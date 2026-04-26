@@ -1,0 +1,10 @@
+Title: O nás
+Metatitle: O projektu Station0
+Published: true
+---
+
+# O nás
+
+Tato stránka slouží jako příklad rodičovské stránky s podstránkami.
+
+Podstránky jsou uloženy ve složce `content/pages/about/`.

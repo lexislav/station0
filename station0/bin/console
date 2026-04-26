@@ -1,0 +1,101 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+use Delight\Auth\Auth;
+use Station0\Service\FileCache;
+use Station0\Service\UserRepository;
+
+$config = require dirname(__DIR__) . '/config/app.php';
+$roles = require dirname(__DIR__) . '/config/roles.php';
+
+foreach ([$config['paths']['cache'], $config['paths']['sessions'], $config['paths']['logs'], $config['paths']['uploads']] as $dir) {
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+}
+
+$pdo = (function () use ($config) {
+    $fresh = !file_exists($config['paths']['db']);
+    $pdo = new \PDO('sqlite:' . $config['paths']['db']);
+    $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+    if ($fresh) {
+        $pdo->exec(file_get_contents(dirname(__DIR__) . '/vendor/delight-im/auth/Database/SQLite.sql'));
+    }
+    return $pdo;
+})();
+
+ini_set('session.use_cookies', '0');
+ini_set('session.use_only_cookies', '0');
+ini_set('session.cache_limiter', '');
+@session_start();
+
+$auth = new Auth($pdo);
+$users = new UserRepository($auth, $pdo, $roles);
+
+$command = $argv[1] ?? 'help';
+$args = array_slice($argv, 2);
+
+switch ($command) {
+    case 'user:create':
+        [$username, $email, $role] = [$args[0] ?? null, $args[1] ?? null, $args[2] ?? 'editor'];
+        if (!$username || !$email) {
+            fwrite(STDERR, "Usage: bin/console user:create <username> <email> [role]\n");
+            exit(1);
+        }
+        echo "Heslo pro {$username}: ";
+        system('stty -echo');
+        $pw = trim((string) fgets(STDIN));
+        system('stty echo');
+        echo "\n";
+        if (strlen($pw) < 8) {
+            fwrite(STDERR, "Heslo musí mít alespoň 8 znaků.\n");
+            exit(1);
+        }
+        $id = $users->create($email, $pw, $role, $username);
+        echo "Uživatel vytvořen (id={$id}, username={$username}, role={$role}).\n";
+        break;
+
+    case 'user:reset-password':
+        $email = $args[0] ?? null;
+        if (!$email) {
+            fwrite(STDERR, "Usage: bin/console user:reset-password <email>\n");
+            exit(1);
+        }
+        $stmt = $pdo->prepare('SELECT id FROM users WHERE email = :e');
+        $stmt->execute([':e' => $email]);
+        $id = (int) $stmt->fetchColumn();
+        if (!$id) {
+            fwrite(STDERR, "Uživatel {$email} neexistuje.\n");
+            exit(1);
+        }
+        echo "Nové heslo: ";
+        system('stty -echo');
+        $pw = trim((string) fgets(STDIN));
+        system('stty echo');
+        echo "\n";
+        if (strlen($pw) < 8) {
+            fwrite(STDERR, "Heslo musí mít alespoň 8 znaků.\n");
+            exit(1);
+        }
+        $users->setPassword($id, $pw);
+        echo "Heslo změněno.\n";
+        break;
+
+    case 'cache:clear':
+        $cache = new FileCache($config['paths']['cache']);
+        $n = $cache->flush();
+        echo "Smazáno {$n} položek cache.\n";
+        break;
+
+    case 'help':
+    default:
+        echo "Station0 console\n";
+        echo "  user:create <username> <email> [role]    Vytvoří uživatele (role: admin|editor)\n";
+        echo "  user:reset-password <email>   Resetuje heslo\n";
+        echo "  cache:clear                   Vyčistí cache obsahu\n";
+        break;
+}

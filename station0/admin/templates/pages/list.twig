@@ -1,0 +1,47 @@
+{% extends '@admin/layout.twig' %}
+{% block body %}
+<div class="toolbar">
+    <h1>Stránky</h1>
+    <a class="btn primary" href="{{ app.adminPath }}/pages/new">+ Nová</a>
+</div>
+<table class="pages">
+    <thead>
+        <tr>
+            <th>Titulek</th>
+            <th>URL</th>
+            <th>Stav</th>
+            <th>Aktualizováno</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for p in pages %}
+        {% set editPath = p.urlPath == '/' ? '~' : p.urlPath|trim('/') %}
+        <tr>
+            <td style="padding-left: calc(0.9rem + {{ p.depth() * 1.2 }}rem)">
+                <a href="{{ app.adminPath }}/pages/{{ editPath }}/edit">{{ p.title }}</a>
+            </td>
+            <td><code>{{ p.urlPath }}</code></td>
+            <td>
+                {% if p.published %}
+                    <span class="tag ok">publikováno</span>
+                {% else %}
+                    <span class="tag">koncept</span>
+                {% endif %}
+            </td>
+            <td>{{ p.updated }}</td>
+            <td>
+                <form method="post" action="{{ app.adminPath }}/pages/{{ editPath }}/delete"
+                      onsubmit="return confirm('Smazat {{ p.urlPath }}?');" class="inline">
+                    <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+                    <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+                    <button class="link danger">smazat</button>
+                </form>
+            </td>
+        </tr>
+    {% else %}
+        <tr><td colspan="5" class="empty">Žádné stránky. <a href="{{ app.adminPath }}/pages/new">Vytvořit první.</a></td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

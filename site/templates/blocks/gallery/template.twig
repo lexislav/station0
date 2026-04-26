@@ -1,0 +1,13 @@
+{% set cols = block.columns|default(3) %}
+<div class="block-gallery block-gallery--cols-{{ cols }}">
+    {% if block.caption is defined and block.caption %}
+        <p class="block-gallery__caption">{{ block.caption }}</p>
+    {% endif %}
+    <div class="block-gallery__grid">
+        {% for image in block.images|default([]) %}
+            <figure class="block-gallery__item">
+                <img src="{{ image.src }}" alt="{{ image.alt|default('') }}" loading="lazy">
+            </figure>
+        {% endfor %}
+    </div>
+</div>

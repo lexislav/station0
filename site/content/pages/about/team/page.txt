@@ -1,0 +1,10 @@
+Title: Tým
+Metatitle: Náš tým – Station0
+Published: true
+---
+
+# Tým
+
+Toto je ukázka podstránky na URL `/about/team`.
+
+Slug je odvozen z názvu souboru `team.txt`.

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="cs">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Admin · {{ app.name }}{% endblock %}</title>
+    <link rel="stylesheet" href="/assets/admin.css">
+    {% block head %}{% endblock %}
+</head>
+<body class="admin">
+<header class="admin-header">
+    <a class="brand" href="{{ app.adminPath }}">{{ app.name }}</a>
+    <nav>
+        <a href="{{ app.adminPath }}">Přehled</a>
+        <a href="{{ app.adminPath }}/pages">Stránky</a>
+        {% if user is defined and user.isAdmin %}<a href="{{ app.adminPath }}/users">Uživatelé</a>{% endif %}
+        <form method="post" action="{{ app.adminPath }}/logout" class="inline">
+            {% if csrf is defined %}
+                <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+                <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+            {% endif %}
+            <button type="submit" class="link">Odhlásit</button>
+        </form>
+    </nav>
+</header>
+<main class="admin-main">
+    {% block body %}{% endblock %}
+</main>
+</body>
+</html>

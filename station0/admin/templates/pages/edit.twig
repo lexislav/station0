@@ -1,0 +1,395 @@
+{% extends '@admin/layout.twig' %}
+{% block head %}
+<link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
+<style>
+/* ── Page builder ─────────────────────────────────────────────────────── */
+.page-builder { margin-top: 1.5rem; }
+
+.block-item {
+    border: 1px solid #dde1e7;
+    border-radius: 6px;
+    margin-bottom: .75rem;
+    background: #fff;
+}
+.block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .45rem .75rem;
+    background: #f4f6f9;
+    border-bottom: 1px solid #dde1e7;
+    border-radius: 6px 6px 0 0;
+    cursor: default;
+}
+.block-label { font-size: .8rem; font-weight: 600; text-transform: uppercase; color: #5a6478; letter-spacing: .04em; }
+.block-actions { display: flex; gap: .25rem; }
+.block-btn {
+    background: none;
+    border: 1px solid #c8cdd6;
+    border-radius: 4px;
+    width: 26px; height: 26px;
+    font-size: .85rem;
+    cursor: pointer;
+    color: #5a6478;
+    line-height: 1;
+}
+.block-btn:hover { background: #e8ebf0; }
+.block-btn.block-remove:hover { background: #ffe4e4; border-color: #f9a0a0; color: #c0392b; }
+
+.block-fields { padding: .75rem; display: flex; flex-direction: column; gap: .6rem; }
+
+.block-add-bar {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+    padding: .6rem .75rem;
+    border: 1px dashed #c8cdd6;
+    border-radius: 6px;
+    background: #f9fafb;
+    margin-top: .25rem;
+}
+
+/* ── List field (repeater) ─────────────────────────────────────────────── */
+.list-field { display: flex; flex-direction: column; gap: .5rem; }
+.list-item {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: flex-end;
+    padding: .5rem;
+    background: #f4f6f9;
+    border-radius: 4px;
+    border: 1px solid #e2e6ec;
+}
+.list-item .field { flex: 1; min-width: 140px; margin: 0; }
+.list-item-remove { flex-shrink: 0; }
+
+/* ── Input with upload button ──────────────────────────────────────────── */
+.input-with-btn { display: flex; gap: .4rem; align-items: center; }
+.input-with-btn input[type="text"] { flex: 1; }
+</style>
+{% endblock %}
+
+{% block body %}
+{% if mode == 'new' %}
+    {% set formAction = app.adminPath ~ '/pages/create' %}
+{% else %}
+    {% set formAction = app.adminPath ~ '/pages/' ~ page.urlPath|trim('/') ~ '/update' %}
+{% endif %}
+
+<form method="post" action="{{ formAction }}" class="page-edit" id="page-edit-form">
+    <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+    <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+
+    {% if mode == 'edit' %}
+        <p class="breadcrumb">
+            <a href="{{ app.adminPath }}/pages">Stránky</a>
+            {% for part in page.urlPath|trim('/')|split('/') %}
+                <span>›</span> {{ part }}
+            {% endfor %}
+            <span class="muted"> – {{ page.urlPath }}</span>
+        </p>
+    {% endif %}
+
+    <div class="field">
+        <label>Titulek</label>
+        <input type="text" name="title" value="{{ page.title }}" required autofocus>
+    </div>
+
+    <div class="row">
+        {% if mode == 'new' %}
+        <div class="field">
+            <label>Slug <small>(volitelné – vygeneruje se z titulku)</small></label>
+            <input type="text" name="slug" value="{{ page.slug }}" placeholder="napr-muj-clanek">
+        </div>
+        <div class="field">
+            <label>Rodičovská stránka</label>
+            <select name="parent">
+                {% for opt in parents %}
+                    <option value="{{ opt.url }}" {% if opt.url == '/' %}selected{% endif %}>{{ opt.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% else %}
+        <div class="field">
+            <label>Slug (URL segment)</label>
+            <input type="text" value="{{ page.slug }}" readonly class="readonly">
+        </div>
+        <div class="field">
+            <label>URL cesta</label>
+            <input type="text" value="{{ page.urlPath }}" readonly class="readonly">
+        </div>
+        {% endif %}
+
+        <div class="field">
+            <label>Šablona</label>
+            <input type="text" name="template" value="{{ page.template|default('page') }}">
+        </div>
+    </div>
+
+    <div class="field">
+        <label>Meta title <small>(pro HTML &lt;title&gt; – pokud prázdné, použije se Titulek)</small></label>
+        <input type="text" name="metatitle" value="{{ page.metatitle }}" placeholder="{{ page.title }}">
+    </div>
+
+    <div class="field checkbox">
+        <label>
+            <input type="checkbox" name="published" value="1" {% if page.published %}checked{% endif %}>
+            Publikováno
+        </label>
+    </div>
+
+    {# ════════════════════════════════════════════════════════════════════
+       Page builder – ordered list of content blocks
+       ════════════════════════════════════════════════════════════════════ #}
+    <div class="page-builder">
+        <div id="block-list">
+            {% for i, block in blocks %}
+                {% include '@admin/pages/_block_item.twig' with {block: block, id: i} %}
+            {% endfor %}
+        </div>
+        <div class="block-add-bar">
+            <span class="muted" style="font-size:.85rem">+ Přidat blok:</span>
+            {% for bt in blockTypes %}
+                <button type="button" class="btn btn-sm block-type-btn"
+                        data-type="{{ bt.type }}">{{ bt.label }}</button>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# Serialised body – filled by JS before submit #}
+    <textarea name="body" id="body-field" hidden></textarea>
+
+    {# ── Block templates for JS cloning (server-rendered, one per type) ── #}
+    {% for bt in blockTypes %}
+    <template id="block-tpl-{{ bt.type }}">
+        {% include '@admin/pages/_block_item.twig' with {block: {type: bt.type}, id: '__ID__'} %}
+    </template>
+    {% endfor %}
+
+    {# Block type schemas for JS (add-list-item, etc.) #}
+    <script id="block-schemas" type="application/json">{{ blockTypes|json_encode|raw }}</script>
+
+    <div class="toolbar sticky">
+        <a class="btn" href="{{ app.adminPath }}/pages">Zrušit</a>
+        <button type="submit" class="btn primary">Uložit</button>
+    </div>
+</form>
+
+<script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<script>
+(function () {
+    const form       = document.getElementById('page-edit-form');
+    const bodyField  = document.getElementById('body-field');
+    const blockList  = document.getElementById('block-list');
+    const schemas    = JSON.parse(document.getElementById('block-schemas').textContent);
+
+    const csrf = {
+        nameKey:  '{{ csrf.nameKey }}',
+        name:     '{{ csrf.name }}',
+        valueKey: '{{ csrf.valueKey }}',
+        value:    '{{ csrf.value }}'
+    };
+
+    // Counter ensures unique IDs for dynamically added blocks.
+    // Starts after the server-rendered blocks so there are no collisions.
+    let blockCounter = {{ blocks|length }};
+
+    // blockId (string) → ToastUI Editor instance
+    const editors = {};
+
+    // ── ToastUI ────────────────────────────────────────────────────────────
+
+    function initTextEditor(blockEl) {
+        const editorDiv = blockEl.querySelector('.block-editor');
+        const textarea  = blockEl.querySelector('[data-field="body"]');
+        const id        = blockEl.dataset.blockId;
+        if (!editorDiv || !textarea || editors[id]) return;
+
+        editors[id] = new toastui.Editor({
+            el: editorDiv,
+            height: '280px',
+            initialEditType: 'wysiwyg',
+            previewStyle: 'tab',
+            usageStatistics: false,
+            initialValue: textarea.value,
+            hooks: {
+                addImageBlobHook: async (blob, callback) => {
+                    const url = await uploadFile(blob);
+                    if (url) callback(url, blob.name || 'image');
+                }
+            }
+        });
+    }
+
+    function destroyTextEditor(blockEl) {
+        const id = blockEl.dataset.blockId;
+        if (editors[id]) { editors[id].destroy(); delete editors[id]; }
+    }
+
+    function syncTextEditors() {
+        document.querySelectorAll('.block-item[data-type="text"]').forEach(blockEl => {
+            const ed = editors[blockEl.dataset.blockId];
+            if (ed) blockEl.querySelector('[data-field="body"]').value = ed.getMarkdown();
+        });
+    }
+
+    // Initialise editors for all blocks present on page load
+    document.querySelectorAll('.block-item[data-type="text"]').forEach(initTextEditor);
+
+    // ── Block management ───────────────────────────────────────────────────
+
+    function addBlock(type) {
+        const id  = blockCounter++;
+        const tpl = document.getElementById('block-tpl-' + type);
+        if (!tpl) return;
+
+        // Clone template, swap the __ID__ placeholder, append
+        const tmpDiv      = document.createElement('div');
+        const cloned      = tpl.content.cloneNode(true);
+        tmpDiv.appendChild(cloned);
+        tmpDiv.innerHTML  = tmpDiv.innerHTML.replace(/__ID__/g, String(id));
+        const blockEl     = tmpDiv.firstElementChild;
+        blockEl.dataset.blockId = String(id);
+
+        blockList.appendChild(blockEl);
+
+        if (type === 'text') initTextEditor(blockEl);
+    }
+
+    function removeBlock(blockEl) {
+        destroyTextEditor(blockEl);
+        blockEl.remove();
+    }
+
+    function moveBlock(blockEl, dir) {
+        const prev = blockEl.previousElementSibling;
+        const next = blockEl.nextElementSibling;
+        if (dir === 'up'   && prev) blockList.insertBefore(blockEl, prev);
+        if (dir === 'down' && next) blockList.insertBefore(next, blockEl);
+    }
+
+    // ── List-item repeater ─────────────────────────────────────────────────
+
+    function createListItem(itemFields) {
+        const div = document.createElement('div');
+        div.className = 'list-item';
+        let html = '';
+        (itemFields || []).forEach(sf => {
+            if (sf.type === 'image') {
+                html += `<div class="field"><label>${sf.label}</label>`
+                      + `<div class="input-with-btn">`
+                      + `<input type="text" data-subfield="${sf.name}" value="" placeholder="/uploads/...">`
+                      + `<button type="button" class="btn btn-sm upload-trigger">Nahrát</button>`
+                      + `<input type="file" class="upload-file-input" hidden accept="image/*">`
+                      + `</div></div>`;
+            } else {
+                html += `<div class="field"><label>${sf.label}</label>`
+                      + `<input type="text" data-subfield="${sf.name}" value=""></div>`;
+            }
+        });
+        html += `<button type="button" class="btn btn-sm list-item-remove">✕ Odebrat</button>`;
+        div.innerHTML = html;
+        return div;
+    }
+
+    // ── Upload ─────────────────────────────────────────────────────────────
+
+    async function uploadFile(file) {
+        const fd = new FormData();
+        fd.append('image', file);
+        fd.append(csrf.nameKey, csrf.name);
+        fd.append(csrf.valueKey, csrf.value);
+        try {
+            const res  = await fetch('{{ app.adminPath }}/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
+            const json = await res.json();
+            if (!res.ok || !json.url) throw new Error(json.error || 'Upload failed');
+            return json.url;
+        } catch (e) {
+            alert('Upload selhal: ' + e.message);
+            return null;
+        }
+    }
+
+    // ── Event delegation ───────────────────────────────────────────────────
+
+    document.addEventListener('click', async e => {
+        // Block header actions
+        const removeBtn = e.target.closest('.block-remove');
+        const upBtn     = e.target.closest('.block-up');
+        const downBtn   = e.target.closest('.block-down');
+        if (removeBtn) { removeBlock(removeBtn.closest('.block-item')); return; }
+        if (upBtn)     { moveBlock(upBtn.closest('.block-item'), 'up'); return; }
+        if (downBtn)   { moveBlock(downBtn.closest('.block-item'), 'down'); return; }
+
+        // Add block
+        if (e.target.matches('.block-type-btn')) { addBlock(e.target.dataset.type); return; }
+
+        // List items
+        if (e.target.matches('.list-item-add')) {
+            const listEl    = e.target.closest('.list-field');
+            const subFields = JSON.parse(listEl.dataset.itemFields || '[]');
+            listEl.insertBefore(createListItem(subFields), e.target);
+            return;
+        }
+        if (e.target.matches('.list-item-remove')) { e.target.closest('.list-item').remove(); return; }
+
+        // Upload button → trigger hidden file input
+        if (e.target.matches('.upload-trigger')) {
+            e.target.closest('.input-with-btn').querySelector('.upload-file-input').click();
+            return;
+        }
+    });
+
+    document.addEventListener('change', async e => {
+        if (!e.target.matches('.upload-file-input')) return;
+        const file = e.target.files[0];
+        if (!file) return;
+        const url = await uploadFile(file);
+        if (url) e.target.closest('.input-with-btn').querySelector('input[type="text"]').value = url;
+        e.target.value = '';
+    });
+
+    // ── Serialisation → YAML → hidden field ───────────────────────────────
+
+    function collectBlocks() {
+        const blocks = [];
+        document.querySelectorAll('.block-item').forEach(blockEl => {
+            const block = { type: blockEl.dataset.type };
+
+            // Scalar fields (skip anything nested inside a .list-item)
+            blockEl.querySelectorAll('input[data-field], select[data-field], textarea[data-field]')
+                .forEach(el => {
+                    if (el.closest('.list-item')) return;
+                    const name = el.dataset.field;
+                    block[name] = el.type === 'checkbox' ? el.checked : el.value;
+                });
+
+            // List fields
+            blockEl.querySelectorAll('.list-field[data-field]').forEach(listEl => {
+                const name = listEl.dataset.field;
+                block[name] = [];
+                listEl.querySelectorAll('.list-item').forEach(itemEl => {
+                    const item = {};
+                    itemEl.querySelectorAll('[data-subfield]').forEach(sf => {
+                        item[sf.dataset.subfield] = sf.value;
+                    });
+                    block[name].push(item);
+                });
+            });
+
+            blocks.push(block);
+        });
+        return blocks;
+    }
+
+    form.addEventListener('submit', () => {
+        syncTextEditors();
+        bodyField.value = jsyaml.dump(collectBlocks(), { lineWidth: -1 });
+    });
+
+})();
+</script>
+{% endblock %}

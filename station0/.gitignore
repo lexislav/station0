@@ -1,0 +1,12 @@
+/vendor/
+/writable/cache/*
+/writable/sessions/*
+/writable/logs/*
+/writable/db.sqlite
+/public/uploads/*
+!/writable/cache/.gitkeep
+!/writable/sessions/.gitkeep
+!/writable/logs/.gitkeep
+!/public/uploads/.htaccess
+.env
+.DS_Store

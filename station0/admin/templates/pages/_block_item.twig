@@ -1,0 +1,109 @@
+{% set schema = blockTypesMap[block.type] ?? null %}
+{% set blockLabel = schema.label ?? block.type %}
+<div class="block-item" data-type="{{ block.type }}" data-block-id="{{ id }}">
+    <div class="block-header">
+        <span class="block-label">{{ blockLabel }}</span>
+        <div class="block-actions">
+            <button type="button" class="block-btn block-up"    title="Nahoru">↑</button>
+            <button type="button" class="block-btn block-down"  title="Dolů">↓</button>
+            <button type="button" class="block-btn block-remove" title="Odstranit">×</button>
+        </div>
+    </div>
+    <div class="block-fields">
+
+        {# ── Text block: ToastUI editor ── #}
+        {% if block.type == 'text' %}
+            <div class="field">
+                <div class="block-editor" id="editor-{{ id }}"></div>
+                <textarea data-field="body" hidden>{{ block.body|default('') }}</textarea>
+            </div>
+
+        {# ── Structured block: schema-driven fields ── #}
+        {% elseif schema is not null %}
+            {% for field in schema.fields %}
+
+                {% if field.type == 'text' %}
+                    <div class="field">
+                        <label>{{ field.label }}</label>
+                        <input type="text" data-field="{{ field.name }}"
+                               value="{{ attribute(block, field.name)|default(field.default|default('')) }}">
+                    </div>
+
+                {% elseif field.type == 'image' %}
+                    <div class="field">
+                        <label>{{ field.label }}</label>
+                        <div class="input-with-btn">
+                            <input type="text" data-field="{{ field.name }}"
+                                   value="{{ attribute(block, field.name)|default('') }}"
+                                   placeholder="/uploads/...">
+                            <button type="button" class="btn btn-sm upload-trigger">Nahrát</button>
+                            <input type="file" class="upload-file-input" hidden accept="image/*">
+                        </div>
+                    </div>
+
+                {% elseif field.type == 'textarea' %}
+                    <div class="field">
+                        <label>{{ field.label }}</label>
+                        <textarea data-field="{{ field.name }}"
+                                  rows="4">{{ attribute(block, field.name)|default('') }}</textarea>
+                    </div>
+
+                {% elseif field.type == 'select' %}
+                    <div class="field">
+                        <label>{{ field.label }}</label>
+                        <select data-field="{{ field.name }}">
+                            {% for opt in field.options %}
+                                <option value="{{ opt }}"
+                                    {% if attribute(block, field.name)|default(field.default|default('')) == opt %}
+                                        selected
+                                    {% endif %}>{{ opt }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                {% elseif field.type == 'boolean' %}
+                    <div class="field checkbox">
+                        <label>
+                            <input type="checkbox" data-field="{{ field.name }}"
+                                {% if attribute(block, field.name)|default(false) %}checked{% endif %}>
+                            {{ field.label }}
+                        </label>
+                    </div>
+
+                {% elseif field.type == 'list' %}
+                    <div class="field">
+                        <label>{{ field.label }}</label>
+                        <div class="list-field" data-field="{{ field.name }}"
+                             data-item-fields="{{ field.item_fields|json_encode|e('html_attr') }}">
+                            {% for item in attribute(block, field.name)|default([]) %}
+                                <div class="list-item">
+                                    {% for subfield in field.item_fields %}
+                                        <div class="field">
+                                            <label>{{ subfield.label }}</label>
+                                            {% if subfield.type == 'image' %}
+                                                <div class="input-with-btn">
+                                                    <input type="text" data-subfield="{{ subfield.name }}"
+                                                           value="{{ attribute(item, subfield.name)|default('') }}"
+                                                           placeholder="/uploads/...">
+                                                    <button type="button" class="btn btn-sm upload-trigger">Nahrát</button>
+                                                    <input type="file" class="upload-file-input" hidden accept="image/*">
+                                                </div>
+                                            {% else %}
+                                                <input type="text" data-subfield="{{ subfield.name }}"
+                                                       value="{{ attribute(item, subfield.name)|default('') }}">
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                    <button type="button" class="btn btn-sm list-item-remove">✕ Odebrat</button>
+                                </div>
+                            {% endfor %}
+                            <button type="button" class="btn btn-sm list-item-add">+ Přidat položku</button>
+                        </div>
+                    </div>
+
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+
+    </div>{# /.block-fields #}
+</div>{# /.block-item #}

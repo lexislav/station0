@@ -1,0 +1,10 @@
+{% extends '@admin/layout.twig' %}
+{% block body %}
+<h1>Přehled</h1>
+<p>Přihlášen: <strong>{{ user.email }}</strong></p>
+<ul class="cards">
+    <li><a href="{{ app.adminPath }}/pages"><span class="big">{{ pageCount }}</span> stránek</a></li>
+    <li><a href="{{ app.adminPath }}/pages/new">+ nová stránka</a></li>
+    {% if user.isAdmin %}<li><a href="{{ app.adminPath }}/users">Uživatelé</a></li>{% endif %}
+</ul>
+{% endblock %}

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="cs">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ app.name }}{% endblock %}</title>
+    <link rel="stylesheet" href="/assets/site.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+<header class="site-header">
+    <a class="brand" href="/">{{ app.name }}</a>
+</header>
+<main class="container">
+    {% block body %}{% endblock %}
+</main>
+</body>
+</html>

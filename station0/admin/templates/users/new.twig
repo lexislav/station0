@@ -1,0 +1,21 @@
+{% extends '@admin/layout.twig' %}
+{% block body %}
+<h1>Nový uživatel</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+<form method="post" action="{{ app.adminPath }}/users" class="form-narrow">
+    <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+    <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+    <div class="field"><label>Uživatelské jméno<input type="text" name="username" required autocomplete="username"></label></div>
+    <div class="field"><label>E-mail<input type="email" name="email" required></label></div>
+    <div class="field"><label>Heslo<input type="password" name="password" minlength="8" required></label></div>
+    <div class="field"><label>Role
+        <select name="role">
+            {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+        </select>
+    </label></div>
+    <div class="toolbar">
+        <a class="btn" href="{{ app.adminPath }}/users">Zrušit</a>
+        <button type="submit" class="btn primary">Vytvořit</button>
+    </div>
+</form>
+{% endblock %}
