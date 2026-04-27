@@ -106,7 +106,7 @@ final class Bootstrap
             $pdo = new PDO('sqlite:' . $dbPath);
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             if ($fresh) {
-                $schema = file_get_contents(dirname(__DIR__) . '/vendor/delight-im/auth/Database/SQLite.sql');
+                $schema = file_get_contents(dirname(dirname(__DIR__)) . '/vendor/delight-im/auth/Database/SQLite.sql');
                 $pdo->exec($schema);
             }
             return $pdo;

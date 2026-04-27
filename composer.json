@@ -25,7 +25,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Station0\\": "src/"
+            "Station0\\": "station0/src/"
         }
     },
     "config": {

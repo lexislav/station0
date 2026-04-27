@@ -3,7 +3,7 @@
 
 declare(strict_types=1);
 
-require dirname(__DIR__) . '/vendor/autoload.php';
+require dirname(dirname(__DIR__)) . '/vendor/autoload.php';
 
 use Delight\Auth\Auth;
 use Station0\Service\FileCache;
@@ -23,7 +23,7 @@ $pdo = (function () use ($config) {
     $pdo = new \PDO('sqlite:' . $config['paths']['db']);
     $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
     if ($fresh) {
-        $pdo->exec(file_get_contents(dirname(__DIR__) . '/vendor/delight-im/auth/Database/SQLite.sql'));
+        $pdo->exec(file_get_contents(dirname(dirname(__DIR__)) . '/vendor/delight-im/auth/Database/SQLite.sql'));
     }
     return $pdo;
 })();
