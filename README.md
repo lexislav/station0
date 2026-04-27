@@ -18,7 +18,7 @@ Lightweight flat-file CMS built on PHP 8.2+. Pages are stored as plain text file
 ## Installation
 
 ```bash
-composer create-project lexislav/station0-skeleton mysite
+composer create-project lexislav/get-station0 mysite
 cd mysite
 php -S localhost:8080 -t public public/index.php
 ```

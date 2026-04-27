@@ -5,7 +5,7 @@
 This repo is the **core library** (`lexislav/station0`, type: library).
 It ships into `vendor/lexislav/station0/` when the skeleton project runs `composer install`.
 
-The companion skeleton is at `lexislav/station0-skeleton` (separate repo).
+The companion skeleton is at `lexislav/get-station0` (separate repo).
 
 Flat-file CMS built on **Slim 4**, **Twig 3**, **League/CommonMark**, and **Delight\Auth** (SQLite).
 
@@ -22,7 +22,7 @@ Flat-file CMS built on **Slim 4**, **Twig 3**, **League/CommonMark**, and **Deli
 
 **Request flow:** `public/index.php` (skeleton) → dotenv → `Bootstrap::createApp()` → Slim app with PHP-DI container → middleware stack → controller → Twig response.
 
-**Path resolution:** `Bootstrap::findProjectRoot()` walks up 3 levels from `vendor/lexislav/station0/` to find the project root. Falls back to `dirname($packageRoot)` for local dev without vendor.
+**Path resolution:** `Bootstrap::findProjectRoot()` checks if `basename(dirname(dirname($packageRoot))) === 'vendor'` (real Composer install → 3 levels up). For symlinked dev installs and direct clones falls back to `getcwd()`, which resolves to the skeleton root when the server is started from there.
 
 **Config factory:** The skeleton provides `site/config.php` as `fn(string $station0Root, string $siteRoot, string $projectRoot): array`. Called by both Bootstrap and bin/console.
 
@@ -83,6 +83,37 @@ To test the library against a real skeleton:
 composer install
 ```
 
+## Block schema format
+
+`site/templates/blocks/{type}/schema.yaml` uses a dict of fields keyed by name. `PageController::normalizeFields()` converts it to an array with `name` injected, and `item:` to `item_fields:` for list fields.
+
+```yaml
+label: Gallery
+fields:
+  columns:
+    type: number
+    label: Columns
+    default: 3
+  images:
+    type: list
+    label: Images
+    item:
+      src:
+        type: image   # renders upload button in admin
+        label: Image
+      alt:
+        type: text
+        label: Alt text
+```
+
+Supported field types: `text`, `textarea`, `image`, `number`, `select`, `boolean`, `list`.
+
+## File uploads
+
+`UploadController` accepts: **jpg, png, gif, webp, svg**.
+
+SVG detection uses `detectMime()` — inspects file content for `<svg xmlns` because `mime_content_type()` misidentifies SVGs as `text/plain` or `text/html`. Max size: 8 MB.
+
 ## Common gotchas
 
 - `writable/` and `public/uploads/` live in the **skeleton project root**, not in `vendor/`. Paths come from `$projectRoot` in `site/config.php`.
@@ -91,3 +122,4 @@ composer install
 - `Published: false` pages are hidden on the public site but visible in admin.
 - Block types are defined in the skeleton's `site/templates/blocks/`, not in the library.
 - The setup route (`/admin/setup`) self-disables once any user exists.
+- For local dev with symlinked library: always start the server from the skeleton dir — `findProjectRoot()` relies on `getcwd()`.
