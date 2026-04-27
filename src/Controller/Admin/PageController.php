@@ -208,11 +208,27 @@ final class PageController
             $list[] = [
                 'type'   => $type,
                 'label'  => $schema['label'] ?? $type,
-                'fields' => $schema['fields'] ?? [],
+                'fields' => $this->normalizeFields($schema['fields'] ?? []),
             ];
         }
         $map = array_combine(array_column($list, 'type'), $list);
         return [$list, $map];
+    }
+
+    /** @param array<string, mixed> $raw */
+    private function normalizeFields(array $raw): array
+    {
+        $out = [];
+        foreach ($raw as $name => $def) {
+            $field         = is_array($def) ? $def : [];
+            $field['name'] = (string) $name;
+            if (isset($field['item']) && is_array($field['item'])) {
+                $field['item_fields'] = $this->normalizeFields($field['item']);
+                unset($field['item']);
+            }
+            $out[] = $field;
+        }
+        return $out;
     }
 
     private function csrfFields(Request $request): array

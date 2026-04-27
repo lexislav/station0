@@ -11,10 +11,12 @@ use Psr\Http\Message\UploadedFileInterface;
 final class UploadController
 {
     private const ALLOWED_MIME = [
-        'image/jpeg' => 'jpg',
-        'image/png' => 'png',
-        'image/gif' => 'gif',
-        'image/webp' => 'webp',
+        'image/jpeg'     => 'jpg',
+        'image/png'      => 'png',
+        'image/gif'      => 'gif',
+        'image/webp'     => 'webp',
+        'image/svg+xml'  => 'svg',
+        'text/html'      => 'svg', // some systems misdetect SVG as text/html
     ];
     private const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -34,10 +36,14 @@ final class UploadController
             return $this->json($response->withStatus(413), ['error' => 'File too large']);
         }
 
-        $tmpStream = $file->getStream()->getMetadata('uri');
-        $mime = is_string($tmpStream) ? (mime_content_type($tmpStream) ?: '') : '';
+        $tmpPath = $file->getStream()->getMetadata('uri');
+        if (!is_string($tmpPath)) {
+            return $this->json($response->withStatus(400), ['error' => 'Cannot read uploaded file']);
+        }
+
+        $mime = $this->detectMime($tmpPath, (string) $file->getClientFilename());
         if (!isset(self::ALLOWED_MIME[$mime])) {
-            return $this->json($response->withStatus(415), ['error' => 'Unsupported type']);
+            return $this->json($response->withStatus(415), ['error' => 'Unsupported type: ' . $mime]);
         }
 
         $ext = self::ALLOWED_MIME[$mime];
@@ -48,6 +54,29 @@ final class UploadController
         return $this->json($response, [
             'url' => rtrim($this->uploadsUrl, '/') . '/' . $name,
         ]);
+    }
+
+    private function detectMime(string $path, string $clientName): string
+    {
+        $mime = mime_content_type($path) ?: '';
+
+        // mime_content_type misdetects SVG as text/plain or text/html — check by content
+        if (!isset(self::ALLOWED_MIME[$mime]) || $mime === 'text/html' || $mime === 'text/plain') {
+            $head = file_get_contents($path, false, null, 0, 512) ?: '';
+            if (stripos($head, '<svg') !== false && stripos($head, 'xmlns') !== false) {
+                return 'image/svg+xml';
+            }
+        }
+
+        // Fallback: trust client extension only for SVG
+        if (!isset(self::ALLOWED_MIME[$mime])) {
+            $ext = strtolower(pathinfo($clientName, PATHINFO_EXTENSION));
+            if ($ext === 'svg') {
+                return 'image/svg+xml';
+            }
+        }
+
+        return $mime;
     }
 
     private function json(Response $response, array $data): Response

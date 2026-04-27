@@ -37,7 +37,7 @@
                                    value="{{ attribute(block, field.name)|default('') }}"
                                    placeholder="/uploads/...">
                             <button type="button" class="btn btn-sm upload-trigger">Nahrát</button>
-                            <input type="file" class="upload-file-input" hidden accept="image/*">
+                            <input type="file" class="upload-file-input" hidden accept="image/*,.svg">
                         </div>
                     </div>
 
@@ -86,7 +86,7 @@
                                                            value="{{ attribute(item, subfield.name)|default('') }}"
                                                            placeholder="/uploads/...">
                                                     <button type="button" class="btn btn-sm upload-trigger">Nahrát</button>
-                                                    <input type="file" class="upload-file-input" hidden accept="image/*">
+                                                    <input type="file" class="upload-file-input" hidden accept="image/*,.svg">
                                                 </div>
                                             {% else %}
                                                 <input type="text" data-subfield="{{ subfield.name }}"
