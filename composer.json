@@ -1,7 +1,7 @@
 {
     "name": "lexislav/station0",
-    "description": "Grand zero flat file cms for your next project.",
-    "type": "project",
+    "description": "Grand zero flat file CMS — core library.",
+    "type": "library",
     "license": "MIT",
     "require": {
         "php": "^8.2",
@@ -24,9 +24,12 @@
     },
     "autoload": {
         "psr-4": {
-            "Station0\\": "station0/src/"
+            "Station0\\": "src/"
         }
     },
+    "bin": [
+        "bin/console"
+    ],
     "config": {
         "sort-packages": true
     }

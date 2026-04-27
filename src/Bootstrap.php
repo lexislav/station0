@@ -42,9 +42,10 @@ final class Bootstrap
     public static function createApp(): App
     {
         $station0Root = dirname(__DIR__);
-        $siteRoot = rtrim(getenv('SITE_PATH') ?: (dirname($station0Root) . '/site'), '/');
+        $projectRoot  = self::findProjectRoot($station0Root);
+        $siteRoot     = rtrim(getenv('SITE_PATH') ?: ($projectRoot . '/site'), '/');
         $configFactory = require $siteRoot . '/config.php';
-        $config = $configFactory($station0Root, $siteRoot);
+        $config = $configFactory($station0Root, $siteRoot, $projectRoot);
         $roles = require $station0Root . '/config/roles.php';
 
         foreach ([$config['paths']['cache'], $config['paths']['sessions'], $config['paths']['logs'], $config['paths']['uploads']] as $dir) {
@@ -107,7 +108,7 @@ final class Bootstrap
             $pdo = new PDO('sqlite:' . $dbPath);
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             if ($fresh) {
-                $schema = file_get_contents(dirname(dirname(__DIR__)) . '/vendor/delight-im/auth/Database/SQLite.sql');
+                $schema = file_get_contents($config['paths']['projectRoot'] . '/vendor/delight-im/auth/Database/SQLite.sql');
                 $pdo->exec($schema);
             }
             return $pdo;
@@ -270,5 +271,16 @@ final class Bootstrap
 
         // Catch-all for public pages — multi-segment paths like /about/team (registered last)
         $app->get('/{slug:.+}', [PageController::class, 'show'])->setName('page.show');
+    }
+
+    private static function findProjectRoot(string $packageRoot): string
+    {
+        // When installed via Composer: vendor/lexislav/station0 → vendor/lexislav → vendor → project root
+        $candidate = dirname($packageRoot, 3);
+        if (is_dir($candidate . '/vendor')) {
+            return $candidate;
+        }
+        // Fallback for direct clone / local development
+        return dirname($packageRoot);
     }
 }

@@ -3,7 +3,13 @@
 
 declare(strict_types=1);
 
-$projectRoot = dirname(dirname(__DIR__));
+$station0Root = dirname(__DIR__);
+
+// vendor/lexislav/station0 → vendor/lexislav → vendor → project root
+$projectRoot = dirname($station0Root, 3);
+if (!is_dir($projectRoot . '/vendor')) {
+    $projectRoot = dirname($station0Root); // fallback for direct clone
+}
 
 require $projectRoot . '/vendor/autoload.php';
 
@@ -14,10 +20,9 @@ use Delight\Auth\Auth;
 use Station0\Service\FileCache;
 use Station0\Service\UserRepository;
 
-$station0Root = dirname(__DIR__);
 $siteRoot = rtrim(getenv('SITE_PATH') ?: ($projectRoot . '/site'), '/');
 $configFactory = require $siteRoot . '/config.php';
-$config = $configFactory($station0Root, $siteRoot);
+$config = $configFactory($station0Root, $siteRoot, $projectRoot);
 $roles = require $station0Root . '/config/roles.php';
 
 foreach ([$config['paths']['cache'], $config['paths']['sessions'], $config['paths']['logs'], $config['paths']['uploads']] as $dir) {
@@ -31,7 +36,7 @@ $pdo = (function () use ($config) {
     $pdo = new \PDO('sqlite:' . $config['paths']['db']);
     $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
     if ($fresh) {
-        $pdo->exec(file_get_contents(dirname(dirname(__DIR__)) . '/vendor/delight-im/auth/Database/SQLite.sql'));
+        $pdo->exec(file_get_contents($projectRoot . '/vendor/delight-im/auth/Database/SQLite.sql'));
     }
     return $pdo;
 })();
