@@ -32,6 +32,11 @@ final class UserRepository
         ], $rows);
     }
 
+    public function hasAny(): bool
+    {
+        return (int) $this->pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() > 0;
+    }
+
     public function create(string $email, string $password, string $roleName, string $username): int
     {
         if (!isset($this->rolesMap[$roleName])) {

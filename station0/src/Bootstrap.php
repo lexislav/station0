@@ -24,6 +24,7 @@ use Twig\Loader\FilesystemLoader;
 use Station0\Controller\Admin\AuthController;
 use Station0\Controller\Admin\DashboardController;
 use Station0\Controller\Admin\PageController as AdminPageController;
+use Station0\Controller\Admin\SetupController;
 use Station0\Controller\Admin\UploadController;
 use Station0\Controller\Admin\UserController;
 use Station0\Controller\PageController;
@@ -178,7 +179,19 @@ final class Bootstrap
             $config['adminPath'],
         ));
 
-        $container->set(AuthMiddleware::class, fn ($c) => new AuthMiddleware($c->get(Auth::class), $config['adminPath']));
+        $container->set(AuthMiddleware::class, fn ($c) => new AuthMiddleware(
+            $c->get(Auth::class),
+            $c->get(UserRepository::class),
+            $config['adminPath'],
+        ));
+
+        $container->set(SetupController::class, fn ($c) => new SetupController(
+            $c->get(Auth::class),
+            $c->get(UserRepository::class),
+            $c->get(Twig::class),
+            $c->get(Guard::class),
+            $config['adminPath'],
+        ));
         $container->set('middleware.role', fn ($c) => fn (string $name) => new RoleMiddleware($c->get(Auth::class), $roles, $name));
 
         $container->set(DashboardController::class, fn ($c) => new DashboardController(
@@ -223,6 +236,8 @@ final class Bootstrap
         $app->get('/', [PageController::class, 'home'])->setName('home');
 
         $app->group($adminPath, function ($group) use ($roleMiddleware) {
+            $group->get('/setup', [SetupController::class, 'showSetup'])->setName('admin.setup');
+            $group->post('/setup', [SetupController::class, 'setup']);
             $group->get('/login', [AuthController::class, 'showLogin'])->setName('admin.login');
             $group->post('/login', [AuthController::class, 'login']);
             $group->get('/forgot-password', [AuthController::class, 'showForgotPassword'])->setName('admin.forgot-password');

@@ -3,14 +3,22 @@
 
 declare(strict_types=1);
 
-require dirname(dirname(__DIR__)) . '/vendor/autoload.php';
+$projectRoot = dirname(dirname(__DIR__));
+
+require $projectRoot . '/vendor/autoload.php';
+
+$dotenv = Dotenv\Dotenv::createImmutable($projectRoot);
+$dotenv->safeLoad();
 
 use Delight\Auth\Auth;
 use Station0\Service\FileCache;
 use Station0\Service\UserRepository;
 
-$config = require dirname(__DIR__) . '/config/app.php';
-$roles = require dirname(__DIR__) . '/config/roles.php';
+$station0Root = dirname(__DIR__);
+$siteRoot = rtrim(getenv('SITE_PATH') ?: ($projectRoot . '/site'), '/');
+$configFactory = require $siteRoot . '/config.php';
+$config = $configFactory($station0Root, $siteRoot);
+$roles = require $station0Root . '/config/roles.php';
 
 foreach ([$config['paths']['cache'], $config['paths']['sessions'], $config['paths']['logs'], $config['paths']['uploads']] as $dir) {
     if (!is_dir($dir)) {

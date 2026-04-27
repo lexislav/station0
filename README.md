@@ -18,22 +18,17 @@ Lightweight flat-file CMS built on PHP 8.2+. Pages are stored as plain text file
 ## Installation
 
 ```bash
-git clone <repo> station0
-cd station0
-composer install
+composer create-project lexislav/station0 mysite
+cd mysite
 ```
 
 Copy `.env.example` to `.env` and adjust:
 
 ```env
-APP_BASE_URL=http://localhost:8080
-APP_DEBUG=true
-MAIL_HOST=smtp.example.com
-MAIL_PORT=587
-MAIL_USERNAME=user@example.com
-MAIL_PASSWORD=secret
-MAIL_FROM=noreply@example.com
-MAIL_FROM_NAME=Station0
+BASE_URL=http://localhost:8080
+DEBUG=true
+ADMIN_PATH=/admin
+HTTPS=false
 ```
 
 Start the built-in PHP server:
@@ -45,7 +40,7 @@ php -S localhost:8080 -t public public/index.php
 Create the first admin user:
 
 ```bash
-php bin/console user:create admin admin@example.com admin
+php station0/bin/console user:create admin admin@example.com admin
 ```
 
 Open `http://localhost:8080/admin` and log in.
@@ -180,10 +175,10 @@ To add a new block type, create a directory under `site/templates/blocks/{type}/
 ## CLI
 
 ```bash
-php bin/console user:create <username> <email> [role]
-php bin/console user:reset-password <email>
-php bin/console cache:clear
-php bin/console help
+php station0/bin/console user:create <username> <email> [role]
+php station0/bin/console user:reset-password <email>
+php station0/bin/console cache:clear
+php station0/bin/console help
 ```
 
 ## Caching
@@ -197,13 +192,16 @@ php bin/console cache:clear
 ## Project structure
 
 ```
-bin/            CLI console
-config/         App config and roles
-content/pages/  Flat-file content
-public/         Web root (index.php, assets)
-src/            PHP source (namespace Station0\)
-templates/      Twig templates and block definitions
-writable/       Cache, sessions, logs, db.sqlite
+public/              Web root (index.php, assets)
+site/
+  config.php         App config (env-driven)
+  content/pages/     Flat-file content
+  templates/         Twig templates and block definitions
+station0/
+  src/               PHP source (namespace Station0\)
+  admin/templates/   Admin panel templates
+  bin/console        CLI tool
+  writable/          Cache, sessions, logs, db.sqlite
 ```
 
 ## License

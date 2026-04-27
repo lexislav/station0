@@ -76,11 +76,13 @@ tr:last-child td { border-bottom: none; }
     display: flex; flex-direction: column; gap: .75rem;
 }
 .login-card h1 { margin: 0 0 .5rem; text-align: center; font-size: 1.25rem; }
+.setup-intro { text-align: center; font-size: .9rem; color: var(--muted); margin: 0; }
 .login-card label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
 .login-card input {
     padding: .6rem .75rem; border: 1px solid var(--border); border-radius: var(--radius); font: inherit;
 }
 .login-card button {
-    margin-top: .5rem; padding: .6rem; border: none; border-radius: var(--radius);
+    margin-top: .5rem; padding: .4rem 1rem; border: none; border-radius: 999px;
     background: var(--accent); color: #fff; cursor: pointer; font: inherit; font-weight: 500;
+    width: 100%;
 }
