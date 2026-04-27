@@ -275,12 +275,16 @@ final class Bootstrap
 
     private static function findProjectRoot(string $packageRoot): string
     {
-        // When installed via Composer: vendor/lexislav/station0 → vendor/lexislav → vendor → project root
-        $candidate = dirname($packageRoot, 3);
-        if (is_dir($candidate . '/vendor')) {
-            return $candidate;
+        // Real vendor install: path ends with vendor/<vendor>/<package>
+        if (basename(dirname(dirname($packageRoot))) === 'vendor') {
+            return dirname($packageRoot, 3);
         }
-        // Fallback for direct clone / local development
-        return dirname($packageRoot);
+        // Symlinked dev install or direct clone: use CWD (set by the server/CLI invocation)
+        $cwd = (string) getcwd();
+        if ($cwd !== '' && is_dir($cwd . '/vendor') && is_file($cwd . '/composer.json')) {
+            return $cwd;
+        }
+        // Last resort: package root itself (e.g. running tests inside the library)
+        return $packageRoot;
     }
 }
