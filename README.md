@@ -29,7 +29,7 @@ On first visit to `http://localhost:8080/admin`, a setup form lets you create th
 
 `lexislav/station0` is the **core library** — it contains the PHP classes, admin templates, and CLI binary. It is installed into `vendor/` by the skeleton project.
 
-For a ready-to-use project skeleton, see [lexislav/station0-skeleton](https://github.com/lexislav/station0-skeleton).
+For a ready-to-use project skeleton, see [lexislav/get-station0](https://github.com/lexislav/get-station0).
 
 ## CLI (via skeleton)
 
