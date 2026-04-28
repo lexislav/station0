@@ -68,6 +68,60 @@
 /* ── Input with upload button ──────────────────────────────────────────── */
 .input-with-btn { display: flex; gap: .4rem; align-items: center; }
 .input-with-btn input[type="text"] { flex: 1; }
+
+/* ── ToastUI: no inner wrapper, floating toolbar dock ──────────────────── */
+.block-editor .toastui-editor-defaultUI {
+    border: none;
+    box-shadow: none;
+}
+.block-editor .toastui-editor-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    background: rgba(248, 249, 251, .97);
+    backdrop-filter: blur(6px);
+    border: none;
+    border-bottom: 1px solid #e8eaee;
+    border-radius: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+/* Mode-switch re-parented into block header: split-button look, sits next to label */
+.block-header .toastui-editor-mode-switch {
+    display: flex;
+    flex-shrink: 0;
+    margin: 0;   /* let block-header's justify-content: space-between center it */
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid #c8cdd6;
+    background: #fff;
+    box-sizing: border-box;
+}
+.block-header .toastui-editor-mode-switch .tab-item {
+    font-size: .7rem;
+    padding: 2px 9px;
+    margin: 0;
+    height: auto;
+    min-height: 0;
+    border: none;
+    border-left: 1px solid #c8cdd6;
+    background: #fff;
+    cursor: pointer;
+    color: #5a6478;
+    line-height: 1.7;
+    transition: background .1s, color .1s;
+    border-radius: 0;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+}
+.block-header .toastui-editor-mode-switch .tab-item:first-child { border-left: none; }
+.block-header .toastui-editor-mode-switch .tab-item.active { background: #2c3e50; color: #fff; }
+.block-header .toastui-editor-mode-switch .tab-item:not(.active):hover { background: #f0f2f5; }
 </style>
 {% endblock %}
 
@@ -222,6 +276,16 @@
                 }
             }
         });
+
+        // Move the original mode-switch out of the editor and into the block header,
+        // alongside other block-level meta-actions (move/delete). Keeps the toolbar
+        // free to grow in markdown mode without pushing the switcher off-screen.
+        const header     = blockEl.querySelector('.block-header');
+        const actions    = header && header.querySelector('.block-actions');
+        const modeSwitch = editorDiv.querySelector('.toastui-editor-mode-switch');
+        if (header && actions && modeSwitch) {
+            header.insertBefore(modeSwitch, actions);
+        }
     }
 
     function destroyTextEditor(blockEl) {
