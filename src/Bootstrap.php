@@ -135,7 +135,11 @@ final class Bootstrap
         });
 
         $container->set(Guard::class, function () {
-            return new Guard(new ResponseFactory());
+            $guard = new Guard(new ResponseFactory());
+            // Keep the same token valid across the session — async POSTs (uploads, etc.)
+            // reuse the token rendered into the page; per-request rotation breaks them.
+            $guard->setPersistentTokenMode(true);
+            return $guard;
         });
 
         $container->set(FileCache::class, fn () => new FileCache($config['paths']['cache']));
@@ -279,10 +283,15 @@ final class Bootstrap
         if (basename(dirname(dirname($packageRoot))) === 'vendor') {
             return dirname($packageRoot, 3);
         }
-        // Symlinked dev install or direct clone: use CWD (set by the server/CLI invocation)
-        $cwd = (string) getcwd();
-        if ($cwd !== '' && is_dir($cwd . '/vendor') && is_file($cwd . '/composer.json')) {
-            return $cwd;
+        // Symlinked dev install or direct clone: walk up from CWD.
+        // PHP's built-in server sets CWD to the served file's directory (e.g. public/),
+        // so we may need to climb one or two levels to find the project root.
+        $dir = (string) getcwd();
+        while ($dir !== '' && $dir !== dirname($dir)) {
+            if (is_dir($dir . '/vendor') && is_file($dir . '/composer.json')) {
+                return $dir;
+            }
+            $dir = dirname($dir);
         }
         // Last resort: package root itself (e.g. running tests inside the library)
         return $packageRoot;
