@@ -247,6 +247,9 @@
         value:    '{{ csrf.value }}'
     };
 
+    // URL path of the page being edited; empty when creating a new page.
+    const pagePath = {{ (mode == 'edit' ? page.urlPath : '')|json_encode|raw }};
+
     // Counter ensures unique IDs for dynamically added blocks.
     // Starts after the server-rendered blocks so there are no collisions.
     let blockCounter = {{ blocks|length }};
@@ -271,8 +274,10 @@
             initialValue: textarea.value,
             hooks: {
                 addImageBlobHook: async (blob, callback) => {
-                    const url = await uploadFile(blob);
-                    if (url) callback(url, blob.name || 'image');
+                    const result = await uploadFile(blob);
+                    // Store the bare filename in markdown so the reference
+                    // survives if the page is moved later.
+                    if (result) callback(result.filename, blob.name || 'image');
                 }
             }
         });
@@ -345,7 +350,7 @@
             if (sf.type === 'image') {
                 html += `<div class="field"><label>${sf.label}</label>`
                       + `<div class="input-with-btn">`
-                      + `<input type="text" data-subfield="${sf.name}" value="" placeholder="/uploads/...">`
+                      + `<input type="text" data-subfield="${sf.name}" value="" placeholder="filename.jpg">`
                       + `<button type="button" class="btn btn-sm upload-trigger">Nahrát</button>`
                       + `<input type="file" class="upload-file-input" hidden accept="image/*,.svg">`
                       + `</div></div>`;
@@ -361,16 +366,26 @@
 
     // ── Upload ─────────────────────────────────────────────────────────────
 
+    /**
+     * Upload a file. Returns { filename, url } on success, null on failure.
+     * `filename` is what we store in content (page-local reference); `url`
+     * is only useful for previews / ToastUI inline display.
+     */
     async function uploadFile(file) {
+        if (!pagePath) {
+            alert('Uložte stránku nejdřív — soubory se ukládají do její složky.');
+            return null;
+        }
         const fd = new FormData();
         fd.append('image', file);
+        fd.append('pagePath', pagePath);
         fd.append(csrf.nameKey, csrf.name);
         fd.append(csrf.valueKey, csrf.value);
         try {
             const res  = await fetch('{{ app.adminPath }}/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
             const json = await res.json();
-            if (!res.ok || !json.url) throw new Error(json.error || 'Upload failed');
-            return json.url;
+            if (!res.ok || !json.filename) throw new Error(json.error || 'Upload failed');
+            return { filename: json.filename, url: json.url };
         } catch (e) {
             alert('Upload selhal: ' + e.message);
             return null;
@@ -411,8 +426,8 @@
         if (!e.target.matches('.upload-file-input')) return;
         const file = e.target.files[0];
         if (!file) return;
-        const url = await uploadFile(file);
-        if (url) e.target.closest('.input-with-btn').querySelector('input[type="text"]').value = url;
+        const result = await uploadFile(file);
+        if (result) e.target.closest('.input-with-btn').querySelector('input[type="text"]').value = result.filename;
         e.target.value = '';
     });
 

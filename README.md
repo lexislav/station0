@@ -31,12 +31,51 @@ On first visit to `http://localhost:8080/admin`, a setup form lets you create th
 
 For a ready-to-use project skeleton, see [lexislav/get-station0](https://github.com/lexislav/get-station0).
 
+## Media & uploads
+
+Uploaded assets are stored **next to the page** they belong to:
+
+```
+site/content/pages/about/
+  page.txt
+  team-photo.jpg          ← uploaded asset
+```
+
+Filenames are slugified on upload (`Team Photo.JPG` → `team-photo.jpg`) and
+collisions resolve as `team-photo-2.jpg`, `-3`, … Allowed types: jpg, png,
+gif, webp, svg (max 8 MB).
+
+In stored content, asset references are **page-relative** — bare filenames:
+
+```yaml
+- type: gallery
+  images:
+    - src: team-photo.jpg
+      alt: The team
+```
+
+At render time, the bare filename is resolved against the current page
+(`/media/about/team-photo.jpg`). Move or rename the page directory and the
+references still work — they were never absolute.
+
+To migrate any older absolute `/media/{path}/file.ext` references in stored
+pages to the new bare-filename form:
+
+```bash
+php vendor/bin/console assets:relink           # apply
+php vendor/bin/console assets:relink --dry-run # preview
+```
+
+Public asset URLs follow the page URL: `/media/{page-path}/{filename}`.
+The root page uses `/media/~/{filename}`.
+
 ## CLI (via skeleton)
 
 ```bash
 php vendor/bin/console user:create <username> <email> [role]
 php vendor/bin/console user:reset-password <email>
 php vendor/bin/console cache:clear
+php vendor/bin/console assets:relink [--dry-run]
 ```
 
 ## Package structure

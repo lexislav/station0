@@ -68,7 +68,9 @@ Markdown body (or YAML block list)
 | `BlockRegistry` | `src/Service/BlockRegistry.php` | Block schema/template loading |
 | `UserRepository` | `src/Service/UserRepository.php` | Wrapper around Delight\Auth |
 | `FileCache` | `src/Service/FileCache.php` | File-based cache (get/set/flush) |
-| `Slug` | `src/Support/Slug.php` | URL slug generation |
+| `MediaService` | `src/Service/MediaService.php` | Page-local asset storage + ref resolution |
+| `AssetController` | `src/Controller/AssetController.php` | Serves `/media/{path:.+}` |
+| `Slug` | `src/Support/Slug.php` | URL slug + filename slugification |
 
 ## Local development
 
@@ -108,11 +110,50 @@ fields:
 
 Supported field types: `text`, `textarea`, `image`, `number`, `select`, `boolean`, `list`.
 
-## File uploads
+## File uploads & media
 
-`UploadController` accepts: **jpg, png, gif, webp, svg**.
+Assets are stored **page-locally** — directly inside the page's content directory:
 
-SVG detection uses `detectMime()` — inspects file content for `<svg xmlns` because `mime_content_type()` misidentifies SVGs as `text/plain` or `text/html`. Max size: 8 MB.
+```
+site/content/pages/about/
+  page.txt
+  team-photo.jpg
+```
+
+`MediaService` owns the storage logic; `UploadController` is a thin HTTP layer
+that delegates to it. Uploads accept: **jpg, png, gif, webp, svg** (max 8 MB).
+SVG detection sniffs file content for `<svg xmlns` because `mime_content_type()`
+misidentifies SVGs as `text/plain`/`text/html`.
+
+**Stored references are page-relative.** Image fields and markdown image links
+hold a bare filename (`team-photo.jpg`), not a URL. `PageRenderer` resolves
+them at render time:
+
+- For block image fields: walks the block schema, finds `image` fields
+  (including those nested in list `item_fields`), and rewrites bare values via
+  `MediaService::resolveRef()`.
+- For markdown image links in `text` blocks: regex rewrite of `![alt](src)`
+  before CommonMark conversion.
+
+This keeps content stable across page moves — when the directory is renamed,
+the assets travel with it and references still resolve.
+
+**Public asset URL:** `/media/{page-url-path}/{filename}` (root page uses
+`/media/~/{filename}`). Served by `AssetController` with proper Content-Type
+and `Cache-Control: immutable`. Route registered just before the catch-all
+page route in `Bootstrap`.
+
+**Upload contract:** `POST /admin/upload` requires the form field `pagePath`
+(URL path of the target page). Response: `{ filename, url }`. The admin JS
+stores `filename` in image inputs and inserts it into ToastUI markdown so
+references stay page-local.
+
+**Migration command:** `php vendor/bin/console assets:relink [--dry-run]`
+walks every page and replaces `/media/{this-page-path}/file.ext` → `file.ext`.
+Cross-page references (`/media/other-page/...`) are left intact.
+
+When deleting a page, `ContentRepository::delete()` removes sibling asset
+files but never sub-directories (those belong to child pages).
 
 ## Common gotchas
 

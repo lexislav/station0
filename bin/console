@@ -17,8 +17,10 @@ $dotenv = Dotenv\Dotenv::createImmutable($projectRoot);
 $dotenv->safeLoad();
 
 use Delight\Auth\Auth;
+use Station0\Service\ContentRepository;
 use Station0\Service\FileCache;
 use Station0\Service\UserRepository;
+use Symfony\Component\Yaml\Yaml;
 
 $siteRoot = rtrim(getenv('SITE_PATH') ?: ($projectRoot . '/site'), '/');
 $configFactory = require $siteRoot . '/config.php';
@@ -104,11 +106,61 @@ switch ($command) {
         echo "Smazáno {$n} položek cache.\n";
         break;
 
+    case 'assets:relink':
+        $dryRun = in_array('--dry-run', $args, true);
+        $repo   = new ContentRepository($config['paths']['content'] . '/pages');
+        $changedFiles = 0;
+        $changedRefs  = 0;
+
+        foreach ($repo->all() as $page) {
+            if (!$page->filePath || !is_file($page->filePath)) {
+                continue;
+            }
+            $raw = (string) file_get_contents($page->filePath);
+            // Split front matter from body — only the body holds asset references.
+            $sep = strpos($raw, "\n---\n");
+            if ($sep === false) {
+                continue;
+            }
+            $head = substr($raw, 0, $sep + 5);
+            $body = substr($raw, $sep + 5);
+
+            // Local prefix to strip: /media/{page-url-path}/  (or /media/~/ for root)
+            $prefix = $page->urlPath === '/'
+                ? '/media/~/'
+                : '/media' . rtrim($page->urlPath, '/') . '/';
+
+            $count = 0;
+            $newBody = preg_replace_callback(
+                '#' . preg_quote($prefix, '#') . '([A-Za-z0-9._\-]+)#',
+                function (array $m) use (&$count) { $count++; return $m[1]; },
+                $body,
+            ) ?? $body;
+
+            if ($count === 0) {
+                continue;
+            }
+            $changedFiles++;
+            $changedRefs += $count;
+            echo ($dryRun ? '[dry] ' : '') . "{$page->urlPath}: {$count} ref(s)\n";
+
+            if (!$dryRun) {
+                file_put_contents($page->filePath, $head . $newBody);
+            }
+        }
+
+        echo ($dryRun ? '[dry] ' : '') . "Hotovo: {$changedRefs} reference(í) v {$changedFiles} stránk(ách).\n";
+        if (!$dryRun && $changedFiles > 0) {
+            (new FileCache($config['paths']['cache']))->flush();
+        }
+        break;
+
     case 'help':
     default:
         echo "Station0 console\n";
         echo "  user:create <username> <email> [role]    Vytvoří uživatele (role: admin|editor)\n";
         echo "  user:reset-password <email>   Resetuje heslo\n";
         echo "  cache:clear                   Vyčistí cache obsahu\n";
+        echo "  assets:relink [--dry-run]     Převede absolutní /media/... odkazy na page-local názvy\n";
         break;
 }

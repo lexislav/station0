@@ -27,12 +27,14 @@ use Station0\Controller\Admin\PageController as AdminPageController;
 use Station0\Controller\Admin\SetupController;
 use Station0\Controller\Admin\UploadController;
 use Station0\Controller\Admin\UserController;
+use Station0\Controller\AssetController;
 use Station0\Controller\PageController;
 use Station0\Middleware\AuthMiddleware;
 use Station0\Middleware\RoleMiddleware;
 use Station0\Service\BlockRegistry;
 use Station0\Service\ContentRepository;
 use Station0\Service\FileCache;
+use Station0\Service\MediaService;
 use Station0\Service\MailerService;
 use Station0\Service\PageRenderer;
 use Station0\Service\UserRepository;
@@ -165,6 +167,7 @@ final class Bootstrap
             $c->get(MarkdownConverter::class),
             $c->get(BlockRegistry::class),
             $c->get(FileCache::class),
+            $c->get(MediaService::class),
         ));
 
         $container->set(UserRepository::class, fn ($c) => new UserRepository(
@@ -224,9 +227,17 @@ final class Bootstrap
             $config['adminPath'],
         ));
 
+        $container->set(MediaService::class, fn ($c) => new MediaService(
+            $c->get(ContentRepository::class),
+            $config['paths']['content'] . '/pages',
+        ));
+
         $container->set(UploadController::class, fn ($c) => new UploadController(
-            $config['paths']['uploads'],
-            $config['uploadsUrl']
+            $c->get(MediaService::class),
+        ));
+
+        $container->set(AssetController::class, fn ($c) => new AssetController(
+            $c->get(MediaService::class),
         ));
 
         return $container;
@@ -272,6 +283,9 @@ final class Bootstrap
                 })->add($roleMiddleware('admin'));
             })->add(AuthMiddleware::class);
         });
+
+        // Page-local assets — must precede the page catch-all below.
+        $app->get('/media/{path:.+}', [AssetController::class, 'show'])->setName('media.show');
 
         // Catch-all for public pages — multi-segment paths like /about/team (registered last)
         $app->get('/{slug:.+}', [PageController::class, 'show'])->setName('page.show');

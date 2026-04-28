@@ -116,10 +116,16 @@ final class ContentRepository
         $deleted = @unlink($page->filePath);
         unset($this->parsedCache[$page->filePath]);
 
-        // Remove the page directory if it is now empty (no children, no other files)
         if ($deleted) {
             $dir = dirname($page->filePath);
             if ($dir !== rtrim($this->pagesDir, '/') && is_dir($dir)) {
+                // Remove sibling files (page-local assets), but never sub-directories
+                // — those belong to child pages.
+                foreach (glob($dir . '/*') ?: [] as $entry) {
+                    if (is_file($entry)) {
+                        @unlink($entry);
+                    }
+                }
                 $remaining = array_filter(
                     glob($dir . '/{*,.*}', GLOB_BRACE) ?: [],
                     fn (string $f) => !in_array(basename($f), ['.', '..', '.DS_Store'], true),

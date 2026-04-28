@@ -19,4 +19,20 @@ final class Slug
         $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $title);
         return self::sanitize($ascii !== false ? $ascii : $title);
     }
+
+    /**
+     * Slugify an uploaded filename while preserving its extension.
+     * "Team Photo.JPG" → "team-photo.jpg"
+     */
+    public static function filename(string $name): string
+    {
+        $name = basename($name);
+        $ext  = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        $base = pathinfo($name, PATHINFO_FILENAME);
+        $base = self::fromTitle($base);
+        if ($base === '') {
+            $base = 'file';
+        }
+        return $ext !== '' ? $base . '.' . $ext : $base;
+    }
 }
