@@ -98,12 +98,13 @@ final class PageController
         $filePath = $pageDir . '/' . $template . '.txt';
 
         $page = new Page(
-            slug:      $slug,
-            title:     $title,
-            body:      (string) ($data['body'] ?? ''),
-            metatitle: trim((string) ($data['metatitle'] ?? '')) ?: null,
-            published: isset($data['published']),
-            template:  $template,
+            slug:        $slug,
+            title:       $title,
+            body:        (string) ($data['body'] ?? ''),
+            metatitle:   trim((string) ($data['metatitle'] ?? '')) ?: null,
+            published:   isset($data['published']),
+            template:    $template,
+            publishedAt: $this->normalizePublishedAt(trim((string) ($data['published_at'] ?? ''))),
         );
 
         $this->content->save($page, $filePath);
@@ -136,6 +137,19 @@ final class PageController
             'blockTypesMap' => $blockTypesMap,
             'csrf'          => $this->csrfFields($request),
         ]);
+    }
+
+    /**
+     * Convert an HTML datetime-local value ("2026-05-12T14:30") to the
+     * stored format ("2026-05-12 14:30"). Empty input → null.
+     */
+    private function normalizePublishedAt(string $raw): ?string
+    {
+        if ($raw === '') {
+            return null;
+        }
+        $ts = strtotime($raw);
+        return $ts === false ? null : date('Y-m-d H:i', $ts);
     }
 
     /**
@@ -173,6 +187,9 @@ final class PageController
         $page->metatitle = trim((string) ($data['metatitle'] ?? '')) ?: null;
         $page->published = isset($data['published']);
         $page->template  = (string) ($data['template'] ?? $page->template);
+
+        $rawPublishedAt = trim((string) ($data['published_at'] ?? ''));
+        $page->publishedAt = $this->normalizePublishedAt($rawPublishedAt);
 
         $newSlug = trim((string) ($data['slug'] ?? ''));
         if ($newSlug === '' && $page->title !== '') {

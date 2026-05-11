@@ -25,11 +25,26 @@ final class Page
         public ?string $author = null,
         public ?string $updated = null,
         public string $template = 'page',
+        /** ISO-ish datetime ("Y-m-d H:i" or "Y-m-d"). Future = scheduled. */
+        public ?string $publishedAt = null,
         public array $extra = [],
     ) {}
 
     public function depth(): int
     {
         return $this->urlPath === '/' ? 0 : substr_count($this->urlPath, '/');
+    }
+
+    /** True when the page should be visible on the public site right now. */
+    public function isLive(?int $now = null): bool
+    {
+        if (!$this->published) {
+            return false;
+        }
+        if ($this->publishedAt === null || $this->publishedAt === '') {
+            return true;
+        }
+        $ts = strtotime($this->publishedAt);
+        return $ts === false || $ts <= ($now ?? time());
     }
 }

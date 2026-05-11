@@ -34,7 +34,7 @@ final class PageController
     {
         $page = $this->content->find($urlPath);
 
-        if ($page === null || !$page->published) {
+        if ($page === null || !$page->isLive()) {
             $response = $response->withStatus(404);
             return $this->twig->render($response, '404.twig', ['urlPath' => $urlPath]);
         }

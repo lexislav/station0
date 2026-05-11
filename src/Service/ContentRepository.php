@@ -73,7 +73,7 @@ final class ContentRepository
         usort($pages, fn (Page $a, Page $b) => strcmp($a->urlPath, $b->urlPath));
 
         if (!$includeUnpublished) {
-            $pages = array_values(array_filter($pages, fn (Page $p) => $p->published));
+            $pages = array_values(array_filter($pages, fn (Page $p) => $p->isLive()));
         }
 
         return $pages;
@@ -315,7 +315,8 @@ final class ContentRepository
             author:    $meta['author'] ?? null,
             updated:   $meta['updated'] ?? null,
             template:  $template,
-            extra:     array_diff_key($meta, array_flip(['title', 'metatitle', 'published', 'author', 'updated', 'template'])),
+            publishedAt: isset($meta['publishedat']) && $meta['publishedat'] !== '' ? $meta['publishedat'] : null,
+            extra:     array_diff_key($meta, array_flip(['title', 'metatitle', 'published', 'publishedat', 'author', 'updated', 'template'])),
         );
 
         $page->urlPath    = $urlPath ?: '/';
@@ -388,9 +389,10 @@ final class ContentRepository
             'Metatitle' => $page->metatitle,
             // Template is not stored for 'page' – it is derivable from the filename
             'Template'  => ($page->template !== 'page') ? $page->template : null,
-            'Published' => $page->published ? 'true' : 'false',
-            'Author'    => $page->author,
-            'Updated'   => $page->updated,
+            'Published'   => $page->published ? 'true' : 'false',
+            'PublishedAt' => $page->publishedAt,
+            'Author'      => $page->author,
+            'Updated'     => $page->updated,
         ];
 
         foreach ($page->extra as $k => $v) {

@@ -187,11 +187,18 @@
         <input type="text" name="metatitle" value="{{ page.metatitle }}" placeholder="{{ page.title }}">
     </div>
 
-    <div class="field checkbox">
-        <label>
-            <input type="checkbox" name="published" value="1" {% if page.published %}checked{% endif %}>
-            Publikováno
-        </label>
+    <div class="row">
+        <div class="field checkbox">
+            <label>
+                <input type="checkbox" name="published" value="1" {% if page.published %}checked{% endif %}>
+                Publikováno
+            </label>
+        </div>
+        <div class="field">
+            <label>Datum publikování <small>(budoucí datum = naplánováno)</small></label>
+            <input type="datetime-local" name="published_at"
+                   value="{{ page.publishedAt ? page.publishedAt|date('Y-m-d\\TH:i') : '' }}">
+        </div>
     </div>
 
     {# ════════════════════════════════════════════════════════════════════
