@@ -17,9 +17,7 @@
 .row-actions summary:hover { background: #f0f2f5; }
 .row-actions[open] summary { background: #e8ebf0; }
 .row-actions .menu {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 4px);
+    position: fixed;
     min-width: 160px;
     background: #fff;
     border: 1px solid #dde1e7;
@@ -102,11 +100,40 @@
     </tbody>
 </table>
 <script>
-// Close any open row-action menu when clicking outside.
-document.addEventListener('click', e => {
-    document.querySelectorAll('details.row-actions[open]').forEach(d => {
-        if (!d.contains(e.target)) d.open = false;
+(() => {
+    // Position a fixed dropdown next to its summary button, flipping above
+    // when there isn't enough room below. The menu lives inside the row but
+    // escapes the table's overflow:hidden because position:fixed is anchored
+    // to the viewport.
+    function place(details) {
+        const summary = details.querySelector('summary');
+        const menu    = details.querySelector('.menu');
+        if (!summary || !menu) return;
+        const r = summary.getBoundingClientRect();
+        const mh = menu.offsetHeight;
+        const mw = menu.offsetWidth;
+        const below = window.innerHeight - r.bottom;
+        const top = (below > mh + 8 || below > r.top) ? r.bottom + 4 : r.top - mh - 4;
+        const left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8));
+        menu.style.top  = top  + 'px';
+        menu.style.left = left + 'px';
+    }
+
+    document.querySelectorAll('details.row-actions').forEach(d => {
+        d.addEventListener('toggle', () => { if (d.open) place(d); });
     });
-});
+
+    // Reposition any open menu on scroll/resize.
+    const reposition = () => document.querySelectorAll('details.row-actions[open]').forEach(place);
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+
+    // Close any open menu when clicking outside.
+    document.addEventListener('click', e => {
+        document.querySelectorAll('details.row-actions[open]').forEach(d => {
+            if (!d.contains(e.target)) d.open = false;
+        });
+    });
+})();
 </script>
 {% endblock %}
