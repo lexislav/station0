@@ -1,4 +1,52 @@
 {% extends '@admin/layout.twig' %}
+{% block head %}
+<style>
+.row-actions { position: relative; }
+.row-actions summary {
+    list-style: none;
+    cursor: pointer;
+    padding: .2rem .55rem;
+    border: 1px solid #c8cdd6;
+    border-radius: 4px;
+    background: #fff;
+    color: #5a6478;
+    font-size: .85rem;
+    display: inline-block;
+}
+.row-actions summary::-webkit-details-marker { display: none; }
+.row-actions summary:hover { background: #f0f2f5; }
+.row-actions[open] summary { background: #e8ebf0; }
+.row-actions .menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    min-width: 160px;
+    background: #fff;
+    border: 1px solid #dde1e7;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+    padding: .25rem 0;
+    z-index: 30;
+}
+.row-actions .menu a,
+.row-actions .menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: .4rem .75rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #2c3e50;
+    font: inherit;
+    text-decoration: none;
+}
+.row-actions .menu a:hover,
+.row-actions .menu button:hover { background: #f4f6f9; }
+.row-actions .menu .danger { color: #c0392b; }
+.row-actions .menu .danger:hover { background: #ffe4e4; }
+</style>
+{% endblock %}
 {% block body %}
 <div class="toolbar">
     <h1>Stránky</h1>
@@ -31,12 +79,21 @@
             </td>
             <td>{{ p.updated }}</td>
             <td>
-                <form method="post" action="{{ app.adminPath }}/pages/{{ editPath }}/delete"
-                      onsubmit="return confirm('Smazat {{ p.urlPath }}?');" class="inline">
-                    <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
-                    <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
-                    <button class="link danger">smazat</button>
-                </form>
+                <details class="row-actions">
+                    <summary>⋯</summary>
+                    <div class="menu">
+                        <a href="{{ app.adminPath }}/pages/new?parent={{ p.urlPath|url_encode }}">+ Přidat podstránku</a>
+                        <a href="{{ app.adminPath }}/pages/{{ editPath }}/edit">Upravit</a>
+                        {% if p.urlPath != '/' %}
+                        <form method="post" action="{{ app.adminPath }}/pages/{{ editPath }}/delete"
+                              onsubmit="return confirm('Smazat {{ p.urlPath }}?');">
+                            <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+                            <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+                            <button type="submit" class="danger">Smazat</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </details>
             </td>
         </tr>
     {% else %}
@@ -44,4 +101,12 @@
     {% endfor %}
     </tbody>
 </table>
+<script>
+// Close any open row-action menu when clicking outside.
+document.addEventListener('click', e => {
+    document.querySelectorAll('details.row-actions[open]').forEach(d => {
+        if (!d.contains(e.target)) d.open = false;
+    });
+});
+</script>
 {% endblock %}

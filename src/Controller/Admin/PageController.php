@@ -45,14 +45,20 @@ final class PageController
     {
         [$blockTypes, $blockTypesMap] = $this->blockTypeData();
 
+        $preselectedParent = (string) ($request->getQueryParams()['parent'] ?? '/');
+        if ($preselectedParent !== '/' && $this->content->find($preselectedParent) === null) {
+            $preselectedParent = '/';
+        }
+
         return $this->twig->render($response, '@admin/pages/edit.twig', [
-            'mode'          => 'new',
-            'page'          => new Page(slug: '', title: '', body: ''),
-            'parents'       => $this->parentOptions(),
-            'blocks'        => [['type' => 'text', 'body' => '']],
-            'blockTypes'    => $blockTypes,
-            'blockTypesMap' => $blockTypesMap,
-            'csrf'          => $this->csrfFields($request),
+            'mode'             => 'new',
+            'page'             => new Page(slug: '', title: '', body: ''),
+            'parents'          => $this->parentOptions(),
+            'selectedParent'   => $preselectedParent,
+            'blocks'           => [['type' => 'text', 'body' => '']],
+            'blockTypes'       => $blockTypes,
+            'blockTypesMap'    => $blockTypesMap,
+            'csrf'             => $this->csrfFields($request),
         ]);
     }
 
