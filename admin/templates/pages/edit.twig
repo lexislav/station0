@@ -139,8 +139,13 @@
     {% if mode == 'edit' %}
         <p class="breadcrumb">
             <a href="{{ app.adminPath }}/pages">Stránky</a>
-            {% for part in page.urlPath|trim('/')|split('/') %}
-                <span>›</span> {{ part }}
+            {% for crumb in breadcrumb %}
+                <span>›</span>
+                {% if not loop.last %}
+                    <a href="{{ app.adminPath }}/pages/{{ crumb.urlPath|trim('/') }}/edit">{{ crumb.title }}</a>
+                {% else %}
+                    {{ crumb.title }}
+                {% endif %}
             {% endfor %}
         </p>
     {% endif %}
@@ -166,7 +171,7 @@
         </div>
         {% elseif page.slug != '' %}
         <div class="field">
-            <label>Slug <small>(URL segment – přejmenuje složku stránky)</small></label>
+            <label>Slug <small class="muted">– <code>{{ page.urlPath }}</code></small></label>
             <input type="text" name="slug" value="{{ page.slug }}" placeholder="napr-muj-clanek">
         </div>
         {% endif %}

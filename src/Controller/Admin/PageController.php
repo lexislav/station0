@@ -124,11 +124,32 @@ final class PageController
         return $this->twig->render($response, '@admin/pages/edit.twig', [
             'mode'          => 'edit',
             'page'          => $page,
+            'breadcrumb'    => $this->breadcrumbFor($page->urlPath),
             'blocks'        => $this->renderer->parseBlocks($page->body),
             'blockTypes'    => $blockTypes,
             'blockTypesMap' => $blockTypesMap,
             'csrf'          => $this->csrfFields($request),
         ]);
+    }
+
+    /**
+     * Ordered ancestor + self titles for the breadcrumb.
+     * @return list<array{title: string, urlPath: string}>
+     */
+    private function breadcrumbFor(string $urlPath): array
+    {
+        $crumbs = [];
+        $segments = array_values(array_filter(explode('/', trim($urlPath, '/')), 'strlen'));
+        $accum = '';
+        foreach ($segments as $seg) {
+            $accum  .= '/' . $seg;
+            $ancestor = $this->content->find($accum);
+            $crumbs[] = [
+                'title'   => $ancestor?->title ?: $seg,
+                'urlPath' => $accum,
+            ];
+        }
+        return $crumbs;
     }
 
     public function update(Request $request, Response $response, array $args): Response
