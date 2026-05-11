@@ -65,6 +65,10 @@ final class Bootstrap
 
         $app->addRoutingMiddleware();
         $app->add(TwigMiddleware::createFromContainer($app, Twig::class));
+        $app->add(new \Station0\Middleware\CsrfTwigGlobalMiddleware(
+            $container->get(Guard::class),
+            $container->get(Twig::class),
+        ));
         $app->add($container->get(Guard::class));
 
         $app->addErrorMiddleware($config['debug'], true, true, $container->get(Logger::class));
