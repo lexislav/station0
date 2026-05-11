@@ -147,6 +147,11 @@ final class PageController
         $page->published = isset($data['published']);
         $page->template  = (string) ($data['template'] ?? $page->template);
 
+        $newSlug = trim((string) ($data['slug'] ?? ''));
+        if ($newSlug !== '' && $page->slug !== '' && $newSlug !== $page->slug) {
+            $this->content->rename($page, $newSlug);
+        }
+
         $this->content->save($page);
         $this->cache->flush();
 

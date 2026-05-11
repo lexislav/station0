@@ -142,7 +142,6 @@
             {% for part in page.urlPath|trim('/')|split('/') %}
                 <span>›</span> {{ part }}
             {% endfor %}
-            <span class="muted"> – {{ page.urlPath }}</span>
         </p>
     {% endif %}
 
@@ -165,10 +164,10 @@
                 {% endfor %}
             </select>
         </div>
-        {% else %}
+        {% elseif page.slug != '' %}
         <div class="field">
-            <label>URL cesta</label>
-            <input type="text" value="{{ page.urlPath }}" readonly class="readonly">
+            <label>Slug <small>(URL segment – přejmenuje složku stránky)</small></label>
+            <input type="text" name="slug" value="{{ page.slug }}" placeholder="napr-muj-clanek">
         </div>
         {% endif %}
 

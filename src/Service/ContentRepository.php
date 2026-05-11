@@ -105,6 +105,48 @@ final class ContentRepository
         unset($this->parsedCache[$filePath]);
     }
 
+    /**
+     * Rename a page's slug — renames its directory; children travel with it.
+     * Mutates $page (slug, urlPath, filePath, childrenDir). No-op when the
+     * sanitized new slug equals the current one. Throws on root page or
+     * sibling collision.
+     */
+    public function rename(Page $page, string $newSlug): void
+    {
+        if ($page->slug === '' || $page->urlPath === '/') {
+            throw new \RuntimeException('Cannot rename the root page.');
+        }
+
+        $newSlug = Slug::sanitize($newSlug);
+        if ($newSlug === '' || $newSlug === $page->slug) {
+            return;
+        }
+
+        $oldDir    = dirname($page->filePath);
+        $parentDir = dirname($oldDir);
+        $newDir    = $parentDir . '/' . $newSlug;
+
+        if (is_dir($newDir)) {
+            throw new \RuntimeException("A page with slug '{$newSlug}' already exists here.");
+        }
+
+        if (!@rename($oldDir, $newDir)) {
+            throw new \RuntimeException("Failed to rename page directory.");
+        }
+
+        $page->slug        = $newSlug;
+        $page->filePath    = $newDir . '/' . basename($page->filePath);
+        $page->childrenDir = $newDir . '/';
+        $page->urlPath     = rtrim(dirname($page->urlPath), '/') . '/' . $newSlug;
+
+        // Drop any cached parse for the old path.
+        foreach (array_keys($this->parsedCache) as $key) {
+            if (str_starts_with($key, $oldDir . '/')) {
+                unset($this->parsedCache[$key]);
+            }
+        }
+    }
+
     /** Delete page by URL path. Returns true on success. */
     public function delete(string $urlPath): bool
     {
