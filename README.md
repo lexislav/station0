@@ -25,6 +25,39 @@ php -S localhost:8080 -t public public/index.php
 
 On first visit to `http://localhost:8080/admin`, a setup form lets you create the first admin account in the browser.
 
+## Apache deployment
+
+If you're serving via Apache (Homebrew `httpd`, XAMPP, system Apache, …):
+
+1. Point your vhost `DocumentRoot` at the project's `public/` directory.
+2. Allow `.htaccess` overrides for that directory and ensure `mod_rewrite` is loaded.
+
+Example vhost (Homebrew `httpd` at `/opt/homebrew/etc/httpd/extra/httpd-vhosts.conf`):
+
+```apache
+<VirtualHost *:80>
+    ServerName mysite.local
+    DocumentRoot "/path/to/mysite/public"
+
+    <Directory "/path/to/mysite/public">
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>
+```
+
+In `httpd.conf` make sure this line is uncommented:
+
+```
+LoadModule rewrite_module lib/httpd/modules/mod_rewrite.so
+```
+
+Restart: `brew services restart httpd`.
+
+**Symptom of misconfiguration:** Apache's default "Not Found — The requested URL
+was not found on this server." page on `/admin` (or any sub-path) means the
+rewrite isn't being applied — check `AllowOverride` and `mod_rewrite`.
+
 ## This package
 
 `lexislav/station0` is the **core library** — it contains the PHP classes, admin templates, and CLI binary. It is installed into `vendor/` by the skeleton project.
