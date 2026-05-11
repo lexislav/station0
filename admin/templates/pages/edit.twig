@@ -464,6 +464,30 @@
         bodyField.value = jsyaml.dump(collectBlocks(), { lineWidth: -1 });
     });
 
+    // Slug input: auto-sanitize on blur (mirrors PHP Slug::sanitize).
+    function sanitizeSlug(value) {
+        return value
+            .normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9\-_]+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^[-_]+|[-_]+$/g, '');
+    }
+    form.querySelectorAll('input[name="slug"]').forEach(input => {
+        input.addEventListener('blur', () => {
+            const cleaned = sanitizeSlug(input.value);
+            if (cleaned !== input.value) input.value = cleaned;
+        });
+    });
+
+    // Cmd+S (Mac) / Ctrl+S (Windows, Linux): save the page.
+    document.addEventListener('keydown', e => {
+        if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 's' || e.key === 'S')) {
+            e.preventDefault();
+            form.requestSubmit();
+        }
+    });
+
 })();
 </script>
 {% endblock %}
