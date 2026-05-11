@@ -175,6 +175,9 @@ final class PageController
         $page->template  = (string) ($data['template'] ?? $page->template);
 
         $newSlug = trim((string) ($data['slug'] ?? ''));
+        if ($newSlug === '' && $page->title !== '') {
+            $newSlug = Slug::fromTitle($page->title);
+        }
         if ($newSlug !== '' && $page->slug !== '' && $newSlug !== $page->slug) {
             $this->content->rename($page, $newSlug);
         }
