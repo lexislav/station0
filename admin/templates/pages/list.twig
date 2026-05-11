@@ -80,6 +80,7 @@
                 <details class="row-actions">
                     <summary>⋯</summary>
                     <div class="menu">
+                        <a href="{{ p.urlPath }}" target="_blank" rel="noopener">Zobrazit ↗</a>
                         <a href="{{ app.adminPath }}/pages/new?parent={{ p.urlPath|url_encode }}">+ Přidat podstránku</a>
                         <a href="{{ app.adminPath }}/pages/{{ editPath }}/edit">Upravit</a>
                         {% if p.urlPath != '/' %}
