@@ -124,7 +124,7 @@ final class Bootstrap
             return new Auth($c->get(PDO::class), $_SERVER['REMOTE_ADDR'] ?? null);
         });
 
-        $container->set(Twig::class, function () use ($config) {
+        $container->set(Twig::class, function ($c) use ($config) {
             $twig = Twig::create([
                 FilesystemLoader::MAIN_NAMESPACE => $config['paths']['templates'],
                 'admin'                          => $config['paths']['adminTemplates'],
@@ -137,6 +137,16 @@ final class Bootstrap
                 'baseUrl' => $config['baseUrl'],
                 'adminPath' => $config['adminPath'],
             ]);
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'top_level_pages',
+                function () use ($c) {
+                    $repo = $c->get(ContentRepository::class);
+                    return array_values(array_filter(
+                        $repo->all(false),
+                        fn (\Station0\Service\Page $p) => $p->depth() === 1
+                    ));
+                }
+            ));
             return $twig;
         });
 
