@@ -33,10 +33,91 @@ final class PageController
 
     public function index(Request $request, Response $response): Response
     {
+        $pages = $this->content->all();
         return $this->twig->render($response, '@admin/pages/list.twig', [
-            'pages' => $this->content->all(),
+            'pages' => $pages,
+            'tree'  => $this->buildTree($pages),
             'csrf'  => $this->csrfFields($request),
         ]);
+    }
+
+    // ─── Reorder (drag & drop) ───
+
+    public function reorder(Request $request, Response $response): Response
+    {
+        $raw  = (string) $request->getBody();
+        $data = json_decode($raw, true) ?: (array) $request->getParsedBody();
+
+        $parentUrl = (string) ($data['parent'] ?? '/');
+        $order     = (array) ($data['order'] ?? []);
+        $moved     = isset($data['moved']) && is_array($data['moved']) ? $data['moved'] : null;
+
+        try {
+            if ($moved !== null && !empty($moved['from'])) {
+                $movedPage = $this->content->find((string) $moved['from']);
+                if ($movedPage === null) {
+                    return $this->jsonResponse($response, ['ok' => false, 'error' => 'Source page not found.'], 404);
+                }
+                $this->content->move($movedPage, $parentUrl);
+            }
+
+            $childrenDir = rtrim($this->content->childrenDirForUrl($parentUrl), '/');
+            $step = 10;
+            foreach ($order as $idx => $slug) {
+                $slug = (string) $slug;
+                if ($slug === '') {
+                    continue;
+                }
+                $childUrl = ($parentUrl === '/' ? '' : rtrim($parentUrl, '/')) . '/' . $slug;
+                $page = $this->content->find($childUrl);
+                if ($page === null) {
+                    continue;
+                }
+                $page->sort = ($idx + 1) * $step;
+                $this->content->save($page);
+            }
+
+            $this->cache->flush();
+            return $this->jsonResponse($response, ['ok' => true]);
+        } catch (\Throwable $e) {
+            return $this->jsonResponse($response, ['ok' => false, 'error' => $e->getMessage()], 422);
+        }
+    }
+
+    private function jsonResponse(Response $response, array $payload, int $status = 200): Response
+    {
+        $response->getBody()->write(json_encode($payload));
+        return $response->withStatus($status)->withHeader('Content-Type', 'application/json');
+    }
+
+    /**
+     * Build a nested tree from the flat (already hierarchically sorted) list.
+     * @param Page[] $pages
+     * @return list<array{page: Page, children: array}>
+     */
+    private function buildTree(array $pages): array
+    {
+        $byUrl = [];
+        foreach ($pages as $p) {
+            $byUrl[$p->urlPath] = ['page' => $p, 'children' => []];
+        }
+        $roots = [];
+        foreach ($byUrl as $url => &$node) {
+            if ($url === '/') {
+                $roots[] = &$node;
+                continue;
+            }
+            $parentUrl = rtrim(dirname($url), '/');
+            if ($parentUrl === '') {
+                $parentUrl = '/';
+            }
+            if (isset($byUrl[$parentUrl])) {
+                $byUrl[$parentUrl]['children'][] = &$node;
+            } else {
+                $roots[] = &$node;
+            }
+        }
+        return $roots;
     }
 
     // ─── Create ───

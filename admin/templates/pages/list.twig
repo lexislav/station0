@@ -1,6 +1,44 @@
 {% extends '@admin/layout.twig' %}
 {% block head %}
 <style>
+.page-tree, .page-children {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.page-children {
+    margin-left: 1.4rem;
+    border-left: 1px dashed #dde1e7;
+    padding-left: .4rem;
+    min-height: .5rem; /* allow drops onto empty children */
+}
+.page-row {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr 14rem 7rem 9rem 2.2rem;
+    align-items: center;
+    gap: .5rem;
+    padding: .35rem .55rem;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+.page-row:hover { background: #f7f8fb; border-color: #eceff3; }
+.page-row.root { background: #fafbfd; }
+.drag-handle {
+    cursor: grab;
+    color: #b3bac6;
+    user-select: none;
+    text-align: center;
+    font-size: 1rem;
+    line-height: 1;
+}
+.drag-handle:active { cursor: grabbing; }
+.page-tree .page-row.root .drag-handle { visibility: hidden; }
+.page-row .title a { text-decoration: none; color: #2c3e50; font-weight: 500; }
+.page-row .title a:hover { text-decoration: underline; }
+.page-row .url code { font-size: .8rem; color: #6b7280; }
+.page-row .updated { font-size: .8rem; color: #6b7280; }
+.sortable-ghost { opacity: .35; }
+.sortable-drag  { background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
 .row-actions { position: relative; }
 .row-actions summary {
     list-style: none;
@@ -50,41 +88,35 @@
     <h1>Stránky</h1>
     <a class="btn primary" href="{{ app.adminPath }}/pages/new">+ Nová</a>
 </div>
-<table class="pages">
-    <thead>
-        <tr>
-            <th>Titulek</th>
-            <th>URL</th>
-            <th>Stav</th>
-            <th>Aktualizováno</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-    {% for p in pages %}
-        {% set editPath = p.urlPath == '/' ? '~' : p.urlPath|trim('/') %}
-        <tr>
-            <td style="padding-left: calc(0.9rem + {{ p.depth() * 1.2 }}rem)">
-                <a href="{{ app.adminPath }}/pages/{{ editPath }}/edit">{{ p.title }}</a>
-            </td>
-            <td><code>{{ p.urlPath }}</code></td>
-            <td>
+
+{% macro node(item, csrf, adminPath) %}
+    {% set p = item.page %}
+    {% set isRoot = p.urlPath == '/' %}
+    {% set editPath = isRoot ? '~' : p.urlPath|trim('/') %}
+    <li data-slug="{{ isRoot ? '' : p.slug }}" data-url="{{ p.urlPath }}" {% if isRoot %}data-root="1"{% endif %}>
+        <div class="page-row {% if isRoot %}root{% endif %}">
+            <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+            <span class="title">
+                <a href="{{ adminPath }}/pages/{{ editPath }}/edit">{{ p.title }}</a>
+            </span>
+            <span class="url"><code>{{ p.urlPath }}</code></span>
+            <span class="status">
                 {% if p.published %}
                     <span class="tag ok">publikováno</span>
                 {% else %}
                     <span class="tag">koncept</span>
                 {% endif %}
-            </td>
-            <td>{{ p.updated }}</td>
-            <td>
+            </span>
+            <span class="updated">{{ p.updated }}</span>
+            <span class="actions">
                 <details class="row-actions">
                     <summary>⋯</summary>
                     <div class="menu">
                         <a href="{{ p.urlPath }}" target="_blank" rel="noopener">Zobrazit ↗</a>
-                        <a href="{{ app.adminPath }}/pages/new?parent={{ p.urlPath|url_encode }}">+ Přidat podstránku</a>
-                        <a href="{{ app.adminPath }}/pages/{{ editPath }}/edit">Upravit</a>
-                        {% if p.urlPath != '/' %}
-                        <form method="post" action="{{ app.adminPath }}/pages/{{ editPath }}/delete"
+                        <a href="{{ adminPath }}/pages/new?parent={{ p.urlPath|url_encode }}">+ Přidat podstránku</a>
+                        <a href="{{ adminPath }}/pages/{{ editPath }}/edit">Upravit</a>
+                        {% if not isRoot %}
+                        <form method="post" action="{{ adminPath }}/pages/{{ editPath }}/delete"
                               onsubmit="return confirm('Smazat {{ p.urlPath }}?');">
                             <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
                             <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
@@ -93,43 +125,137 @@
                         {% endif %}
                     </div>
                 </details>
-            </td>
-        </tr>
-    {% else %}
-        <tr><td colspan="5" class="empty">Žádné stránky. <a href="{{ app.adminPath }}/pages/new">Vytvořit první.</a></td></tr>
+            </span>
+        </div>
+        <ul class="page-children" data-parent="{{ p.urlPath }}">
+            {% for child in item.children %}
+                {{ _self.node(child, csrf, adminPath) }}
+            {% endfor %}
+        </ul>
+    </li>
+{% endmacro %}
+
+{% if tree is empty %}
+    <p class="empty">Žádné stránky. <a href="{{ app.adminPath }}/pages/new">Vytvořit první.</a></p>
+{% else %}
+<ul class="page-tree" data-parent="/">
+    {% for item in tree %}
+        {{ _self.node(item, csrf, app.adminPath) }}
     {% endfor %}
-    </tbody>
-</table>
+</ul>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
 (() => {
-    // Position a fixed dropdown next to its summary button, flipping above
-    // when there isn't enough room below. The menu lives inside the row but
-    // escapes the table's overflow:hidden because position:fixed is anchored
-    // to the viewport.
+    const adminPath = {{ app.adminPath|json_encode|raw }};
+    const csrf = {
+        nameKey:  {{ csrf.nameKey|json_encode|raw }},
+        valueKey: {{ csrf.valueKey|json_encode|raw }},
+        name:     {{ csrf.name|json_encode|raw }},
+        value:    {{ csrf.value|json_encode|raw }},
+    };
+
+    function parentUrlOf(ul) {
+        return ul.getAttribute('data-parent') || '/';
+    }
+
+    function siblingsOrder(ul) {
+        return Array.from(ul.children)
+            .map(li => li.getAttribute('data-slug'))
+            .filter(s => s && s.length > 0);
+    }
+
+    async function postReorder(payload) {
+        const body = new FormData();
+        body.append(csrf.nameKey, csrf.name);
+        body.append(csrf.valueKey, csrf.value);
+        body.append('parent', payload.parent);
+        payload.order.forEach(slug => body.append('order[]', slug));
+        if (payload.moved) {
+            body.append('moved[from]', payload.moved.from);
+            body.append('moved[slug]', payload.moved.slug);
+        }
+        const res = await fetch(adminPath + '/pages/reorder', { method: 'POST', body });
+        if (!res.ok) {
+            let msg = 'Reorder failed (HTTP ' + res.status + ')';
+            try {
+                const j = await res.json();
+                if (j && j.error) msg = j.error;
+            } catch (_) {}
+            alert(msg);
+            window.location.reload();
+            return false;
+        }
+        return true;
+    }
+
+    function onEnd(evt) {
+        // Don't allow dragging the root page itself.
+        if (evt.item.hasAttribute('data-root')) {
+            window.location.reload();
+            return;
+        }
+        const toUl   = evt.to;
+        const fromUl = evt.from;
+        const slug   = evt.item.getAttribute('data-slug');
+        const parent = parentUrlOf(toUl);
+
+        const payload = { parent, order: siblingsOrder(toUl) };
+
+        if (toUl !== fromUl) {
+            // Page changed parents. Compute its old URL from the previous parent.
+            const fromParent = parentUrlOf(fromUl);
+            const oldUrl = (fromParent === '/' ? '' : fromParent.replace(/\/$/, '')) + '/' + slug;
+            payload.moved = { from: oldUrl, slug };
+            postReorder(payload).then(ok => {
+                if (ok) {
+                    // Reorder the old parent's siblings too (gaps closed).
+                    postReorder({ parent: fromParent, order: siblingsOrder(fromUl) });
+                }
+            });
+        } else {
+            postReorder(payload);
+        }
+    }
+
+    document.querySelectorAll('ul.page-tree, ul.page-children').forEach(ul => {
+        new Sortable(ul, {
+            group: 'pages',
+            handle: '.drag-handle',
+            animation: 150,
+            fallbackOnBody: true,
+            swapThreshold: 0.65,
+            filter: '[data-root]',
+            onMove: (evt) => {
+                // Block dropping anything into the root <li>'s parent slot (root never moves).
+                if (evt.dragged.hasAttribute('data-root')) return false;
+                return true;
+            },
+            onEnd,
+        });
+    });
+
+    // ── Row actions dropdown positioning (unchanged) ──
     function place(details) {
         const summary = details.querySelector('summary');
         const menu    = details.querySelector('.menu');
         if (!summary || !menu) return;
         const r = summary.getBoundingClientRect();
         const mh = menu.offsetHeight;
-        const mw = menu.offsetWidth;
         const below = window.innerHeight - r.bottom;
         const top = (below > mh + 8 || below > r.top) ? r.bottom + 4 : r.top - mh - 4;
+        const mw = menu.offsetWidth;
         const left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8));
         menu.style.top  = top  + 'px';
         menu.style.left = left + 'px';
     }
-
     document.querySelectorAll('details.row-actions').forEach(d => {
         d.addEventListener('toggle', () => { if (d.open) place(d); });
     });
-
-    // Reposition any open menu on scroll/resize.
     const reposition = () => document.querySelectorAll('details.row-actions[open]').forEach(place);
     window.addEventListener('scroll', reposition, true);
     window.addEventListener('resize', reposition);
-
-    // Close any open menu when clicking outside.
     document.addEventListener('click', e => {
         document.querySelectorAll('details.row-actions[open]').forEach(d => {
             if (!d.contains(e.target)) d.open = false;

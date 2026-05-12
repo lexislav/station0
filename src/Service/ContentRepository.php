@@ -70,7 +70,6 @@ final class ContentRepository
     public function all(bool $includeUnpublished = true): array
     {
         $pages = $this->scanDir($this->pagesDir, '', true);
-        usort($pages, fn (Page $a, Page $b) => strcmp($a->urlPath, $b->urlPath));
 
         if (!$includeUnpublished) {
             $pages = array_values(array_filter($pages, fn (Page $p) => $p->isLive()));
@@ -140,6 +139,57 @@ final class ContentRepository
         $page->urlPath     = rtrim(dirname($page->urlPath), '/') . '/' . $newSlug;
 
         // Drop any cached parse for the old path.
+        foreach (array_keys($this->parsedCache) as $key) {
+            if (str_starts_with($key, $oldDir . '/')) {
+                unset($this->parsedCache[$key]);
+            }
+        }
+    }
+
+    /**
+     * Move a page under a new parent (by parent URL path). Children travel with it.
+     * No-op when the new parent is the page's current parent. Throws on root page,
+     * cycle (moving under self/descendant), or slug collision in the target.
+     */
+    public function move(Page $page, string $newParentUrl): void
+    {
+        if ($page->slug === '' || $page->urlPath === '/') {
+            throw new \RuntimeException('Cannot move the root page.');
+        }
+
+        $newParentUrl = $this->normalizePath($newParentUrl);
+        $currentParentUrl = rtrim(dirname($page->urlPath), '/');
+        if ($currentParentUrl === '') {
+            $currentParentUrl = '/';
+        }
+        if ($newParentUrl === $currentParentUrl) {
+            return;
+        }
+
+        // Prevent moving a page under itself or any of its descendants.
+        if ($newParentUrl === $page->urlPath
+            || str_starts_with($newParentUrl . '/', $page->urlPath . '/')) {
+            throw new \RuntimeException('Cannot move a page under itself or its descendants.');
+        }
+
+        $targetDir = $this->childrenDirForUrl($newParentUrl);
+        @mkdir($targetDir, 0775, true);
+
+        $oldDir = dirname($page->filePath);
+        $newDir = rtrim($targetDir, '/') . '/' . $page->slug;
+
+        if (is_dir($newDir)) {
+            throw new \RuntimeException("A page with slug '{$page->slug}' already exists under '{$newParentUrl}'.");
+        }
+
+        if (!@rename($oldDir, $newDir)) {
+            throw new \RuntimeException('Failed to move page directory.');
+        }
+
+        $page->filePath    = $newDir . '/' . basename($page->filePath);
+        $page->childrenDir = $newDir . '/';
+        $page->urlPath     = ($newParentUrl === '/' ? '' : $newParentUrl) . '/' . $page->slug;
+
         foreach (array_keys($this->parsedCache) as $key) {
             if (str_starts_with($key, $oldDir . '/')) {
                 unset($this->parsedCache[$key]);
@@ -277,6 +327,8 @@ final class ContentRepository
             }
         }
 
+        // Build sibling list first so we can sort by ($sort, title) before recursing.
+        $siblings = [];
         foreach (glob($dir . '/*', GLOB_ONLYDIR) ?: [] as $subDir) {
             $slug  = basename($subDir);
             $files = glob($subDir . '/*.txt') ?: [];
@@ -286,9 +338,22 @@ final class ContentRepository
             }
 
             $urlPath = ($urlBase === '' ? '' : rtrim($urlBase, '/')) . '/' . $slug;
-            $pages[] = $this->buildPage($files[0], $urlPath);
+            $page    = $this->buildPage($files[0], $urlPath);
+            $siblings[] = ['subDir' => $subDir, 'urlPath' => $urlPath, 'page' => $page];
+        }
 
-            $children = $this->scanDir($subDir, $urlPath, false);
+        usort($siblings, function (array $a, array $b) {
+            $sa = $a['page']->sort ?? PHP_INT_MAX;
+            $sb = $b['page']->sort ?? PHP_INT_MAX;
+            if ($sa !== $sb) {
+                return $sa <=> $sb;
+            }
+            return strcmp(strtolower($a['page']->title), strtolower($b['page']->title));
+        });
+
+        foreach ($siblings as $s) {
+            $pages[] = $s['page'];
+            $children = $this->scanDir($s['subDir'], $s['urlPath'], false);
             $pages    = array_merge($pages, $children);
         }
 
@@ -316,7 +381,8 @@ final class ContentRepository
             updated:   $meta['updated'] ?? null,
             template:  $template,
             publishedAt: isset($meta['publishedat']) && $meta['publishedat'] !== '' ? $meta['publishedat'] : null,
-            extra:     array_diff_key($meta, array_flip(['title', 'metatitle', 'published', 'publishedat', 'author', 'updated', 'template'])),
+            sort:      isset($meta['sort']) && $meta['sort'] !== '' ? (int) $meta['sort'] : null,
+            extra:     array_diff_key($meta, array_flip(['title', 'metatitle', 'published', 'publishedat', 'author', 'updated', 'template', 'sort'])),
         );
 
         $page->urlPath    = $urlPath ?: '/';
@@ -393,6 +459,7 @@ final class ContentRepository
             'PublishedAt' => $page->publishedAt,
             'Author'      => $page->author,
             'Updated'     => $page->updated,
+            'Sort'        => $page->sort !== null ? (string) $page->sort : null,
         ];
 
         foreach ($page->extra as $k => $v) {
