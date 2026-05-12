@@ -13,13 +13,25 @@
     min-height: .5rem; /* allow drops onto empty children */
 }
 .page-row {
-    display: grid;
-    grid-template-columns: 1.6rem 1fr 14rem 7rem 9rem 2.2rem;
+    display: flex;
     align-items: center;
     gap: .5rem;
     padding: .35rem .55rem;
     border: 1px solid transparent;
     border-radius: 4px;
+}
+.page-row .drag-handle { flex: 0 0 1.6rem; }
+.page-row .title       { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Right-side cluster: pushed to the row's right edge with margin-left:auto so
+   columns line up across nesting depths (child rows share the same right
+   edge as the parent — no per-level right padding on .page-children). */
+.page-row .right-meta {
+    margin-left: auto;
+    display: grid;
+    grid-template-columns: 7rem 6rem 2.2rem;
+    align-items: center;
+    gap: .5rem;
+    flex: 0 0 auto;
 }
 .page-row:hover { background: #f7f8fb; border-color: #eceff3; }
 .page-row.root { background: #fafbfd; }
@@ -99,7 +111,7 @@
             <span class="title">
                 <a href="{{ adminPath }}/pages/{{ editPath }}/edit">{{ p.title }}</a>
             </span>
-            <span class="url"><code>{{ p.urlPath }}</code></span>
+            <span class="right-meta">
             <span class="status">
                 {% if p.published %}
                     <span class="tag ok">publikováno</span>
@@ -107,7 +119,7 @@
                     <span class="tag">koncept</span>
                 {% endif %}
             </span>
-            <span class="updated">{{ p.updated }}</span>
+            <span class="updated">{{ p.updated ? p.updated|slice(0, 10) : '' }}</span>
             <span class="actions">
                 <details class="row-actions">
                     <summary>⋯</summary>
@@ -125,6 +137,7 @@
                         {% endif %}
                     </div>
                 </details>
+            </span>
             </span>
         </div>
         <ul class="page-children" data-parent="{{ p.urlPath }}">
@@ -219,7 +232,11 @@
         }
     }
 
-    document.querySelectorAll('ul.page-tree, ul.page-children').forEach(ul => {
+    // Only `.page-children` lists are sortable — the outer `.page-tree` wraps
+    // the Home page and must not accept drops (would create a phantom sibling
+    // of root). Reordering top-level pages happens inside Home's own
+    // `.page-children` (data-parent="/").
+    document.querySelectorAll('ul.page-children').forEach(ul => {
         new Sortable(ul, {
             group: 'pages',
             handle: '.drag-handle',
