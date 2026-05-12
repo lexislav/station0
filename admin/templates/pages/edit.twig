@@ -129,7 +129,8 @@
 {% if mode == 'new' %}
     {% set formAction = app.adminPath ~ '/pages/create' %}
 {% else %}
-    {% set formAction = app.adminPath ~ '/pages/' ~ page.urlPath|trim('/') ~ '/update' %}
+    {% set editKey = page.urlPath == '/' ? '~' : page.urlPath|trim('/') %}
+    {% set formAction = app.adminPath ~ '/pages/' ~ editKey ~ '/update' %}
 {% endif %}
 
 <form method="post" action="{{ formAction }}" class="page-edit" id="page-edit-form">
@@ -142,7 +143,7 @@
             {% for crumb in breadcrumb %}
                 <span>›</span>
                 {% if not loop.last %}
-                    <a href="{{ app.adminPath }}/pages/{{ crumb.urlPath|trim('/') }}/edit">{{ crumb.title }}</a>
+                    <a href="{{ app.adminPath }}/pages/{{ crumb.urlPath == '/' ? '~' : crumb.urlPath|trim('/') }}/edit">{{ crumb.title }}</a>
                 {% else %}
                     {{ crumb.title }}
                 {% endif %}
