@@ -71,18 +71,58 @@
     display: flex;
     flex-wrap: wrap;
     gap: .5rem;
-    align-items: flex-end;
+    align-items: flex-start;
     padding: .5rem;
     background: #f4f6f9;
     border-radius: 4px;
     border: 1px solid #e2e6ec;
 }
 .list-item .field { flex: 1; min-width: 140px; margin: 0; }
+.list-item .field--img { flex: 0 0 auto; min-width: 0; }
 .list-item-remove { flex-shrink: 0; }
+.list-item-btns { display: flex; gap: .35rem; align-items: flex-end; flex-shrink: 0; margin-left: auto; }
+@media (min-width: 768px) {
+    .list-item { align-items: center; }
+    .list-item-btns { align-items: center; }
+}
 
 /* ── Input with upload button ──────────────────────────────────────────── */
 .input-with-btn { display: flex; gap: .4rem; align-items: center; }
 .input-with-btn input[type="text"] { flex: 1; }
+
+/* ── Image thumbnail widget (gallery list items) ───────────────────────── */
+.img-thumb-upload { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .3rem; }
+.img-thumb-wrap {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .3rem;
+    cursor: pointer;
+}
+.img-thumb-wrap img {
+    width: 80px; height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #dde1e7;
+    display: block;
+    background: #e8ebf0;
+}
+.img-thumb-placeholder {
+    width: 80px; height: 80px;
+    border-radius: 4px;
+    border: 2px dashed #c8cdd6;
+    display: flex; align-items: center; justify-content: center;
+    background: #f4f6f9;
+    color: #8a94a6;
+    font-size: .7rem;
+    text-align: center;
+    box-sizing: border-box;
+}
+.img-thumb-name {
+    font-size: .72rem; color: #5a6478;
+    max-width: 80px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* ── ToastUI: no inner wrapper, floating toolbar dock ──────────────────── */
 .block-editor .toastui-editor-defaultUI {
@@ -410,10 +450,12 @@
         let html = '';
         (itemFields || []).forEach(sf => {
             if (sf.type === 'image') {
-                html += `<div class="field"><label>${sf.label}</label>`
-                      + `<div class="input-with-btn">`
-                      + `<input type="text" data-subfield="${sf.name}" value="" placeholder="filename.jpg">`
-                      + `<button type="button" class="btn btn-sm upload-trigger">Nahrát</button>`
+                html += `<div class="field field--img">`
+                      + `<div class="img-thumb-upload">`
+                      + `<input type="hidden" data-subfield="${sf.name}" value="">`
+                      + `<label class="img-thumb-wrap" title="Kliknutím nahrajte obrázek">`
+                      + `<span class="img-thumb-placeholder">Nahrát<br>obrázek</span>`
+                      + `</label>`
                       + `<input type="file" class="upload-file-input" hidden accept="image/*,.svg">`
                       + `</div></div>`;
             } else {
@@ -421,7 +463,11 @@
                       + `<input type="text" data-subfield="${sf.name}" value=""></div>`;
             }
         });
-        html += `<button type="button" class="btn btn-sm list-item-remove">✕ Odebrat</button>`;
+        const hasImage = (itemFields || []).some(sf => sf.type === 'image');
+        html += `<div class="list-item-btns">`
+              + (hasImage ? `<button type="button" class="btn btn-sm upload-trigger">Nahrát</button>` : '')
+              + `<button type="button" class="btn btn-sm list-item-remove">✕ Odebrat</button>`
+              + `</div>`;
         div.innerHTML = html;
         return div;
     }
@@ -479,7 +525,16 @@
 
         // Upload button → trigger hidden file input
         if (e.target.matches('.upload-trigger')) {
-            e.target.closest('.input-with-btn').querySelector('.upload-file-input').click();
+            const listItem = e.target.closest('.list-item');
+            const fileInput = listItem
+                ? listItem.querySelector('.upload-file-input')
+                : e.target.closest('.input-with-btn')?.querySelector('.upload-file-input');
+            if (fileInput) fileInput.click();
+            return;
+        }
+        // Clicking the thumbnail (or placeholder) also triggers upload
+        if (e.target.closest('.img-thumb-wrap')) {
+            e.target.closest('.img-thumb-upload').querySelector('.upload-file-input').click();
             return;
         }
     });
@@ -502,7 +557,31 @@
         const file = e.target.files[0];
         if (!file) return;
         const result = await uploadFile(file);
-        if (result) e.target.closest('.input-with-btn').querySelector('input[type="text"]').value = result.filename;
+        if (result) {
+            const wrap = e.target.closest('.img-thumb-upload');
+            if (wrap) {
+                wrap.querySelector('input[type="hidden"][data-subfield]').value = result.filename;
+                const thumbWrap = wrap.querySelector('.img-thumb-wrap');
+                let img = thumbWrap.querySelector('img');
+                if (!img) {
+                    const placeholder = thumbWrap.querySelector('.img-thumb-placeholder');
+                    img = document.createElement('img');
+                    img.alt = result.filename;
+                    thumbWrap.replaceChild(img, placeholder);
+                }
+                img.src = result.url;
+                img.alt = result.filename;
+                // Auto-fill caption from filename if field exists and is empty
+                const captionInput = e.target.closest('.list-item')?.querySelector('[data-subfield="caption"]');
+                if (captionInput && !captionInput.value) {
+                    captionInput.value = result.filename.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+                }
+            } else {
+                // fallback: top-level image fields still use .input-with-btn
+                const ibWrap = e.target.closest('.input-with-btn');
+                if (ibWrap) ibWrap.querySelector('input[type="text"]').value = result.filename;
+            }
+        }
         e.target.value = '';
     });
 

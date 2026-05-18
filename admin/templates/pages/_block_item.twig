@@ -79,14 +79,24 @@
                             {% for item in attribute(block, field.name)|default([]) %}
                                 <div class="list-item">
                                     {% for subfield in field.item_fields %}
-                                        <div class="field">
-                                            <label>{{ subfield.label }}</label>
+                                        <div class="field{% if subfield.type == 'image' %} field--img{% endif %}">
+                                            {% if subfield.type != 'image' %}<label>{{ subfield.label }}</label>{% endif %}
                                             {% if subfield.type == 'image' %}
-                                                <div class="input-with-btn">
-                                                    <input type="text" data-subfield="{{ subfield.name }}"
-                                                           value="{{ attribute(item, subfield.name)|default('') }}"
-                                                           placeholder="filename.jpg">
-                                                    <button type="button" class="btn btn-sm upload-trigger">Nahrát</button>
+                                                {% set _fname = attribute(item, subfield.name)|default('') %}
+                                                {% set _isUrl = _fname starts with 'http' or _fname starts with '/' %}
+                                                {% set _mediaBase = (not _isUrl and mode == 'edit')
+                                                    ? '/media/' ~ (page.urlPath == '/' ? '~' : page.urlPath|trim('/'))
+                                                    : '' %}
+                                                {% set _thumbSrc = _fname ? (_isUrl ? _fname : _mediaBase ~ '/' ~ _fname) : '' %}
+                                                <div class="img-thumb-upload">
+                                                    <input type="hidden" data-subfield="{{ subfield.name }}" value="{{ _fname }}">
+                                                    <label class="img-thumb-wrap" title="Kliknutím nahrajte obrázek">
+                                                        {% if _fname %}
+                                                            <img src="{{ _thumbSrc }}" alt="{{ _fname }}">
+                                                        {% else %}
+                                                            <span class="img-thumb-placeholder">Nahrát<br>obrázek</span>
+                                                        {% endif %}
+                                                    </label>
                                                     <input type="file" class="upload-file-input" hidden accept="image/*,.svg">
                                                 </div>
                                             {% else %}
@@ -95,7 +105,10 @@
                                             {% endif %}
                                         </div>
                                     {% endfor %}
-                                    <button type="button" class="btn btn-sm list-item-remove">✕ Odebrat</button>
+                                    <div class="list-item-btns">
+                                        <button type="button" class="btn btn-sm upload-trigger">Nahrát</button>
+                                        <button type="button" class="btn btn-sm list-item-remove">✕ Odebrat</button>
+                                    </div>
                                 </div>
                             {% endfor %}
                             <button type="button" class="btn btn-sm list-item-add">+ Přidat položku</button>
