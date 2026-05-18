@@ -133,9 +133,10 @@ final class Bootstrap
                 'auto_reload' => true,
             ]);
             $twig->getEnvironment()->addGlobal('app', [
-                'name' => $config['name'],
-                'baseUrl' => $config['baseUrl'],
-                'adminPath' => $config['adminPath'],
+                'name'          => $config['name'],
+                'baseUrl'       => $config['baseUrl'],
+                'adminPath'     => $config['adminPath'],
+                'blockCollapse' => $config['admin']['blockCollapse'] ?? 'remember',
             ]);
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'top_level_pages',

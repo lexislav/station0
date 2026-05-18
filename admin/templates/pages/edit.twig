@@ -19,7 +19,7 @@
     background: #f4f6f9;
     border-bottom: 1px solid #dde1e7;
     border-radius: 6px 6px 0 0;
-    cursor: default;
+    cursor: pointer;
 }
 .block-label { font-size: .8rem; font-weight: 600; text-transform: uppercase; color: #5a6478; letter-spacing: .04em; }
 .block-actions { display: flex; gap: .25rem; }
@@ -35,6 +35,21 @@
 }
 .block-btn:hover { background: #e8ebf0; }
 .block-btn.block-remove:hover { background: #ffe4e4; border-color: #f9a0a0; color: #c0392b; }
+
+/* ── Block collapse ────────────────────────────────────────────────────── */
+.block-item.collapsed .block-fields { display: none; }
+.block-item.collapsed .block-header { border-bottom: none; border-radius: 6px; }
+.block-toggle {
+    font-size: .75rem;
+    color: #8a94a6;
+    margin-left: .35rem;
+    flex-shrink: 0;
+    line-height: 1;
+    display: inline-block;
+    transition: transform .15s ease;
+    user-select: none;
+}
+.block-item.collapsed .block-toggle { transform: rotate(-90deg); }
 
 .block-fields { padding: .75rem; display: flex; flex-direction: column; gap: .6rem; }
 
@@ -262,6 +277,9 @@
     // Starts after the server-rendered blocks so there are no collisions.
     let blockCounter = {{ blocks|length }};
 
+    const collapseMode = {{ app.blockCollapse|json_encode|raw }};
+    const lsKey = 's0_blk_' + (pagePath || '__new__');
+
     // blockId (string) → ToastUI Editor instance
     const editors = {};
 
@@ -334,6 +352,7 @@
         blockList.appendChild(blockEl);
 
         if (type === 'text') initTextEditor(blockEl);
+        initNewBlockCollapse(blockEl);
     }
 
     function removeBlock(blockEl) {
@@ -347,6 +366,41 @@
         if (dir === 'up'   && prev) blockList.insertBefore(blockEl, prev);
         if (dir === 'down' && next) blockList.insertBefore(next, blockEl);
     }
+
+    // ── Block collapse ─────────────────────────────────────────────────────
+
+    function setCollapsed(blockEl, collapsed) {
+        blockEl.classList.toggle('collapsed', collapsed);
+    }
+
+    function loadCollapseState() {
+        try { return JSON.parse(localStorage.getItem(lsKey) || 'null'); }
+        catch { return null; }
+    }
+
+    function saveCollapseState() {
+        const states = Array.from(blockList.children).map(el => el.classList.contains('collapsed'));
+        try { localStorage.setItem(lsKey, JSON.stringify(states)); }
+        catch { /* storage full or private mode — ignore */ }
+    }
+
+    function initCollapseStates() {
+        const items = Array.from(blockList.children);
+        if (collapseMode === 'collapsed') {
+            items.forEach(el => setCollapsed(el, true));
+        } else if (collapseMode === 'remember') {
+            const saved = loadCollapseState();
+            if (saved) items.forEach((el, i) => setCollapsed(el, saved[i] === true));
+        }
+        // 'open': nothing to do
+    }
+
+    function initNewBlockCollapse(blockEl) {
+        if (collapseMode === 'collapsed') setCollapsed(blockEl, true);
+        // 'open' and 'remember' (no prior state for new block): start open
+    }
+
+    initCollapseStates();
 
     // ── List-item repeater ─────────────────────────────────────────────────
 
@@ -428,6 +482,19 @@
             e.target.closest('.input-with-btn').querySelector('.upload-file-input').click();
             return;
         }
+    });
+
+    blockList.addEventListener('dblclick', e => {
+        const header = e.target.closest('.block-header');
+        if (!header) return;
+        if (e.target.closest('.block-actions')) return;
+        if (e.target.closest('.toastui-editor-mode-switch')) return;
+
+        const blockEl = header.closest('.block-item');
+        if (!blockEl) return;
+
+        setCollapsed(blockEl, !blockEl.classList.contains('collapsed'));
+        if (collapseMode === 'remember') saveCollapseState();
     });
 
     document.addEventListener('change', async e => {
