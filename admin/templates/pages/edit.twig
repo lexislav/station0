@@ -442,6 +442,18 @@
 
     initCollapseStates();
 
+    // ── Pre-fill empty captions from image filename ────────────────────────
+    function filenameToCaption(src) {
+        return src.split('/').pop().split('?')[0].replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ').trim();
+    }
+    document.querySelectorAll('.list-item').forEach(item => {
+        const srcInput     = item.querySelector('input[data-subfield="src"]');
+        const captionInput = item.querySelector('input[data-subfield="caption"]');
+        if (srcInput && captionInput && srcInput.value && !captionInput.value) {
+            captionInput.value = filenameToCaption(srcInput.value);
+        }
+    });
+
     // ── List-item repeater ─────────────────────────────────────────────────
 
     function createListItem(itemFields) {
@@ -574,7 +586,7 @@
                 // Auto-fill caption from filename if field exists and is empty
                 const captionInput = e.target.closest('.list-item')?.querySelector('[data-subfield="caption"]');
                 if (captionInput && !captionInput.value) {
-                    captionInput.value = result.filename.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+                    captionInput.value = filenameToCaption(result.filename);
                 }
             } else {
                 // fallback: top-level image fields still use .input-with-btn
