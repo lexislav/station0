@@ -27,6 +27,8 @@ final class Page
         public string $template = 'page',
         /** ISO-ish datetime ("Y-m-d H:i" or "Y-m-d"). Future = scheduled. */
         public ?string $publishedAt = null,
+        /** Explicit sibling sort order. Lower comes first; null falls back to title. */
+        public ?int $sort = null,
         public array $extra = [],
     ) {}
 

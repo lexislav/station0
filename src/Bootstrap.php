@@ -133,9 +133,10 @@ final class Bootstrap
                 'auto_reload' => true,
             ]);
             $twig->getEnvironment()->addGlobal('app', [
-                'name' => $config['name'],
-                'baseUrl' => $config['baseUrl'],
-                'adminPath' => $config['adminPath'],
+                'name'          => $config['name'],
+                'baseUrl'       => $config['baseUrl'],
+                'adminPath'     => $config['adminPath'],
+                'blockCollapse' => $config['admin']['blockCollapse'] ?? 'remember',
             ]);
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'top_level_pages',
@@ -283,6 +284,7 @@ final class Bootstrap
                 $authed->get('/pages', [AdminPageController::class, 'index'])->setName('admin.pages.index');
                 $authed->get('/pages/new', [AdminPageController::class, 'createForm'])->setName('admin.pages.new');
                 $authed->post('/pages/create', [AdminPageController::class, 'store'])->setName('admin.pages.store');
+                $authed->post('/pages/reorder', [AdminPageController::class, 'reorder'])->setName('admin.pages.reorder');
                 $authed->get('/pages/{path:.+}/edit', [AdminPageController::class, 'editForm'])->setName('admin.pages.edit');
                 $authed->post('/pages/{path:.+}/update', [AdminPageController::class, 'update'])->setName('admin.pages.update');
                 $authed->post('/pages/{path:.+}/delete', [AdminPageController::class, 'delete'])->setName('admin.pages.delete');
