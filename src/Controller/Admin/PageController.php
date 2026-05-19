@@ -150,8 +150,41 @@ final class PageController
         $rawSlug   = trim((string) ($data['slug'] ?? ''));
         $parentUrl = trim((string) ($data['parent'] ?? '/'));
 
+        $template = (string) ($data['template'] ?? 'page');
+        if ($template === '') {
+            $template = 'page';
+        }
+        $allowedChildTemplates = $this->parseTemplateList((string) ($data['allowed_child_templates'] ?? ''));
+
         if ($title === '') {
             return $response->withStatus(422);
+        }
+
+        try {
+            $this->content->assertChildTemplateAllowed($parentUrl, $template);
+        } catch (\RuntimeException $e) {
+            [$blockTypes, $blockTypesMap] = $this->blockTypeData();
+            $draft = new Page(
+                slug: $rawSlug,
+                title: $title,
+                body: (string) ($data['body'] ?? ''),
+                metatitle: trim((string) ($data['metatitle'] ?? '')) ?: null,
+                published: isset($data['published']),
+                template: $template,
+                publishedAt: $this->normalizePublishedAt(trim((string) ($data['published_at'] ?? ''))),
+                allowedChildTemplates: $allowedChildTemplates,
+            );
+            return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
+                'mode'           => 'new',
+                'page'           => $draft,
+                'parents'        => $this->parentOptions(),
+                'selectedParent' => $parentUrl,
+                'blocks'         => $this->renderer->parseBlocks($draft->body),
+                'blockTypes'     => $blockTypes,
+                'blockTypesMap'  => $blockTypesMap,
+                'error'          => $e->getMessage(),
+                'csrf'           => $this->csrfFields($request),
+            ]);
         }
 
         $slug = $rawSlug !== '' ? Slug::sanitize($rawSlug) : Slug::fromTitle($title);
@@ -162,11 +195,6 @@ final class PageController
         // Resolve physical save directory
         $childrenDir = $this->content->childrenDirForUrl($parentUrl);
         @mkdir($childrenDir, 0775, true);
-
-        $template = (string) ($data['template'] ?? 'page');
-        if ($template === '') {
-            $template = 'page';
-        }
 
         // Each page lives in its own directory named after the slug;
         // the content file inside is named after the template.
@@ -186,6 +214,7 @@ final class PageController
             published:   isset($data['published']),
             template:    $template,
             publishedAt: $this->normalizePublishedAt(trim((string) ($data['published_at'] ?? ''))),
+            allowedChildTemplates: $allowedChildTemplates,
         );
 
         $this->content->save($page, $filePath);
@@ -268,9 +297,29 @@ final class PageController
         $page->metatitle = trim((string) ($data['metatitle'] ?? '')) ?: null;
         $page->published = isset($data['published']);
         $page->template  = (string) ($data['template'] ?? $page->template);
+        $page->allowedChildTemplates = $this->parseTemplateList((string) ($data['allowed_child_templates'] ?? ''));
 
         $rawPublishedAt = trim((string) ($data['published_at'] ?? ''));
         $page->publishedAt = $this->normalizePublishedAt($rawPublishedAt);
+
+        if ($page->urlPath !== '/') {
+            $parentUrl = rtrim(dirname($page->urlPath), '/') ?: '/';
+            try {
+                $this->content->assertChildTemplateAllowed($parentUrl, $page->template);
+            } catch (\RuntimeException $e) {
+                [$blockTypes, $blockTypesMap] = $this->blockTypeData();
+                return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
+                    'mode'          => 'edit',
+                    'page'          => $page,
+                    'breadcrumb'    => $this->breadcrumbFor($page->urlPath),
+                    'blocks'        => $this->renderer->parseBlocks($page->body),
+                    'blockTypes'    => $blockTypes,
+                    'blockTypesMap' => $blockTypesMap,
+                    'error'         => $e->getMessage(),
+                    'csrf'          => $this->csrfFields($request),
+                ]);
+            }
+        }
 
         $newSlug = trim((string) ($data['slug'] ?? ''));
         if ($newSlug === '' && $page->title !== '') {
@@ -362,6 +411,12 @@ final class PageController
             $out[] = $field;
         }
         return $out;
+    }
+
+    /** @return list<string> */
+    private function parseTemplateList(string $raw): array
+    {
+        return array_values(array_filter(array_map('trim', explode(',', $raw)), 'strlen'));
     }
 
     private function csrfFields(Request $request): array

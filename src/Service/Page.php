@@ -29,6 +29,8 @@ final class Page
         public ?string $publishedAt = null,
         /** Explicit sibling sort order. Lower comes first; null falls back to title. */
         public ?int $sort = null,
+        /** Child templates this page accepts. Empty = unrestricted. */
+        public array $allowedChildTemplates = [],
         public array $extra = [],
     ) {}
 

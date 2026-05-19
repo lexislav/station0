@@ -172,6 +172,8 @@ final class ContentRepository
             throw new \RuntimeException('Cannot move a page under itself or its descendants.');
         }
 
+        $this->assertChildTemplateAllowed($newParentUrl, $page->template);
+
         $targetDir = $this->childrenDirForUrl($newParentUrl);
         @mkdir($targetDir, 0775, true);
 
@@ -258,6 +260,27 @@ final class ContentRepository
         }
 
         return $parent->childrenDir;
+    }
+
+    /**
+     * Throws \RuntimeException if $childTemplate is not allowed under the
+     * parent at $parentUrl. Empty/absent parent list = unrestricted.
+     */
+    public function assertChildTemplateAllowed(string $parentUrl, string $childTemplate): void
+    {
+        $parent = $this->find($parentUrl);
+        if ($parent === null || empty($parent->allowedChildTemplates)) {
+            return;
+        }
+
+        if (!in_array($childTemplate, $parent->allowedChildTemplates, true)) {
+            throw new \RuntimeException(sprintf(
+                "Template '%s' is not allowed under '%s'. Allowed: %s.",
+                $childTemplate,
+                $this->normalizePath($parentUrl),
+                implode(', ', $parent->allowedChildTemplates),
+            ));
+        }
     }
 
     // ─────────────────── Traversal ───────────────────
@@ -382,7 +405,8 @@ final class ContentRepository
             template:  $template,
             publishedAt: isset($meta['publishedat']) && $meta['publishedat'] !== '' ? $meta['publishedat'] : null,
             sort:      isset($meta['sort']) && $meta['sort'] !== '' ? (int) $meta['sort'] : null,
-            extra:     array_diff_key($meta, array_flip(['title', 'metatitle', 'published', 'publishedat', 'author', 'updated', 'template', 'sort'])),
+            allowedChildTemplates: $this->parseTemplateList($meta['allowedchildtemplates'] ?? ''),
+            extra:     array_diff_key($meta, array_flip(['title', 'metatitle', 'published', 'publishedat', 'author', 'updated', 'template', 'sort', 'allowedchildtemplates'])),
         );
 
         $page->urlPath    = $urlPath ?: '/';
@@ -460,6 +484,7 @@ final class ContentRepository
             'Author'      => $page->author,
             'Updated'     => $page->updated,
             'Sort'        => $page->sort !== null ? (string) $page->sort : null,
+            'AllowedChildTemplates' => $page->allowedChildTemplates ? implode(', ', $page->allowedChildTemplates) : null,
         ];
 
         foreach ($page->extra as $k => $v) {
@@ -477,6 +502,12 @@ final class ContentRepository
     }
 
     // ─────────────────── Helpers ───────────────────
+
+    /** @return list<string> */
+    private function parseTemplateList(string $raw): array
+    {
+        return array_values(array_filter(array_map('trim', explode(',', $raw)), 'strlen'));
+    }
 
     private function normalizePath(string $path): string
     {

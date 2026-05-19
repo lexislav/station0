@@ -192,6 +192,8 @@
     <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
     <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
 
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
     {% if mode == 'edit' %}
         <p class="breadcrumb">
             <a href="{{ app.adminPath }}/pages">Stránky</a>
@@ -236,6 +238,13 @@
             <label>Šablona</label>
             <input type="text" name="template" value="{{ page.template|default('page') }}">
         </div>
+    </div>
+
+    <div class="field">
+        <label>Povolené šablony potomků <small>(volitelné, oddělené čárkou — prázdné = bez omezení)</small></label>
+        <input type="text" name="allowed_child_templates"
+               value="{{ page.allowedChildTemplates|join(', ') }}"
+               placeholder="article, gallery">
     </div>
 
     <div class="field">

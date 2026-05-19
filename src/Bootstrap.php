@@ -148,6 +148,23 @@ final class Bootstrap
                     ));
                 }
             ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'child_pages',
+                function (string $parentUrl) use ($c) {
+                    $repo      = $c->get(ContentRepository::class);
+                    $parentUrl = '/' . trim($parentUrl, '/');
+                    return array_values(array_filter(
+                        $repo->all(false),
+                        function (\Station0\Service\Page $p) use ($parentUrl) {
+                            if ($p->urlPath === '/') {
+                                return false;
+                            }
+                            $pp = rtrim(dirname($p->urlPath), '/') ?: '/';
+                            return $pp === $parentUrl;
+                        }
+                    ));
+                }
+            ));
             return $twig;
         });
 
