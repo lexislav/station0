@@ -461,8 +461,17 @@ final class PageController
         if ($parent !== null) {
             $allowed = $this->content->effectiveAllowedChildTemplates($parent);
             if (!empty($allowed)) {
-                $names = array_values(array_filter($names, fn ($n) => in_array($n, $allowed, true)));
+                // Parent restricts: show only what it permits.
+                return array_values(array_filter($names, fn ($n) => in_array($n, $allowed, true)));
             }
+        }
+
+        // No restriction from parent: hide templates that are dedicated child
+        // templates (listed in some page's AllowedChildTemplates but never used
+        // as an own template themselves).
+        $childOnly = $this->content->childOnlyTemplates();
+        if (!empty($childOnly)) {
+            $names = array_values(array_filter($names, fn ($n) => !in_array($n, $childOnly, true)));
         }
 
         return $names;

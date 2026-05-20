@@ -281,6 +281,35 @@ final class ContentRepository
     }
 
     /**
+     * Templates that are dedicated child templates and should NOT appear in
+     * the global template select.
+     *
+     * A template is "child-only" when it is listed in at least one page's
+     * AllowedChildTemplates field AND it is never used as the own template of
+     * any existing page. The second condition prevents accidentally hiding a
+     * template that is still in use at the top level.
+     *
+     * @return list<string>
+     */
+    public function childOnlyTemplates(): array
+    {
+        $usedAsOwn   = [];
+        $listedAsChild = [];
+
+        foreach ($this->all() as $page) {
+            $usedAsOwn[$page->template] = true;
+            foreach ($page->allowedChildTemplates as $tpl) {
+                $listedAsChild[$tpl] = true;
+            }
+        }
+
+        return array_values(array_filter(
+            array_keys($listedAsChild),
+            fn ($tpl) => !isset($usedAsOwn[$tpl]),
+        ));
+    }
+
+    /**
      * Throws \RuntimeException if $childTemplate is not allowed under the
      * parent at $parentUrl. Empty/absent parent list = unrestricted.
      */
