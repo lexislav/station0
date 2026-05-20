@@ -314,7 +314,9 @@ final class PageController
         $page->metatitle = trim((string) ($data['metatitle'] ?? '')) ?: null;
         $page->published = isset($data['published']);
         $page->template  = (string) ($data['template'] ?? $page->template);
-        $page->allowedChildTemplates = $this->parseTemplateList((string) ($data['allowed_child_templates'] ?? ''));
+        if (array_key_exists('allowed_child_templates', $data)) {
+            $page->allowedChildTemplates = $this->parseTemplateList((string) $data['allowed_child_templates']);
+        }
 
         $rawPublishedAt = trim((string) ($data['published_at'] ?? ''));
         $page->publishedAt = $this->normalizePublishedAt($rawPublishedAt);

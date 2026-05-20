@@ -249,13 +249,6 @@
     </div>
 
     <div class="field">
-        <label>Povolené šablony potomků <small>(volitelné, oddělené čárkou — prázdné = bez omezení)</small></label>
-        <input type="text" name="allowed_child_templates"
-               value="{{ page.allowedChildTemplates|join(', ') }}"
-               placeholder="article, gallery">
-    </div>
-
-    <div class="field">
         <label>Meta title <small>(pro HTML &lt;title&gt; – pokud prázdné, použije se Titulek)</small></label>
         <input type="text" name="metatitle" value="{{ page.metatitle }}" placeholder="{{ page.title }}">
     </div>
