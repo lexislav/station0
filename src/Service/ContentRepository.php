@@ -284,28 +284,68 @@ final class ContentRepository
      * Templates that are dedicated child templates and should NOT appear in
      * the global template select.
      *
-     * A template is "child-only" when it is listed in at least one page's
-     * AllowedChildTemplates field AND it is never used as the own template of
-     * any existing page. The second condition prevents accidentally hiding a
-     * template that is still in use at the top level.
+     * A template is "child-only" when:
+     *   1. It is listed in at least one page's AllowedChildTemplates field.
+     *   2. Every existing page that uses it as its own template is a
+     *      sanctioned child — i.e. its parent explicitly allows that template
+     *      via AllowedChildTemplates (or the implicit stream rule).
+     *
+     * This means a template already used under the correct parent (e.g. all
+     * "gallery" pages under a "fotogalerie" parent) is still treated as
+     * child-only, while a template used anywhere outside such a restriction
+     * is kept in the global list.
      *
      * @return list<string>
      */
     public function childOnlyTemplates(): array
     {
-        $usedAsOwn   = [];
-        $listedAsChild = [];
+        $pages = $this->all();
 
-        foreach ($this->all() as $page) {
-            $usedAsOwn[$page->template] = true;
+        // Build a URL → Page map and collect every template listed as a child template.
+        $byUrl         = [];
+        $listedAsChild = [];
+        foreach ($pages as $page) {
+            $byUrl[$page->urlPath] = $page;
             foreach ($page->allowedChildTemplates as $tpl) {
                 $listedAsChild[$tpl] = true;
             }
         }
 
+        if (empty($listedAsChild)) {
+            return [];
+        }
+
+        // For each candidate template, check whether any page using it is
+        // outside a sanctioned parent relationship.
+        $usedOutsideRestriction = [];
+        foreach ($pages as $page) {
+            $tpl = $page->template;
+            if (!isset($listedAsChild[$tpl])) {
+                continue;
+            }
+
+            if ($page->urlPath === '/') {
+                $usedOutsideRestriction[$tpl] = true;
+                continue;
+            }
+
+            $parentUrl = rtrim(dirname($page->urlPath), '/') ?: '/';
+            $parent    = $byUrl[$parentUrl] ?? null;
+
+            if ($parent === null) {
+                $usedOutsideRestriction[$tpl] = true;
+                continue;
+            }
+
+            $allowed = $this->effectiveAllowedChildTemplates($parent);
+            if (empty($allowed) || !in_array($tpl, $allowed, true)) {
+                $usedOutsideRestriction[$tpl] = true;
+            }
+        }
+
         return array_values(array_filter(
             array_keys($listedAsChild),
-            fn ($tpl) => !isset($usedAsOwn[$tpl]),
+            fn ($tpl) => !isset($usedOutsideRestriction[$tpl]),
         ));
     }
 
