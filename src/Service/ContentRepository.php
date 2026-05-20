@@ -263,22 +263,45 @@ final class ContentRepository
     }
 
     /**
+     * Returns the effective set of templates a child page may use under $parent.
+     * Priority: explicit AllowedChildTemplates field → implicit rule (a "stream"
+     * page restricts children to the same "stream" template) → unrestricted ([]).
+     *
+     * @return list<string>
+     */
+    public function effectiveAllowedChildTemplates(Page $parent): array
+    {
+        if (!empty($parent->allowedChildTemplates)) {
+            return $parent->allowedChildTemplates;
+        }
+        if ($parent->template === 'stream') {
+            return ['stream'];
+        }
+        return [];
+    }
+
+    /**
      * Throws \RuntimeException if $childTemplate is not allowed under the
      * parent at $parentUrl. Empty/absent parent list = unrestricted.
      */
     public function assertChildTemplateAllowed(string $parentUrl, string $childTemplate): void
     {
         $parent = $this->find($parentUrl);
-        if ($parent === null || empty($parent->allowedChildTemplates)) {
+        if ($parent === null) {
             return;
         }
 
-        if (!in_array($childTemplate, $parent->allowedChildTemplates, true)) {
+        $allowed = $this->effectiveAllowedChildTemplates($parent);
+        if (empty($allowed)) {
+            return;
+        }
+
+        if (!in_array($childTemplate, $allowed, true)) {
             throw new \RuntimeException(sprintf(
                 "Template '%s' is not allowed under '%s'. Allowed: %s.",
                 $childTemplate,
                 $this->normalizePath($parentUrl),
-                implode(', ', $parent->allowedChildTemplates),
+                implode(', ', $allowed),
             ));
         }
     }

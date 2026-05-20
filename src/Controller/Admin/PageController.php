@@ -128,7 +128,8 @@ final class PageController
         [$blockTypes, $blockTypesMap] = $this->blockTypeData();
 
         $preselectedParent = (string) ($request->getQueryParams()['parent'] ?? '/');
-        if ($preselectedParent !== '/' && $this->content->find($preselectedParent) === null) {
+        $parentPage        = $this->content->find($preselectedParent);
+        if ($preselectedParent !== '/' && $parentPage === null) {
             $preselectedParent = '/';
         }
 
@@ -140,7 +141,7 @@ final class PageController
             'blocks'             => [['type' => 'text', 'body' => '']],
             'blockTypes'         => $blockTypes,
             'blockTypesMap'      => $blockTypesMap,
-            'availableTemplates' => $this->availablePageTemplates(),
+            'availableTemplates' => $this->availablePageTemplates($parentPage),
             'csrf'               => $this->csrfFields($request),
         ]);
     }
@@ -161,6 +162,8 @@ final class PageController
         if ($title === '') {
             return $response->withStatus(422);
         }
+
+        $parentPage = $this->content->find($parentUrl);
 
         try {
             $this->content->assertChildTemplateAllowed($parentUrl, $template);
@@ -184,7 +187,7 @@ final class PageController
                 'blocks'             => $this->renderer->parseBlocks($draft->body),
                 'blockTypes'         => $blockTypes,
                 'blockTypesMap'      => $blockTypesMap,
-                'availableTemplates' => $this->availablePageTemplates(),
+                'availableTemplates' => $this->availablePageTemplates($parentPage),
                 'error'              => $e->getMessage(),
                 'csrf'               => $this->csrfFields($request),
             ]);
@@ -240,6 +243,7 @@ final class PageController
         }
 
         [$blockTypes, $blockTypesMap] = $this->blockTypeData();
+        $parentPage = $this->parentPageOf($page->urlPath);
 
         return $this->twig->render($response, '@admin/pages/edit.twig', [
             'mode'               => 'edit',
@@ -248,7 +252,7 @@ final class PageController
             'blocks'             => $this->renderer->parseBlocks($page->body),
             'blockTypes'         => $blockTypes,
             'blockTypesMap'      => $blockTypesMap,
-            'availableTemplates' => $this->availablePageTemplates(),
+            'availableTemplates' => $this->availablePageTemplates($parentPage),
             'csrf'               => $this->csrfFields($request),
         ]);
     }
@@ -307,7 +311,8 @@ final class PageController
         $page->publishedAt = $this->normalizePublishedAt($rawPublishedAt);
 
         if ($page->urlPath !== '/') {
-            $parentUrl = rtrim(dirname($page->urlPath), '/') ?: '/';
+            $parentUrl  = rtrim(dirname($page->urlPath), '/') ?: '/';
+            $parentPage = $this->content->find($parentUrl);
             try {
                 $this->content->assertChildTemplateAllowed($parentUrl, $page->template);
             } catch (\RuntimeException $e) {
@@ -319,7 +324,7 @@ final class PageController
                     'blocks'             => $this->renderer->parseBlocks($page->body),
                     'blockTypes'         => $blockTypes,
                     'blockTypesMap'      => $blockTypesMap,
-                    'availableTemplates' => $this->availablePageTemplates(),
+                    'availableTemplates' => $this->availablePageTemplates($parentPage),
                     'error'              => $e->getMessage(),
                     'csrf'               => $this->csrfFields($request),
                 ]);
@@ -361,6 +366,16 @@ final class PageController
             return '/';
         }
         return '/' . ltrim($raw, '/');
+    }
+
+    /** Look up the parent Page for a given URL path, or null for root / root children. */
+    private function parentPageOf(string $urlPath): ?Page
+    {
+        if ($urlPath === '/') {
+            return null;
+        }
+        $parentUrl = rtrim(dirname($urlPath), '/') ?: '/';
+        return $this->content->find($parentUrl);
     }
 
     /** All page URLs for the "Parent" dropdown, including root "/" */
@@ -419,7 +434,7 @@ final class PageController
     }
 
     /** @return list<string> */
-    private function availablePageTemplates(): array
+    private function availablePageTemplates(?Page $parent = null): array
     {
         if ($this->templatesPath === '') {
             return [];
@@ -433,6 +448,14 @@ final class PageController
             }
         }
         sort($names);
+
+        if ($parent !== null) {
+            $allowed = $this->content->effectiveAllowedChildTemplates($parent);
+            if (!empty($allowed)) {
+                $names = array_values(array_filter($names, fn ($n) => in_array($n, $allowed, true)));
+            }
+        }
+
         return $names;
     }
 
