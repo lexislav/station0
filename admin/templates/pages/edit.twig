@@ -237,7 +237,7 @@
         <div class="field">
             <label>Šablona</label>
             {% if availableTemplates is not empty %}
-                <select name="template">
+                <select name="template" id="template-select">
                     {% for tpl in availableTemplates %}
                         <option value="{{ tpl }}" {% if tpl == (page.template|default('page')) %}selected{% endif %}>{{ tpl }}</option>
                     {% endfor %}
@@ -675,6 +675,40 @@
             form.requestSubmit();
         }
     });
+
+    // ── Parent → template select sync ─────────────────────────────────────
+    // Only active on "new page" form where both selects are present.
+    const parentSelect   = document.querySelector('select[name="parent"]');
+    const templateSelect = document.getElementById('template-select');
+
+    if (parentSelect && templateSelect) {
+        parentSelect.addEventListener('change', async () => {
+            const parentUrl  = parentSelect.value;
+            const current    = templateSelect.value;
+            const apiUrl     = '{{ app.adminPath }}/pages/templates?parent=' + encodeURIComponent(parentUrl);
+
+            let templates;
+            try {
+                const res = await fetch(apiUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                if (!res.ok) return;
+                ({ templates } = await res.json());
+            } catch { return; }
+
+            templateSelect.innerHTML = '';
+            if (templates.length === 0) return;
+
+            templates.forEach(tpl => {
+                const opt    = document.createElement('option');
+                opt.value    = tpl;
+                opt.textContent = tpl;
+                opt.selected = tpl === current;
+                templateSelect.appendChild(opt);
+            });
+
+            // If the previous selection is no longer available, pick the first option.
+            if (!templates.includes(current)) templateSelect.selectedIndex = 0;
+        });
+    }
 
 })();
 </script>

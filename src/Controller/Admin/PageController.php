@@ -121,6 +121,15 @@ final class PageController
         return $roots;
     }
 
+    // ─── Templates API (used by the parent-change JS) ───
+
+    public function templatesForParent(Request $request, Response $response): Response
+    {
+        $parentUrl  = (string) ($request->getQueryParams()['parent'] ?? '/');
+        $parentPage = $this->content->find($parentUrl);
+        return $this->jsonResponse($response, ['templates' => $this->availablePageTemplates($parentPage)]);
+    }
+
     // ─── Create ───
 
     public function createForm(Request $request, Response $response): Response

@@ -303,6 +303,7 @@ final class Bootstrap
 
                 $authed->get('/pages', [AdminPageController::class, 'index'])->setName('admin.pages.index');
                 $authed->get('/pages/new', [AdminPageController::class, 'createForm'])->setName('admin.pages.new');
+                $authed->get('/pages/templates', [AdminPageController::class, 'templatesForParent'])->setName('admin.pages.templates');
                 $authed->post('/pages/create', [AdminPageController::class, 'store'])->setName('admin.pages.store');
                 $authed->post('/pages/reorder', [AdminPageController::class, 'reorder'])->setName('admin.pages.reorder');
                 $authed->get('/pages/{path:.+}/edit', [AdminPageController::class, 'editForm'])->setName('admin.pages.edit');
