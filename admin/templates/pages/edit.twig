@@ -307,7 +307,7 @@
 
     <div class="toolbar sticky">
         <a class="btn" href="{{ app.adminPath }}/pages">Zrušit</a>
-        <button type="submit" class="btn primary">Uložit</button>
+        <button type="submit" class="btn primary" id="save-btn" disabled>Uložit</button>
     </div>
 </form>
 
@@ -340,6 +340,10 @@
     // blockId (string) → ToastUI Editor instance
     const editors = {};
 
+    const isNew   = {{ (mode == 'new')|json_encode|raw }};
+    const saveBtn = document.getElementById('save-btn');
+    function enableSave() { if (saveBtn) saveBtn.disabled = false; }
+
     // ── ToastUI ────────────────────────────────────────────────────────────
 
     function initTextEditor(blockEl) {
@@ -355,6 +359,7 @@
             previewStyle: 'tab',
             usageStatistics: false,
             initialValue: textarea.value,
+            events: { change: enableSave },
             hooks: {
                 addImageBlobHook: async (blob, callback) => {
                     const result = await uploadFile(blob);
@@ -667,6 +672,34 @@
             if (cleaned !== input.value) input.value = cleaned;
         });
     });
+
+    // ── Save button dirty tracking ─────────────────────────────────────────
+    const titleInput = form.querySelector('input[name="title"]');
+    const slugInput  = form.querySelector('input[name="slug"]');
+
+    if (isNew) {
+        // Enable save only when title is non-empty.
+        if (titleInput) {
+            titleInput.addEventListener('input', () => {
+                if (saveBtn) saveBtn.disabled = titleInput.value.trim() === '';
+            });
+        }
+        // Auto-generate slug from title while slug hasn't been manually edited.
+        if (titleInput && slugInput) {
+            let slugTouched = slugInput.value !== '';
+            titleInput.addEventListener('input', () => {
+                if (!slugTouched) slugInput.value = sanitizeSlug(titleInput.value);
+            });
+            slugInput.addEventListener('input', () => {
+                const auto = sanitizeSlug(titleInput.value);
+                slugTouched = slugInput.value !== '' && slugInput.value !== auto;
+            });
+        }
+    } else {
+        // Edit mode: enable save on any form input or change event.
+        form.addEventListener('input',  enableSave);
+        form.addEventListener('change', enableSave);
+    }
 
     // Cmd+S (Mac) / Ctrl+S (Windows, Linux): save the page.
     document.addEventListener('keydown', e => {

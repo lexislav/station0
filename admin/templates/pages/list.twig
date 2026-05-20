@@ -113,10 +113,12 @@
             </span>
             <span class="right-meta">
             <span class="status">
-                {% if p.published %}
-                    <span class="tag ok">publikováno</span>
-                {% else %}
+                {% if not p.published %}
                     <span class="tag">koncept</span>
+                {% elseif p.publishedAt and date(p.publishedAt) > date() %}
+                    <span class="tag planned">plánováno</span>
+                {% else %}
+                    <span class="tag ok">publikováno</span>
                 {% endif %}
             </span>
             <span class="updated">{{ p.updated ? p.updated|slice(0, 10) : '' }}</span>
