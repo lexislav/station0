@@ -223,6 +223,8 @@ final class Bootstrap
             $c->get(Auth::class),
             $c->get(UserRepository::class),
             $config['adminPath'],
+            $c->get(Twig::class),
+            $roles,
         ));
 
         $container->set(SetupController::class, fn ($c) => new SetupController(
