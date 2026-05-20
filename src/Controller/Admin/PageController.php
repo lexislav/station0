@@ -27,6 +27,7 @@ final class PageController
         private readonly BlockRegistry $blocks,
         private readonly PageRenderer $renderer,
         private readonly string $adminPath,
+        private readonly string $templatesPath = '',
     ) {}
 
     // ─── List ───
@@ -132,14 +133,15 @@ final class PageController
         }
 
         return $this->twig->render($response, '@admin/pages/edit.twig', [
-            'mode'             => 'new',
-            'page'             => new Page(slug: '', title: '', body: ''),
-            'parents'          => $this->parentOptions(),
-            'selectedParent'   => $preselectedParent,
-            'blocks'           => [['type' => 'text', 'body' => '']],
-            'blockTypes'       => $blockTypes,
-            'blockTypesMap'    => $blockTypesMap,
-            'csrf'             => $this->csrfFields($request),
+            'mode'               => 'new',
+            'page'               => new Page(slug: '', title: '', body: ''),
+            'parents'            => $this->parentOptions(),
+            'selectedParent'     => $preselectedParent,
+            'blocks'             => [['type' => 'text', 'body' => '']],
+            'blockTypes'         => $blockTypes,
+            'blockTypesMap'      => $blockTypesMap,
+            'availableTemplates' => $this->availablePageTemplates(),
+            'csrf'               => $this->csrfFields($request),
         ]);
     }
 
@@ -175,15 +177,16 @@ final class PageController
                 allowedChildTemplates: $allowedChildTemplates,
             );
             return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
-                'mode'           => 'new',
-                'page'           => $draft,
-                'parents'        => $this->parentOptions(),
-                'selectedParent' => $parentUrl,
-                'blocks'         => $this->renderer->parseBlocks($draft->body),
-                'blockTypes'     => $blockTypes,
-                'blockTypesMap'  => $blockTypesMap,
-                'error'          => $e->getMessage(),
-                'csrf'           => $this->csrfFields($request),
+                'mode'               => 'new',
+                'page'               => $draft,
+                'parents'            => $this->parentOptions(),
+                'selectedParent'     => $parentUrl,
+                'blocks'             => $this->renderer->parseBlocks($draft->body),
+                'blockTypes'         => $blockTypes,
+                'blockTypesMap'      => $blockTypesMap,
+                'availableTemplates' => $this->availablePageTemplates(),
+                'error'              => $e->getMessage(),
+                'csrf'               => $this->csrfFields($request),
             ]);
         }
 
@@ -239,13 +242,14 @@ final class PageController
         [$blockTypes, $blockTypesMap] = $this->blockTypeData();
 
         return $this->twig->render($response, '@admin/pages/edit.twig', [
-            'mode'          => 'edit',
-            'page'          => $page,
-            'breadcrumb'    => $this->breadcrumbFor($page->urlPath),
-            'blocks'        => $this->renderer->parseBlocks($page->body),
-            'blockTypes'    => $blockTypes,
-            'blockTypesMap' => $blockTypesMap,
-            'csrf'          => $this->csrfFields($request),
+            'mode'               => 'edit',
+            'page'               => $page,
+            'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
+            'blocks'             => $this->renderer->parseBlocks($page->body),
+            'blockTypes'         => $blockTypes,
+            'blockTypesMap'      => $blockTypesMap,
+            'availableTemplates' => $this->availablePageTemplates(),
+            'csrf'               => $this->csrfFields($request),
         ]);
     }
 
@@ -309,14 +313,15 @@ final class PageController
             } catch (\RuntimeException $e) {
                 [$blockTypes, $blockTypesMap] = $this->blockTypeData();
                 return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
-                    'mode'          => 'edit',
-                    'page'          => $page,
-                    'breadcrumb'    => $this->breadcrumbFor($page->urlPath),
-                    'blocks'        => $this->renderer->parseBlocks($page->body),
-                    'blockTypes'    => $blockTypes,
-                    'blockTypesMap' => $blockTypesMap,
-                    'error'         => $e->getMessage(),
-                    'csrf'          => $this->csrfFields($request),
+                    'mode'               => 'edit',
+                    'page'               => $page,
+                    'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
+                    'blocks'             => $this->renderer->parseBlocks($page->body),
+                    'blockTypes'         => $blockTypes,
+                    'blockTypesMap'      => $blockTypesMap,
+                    'availableTemplates' => $this->availablePageTemplates(),
+                    'error'              => $e->getMessage(),
+                    'csrf'               => $this->csrfFields($request),
                 ]);
             }
         }
@@ -411,6 +416,24 @@ final class PageController
             $out[] = $field;
         }
         return $out;
+    }
+
+    /** @return list<string> */
+    private function availablePageTemplates(): array
+    {
+        if ($this->templatesPath === '') {
+            return [];
+        }
+        $files = glob(rtrim($this->templatesPath, '/') . '/*.twig') ?: [];
+        $names = [];
+        foreach ($files as $file) {
+            $name = basename($file, '.twig');
+            if ($name !== 'layout') {
+                $names[] = $name;
+            }
+        }
+        sort($names);
+        return $names;
     }
 
     /** @return list<string> */

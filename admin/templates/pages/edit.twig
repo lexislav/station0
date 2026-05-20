@@ -236,7 +236,15 @@
 
         <div class="field">
             <label>Šablona</label>
-            <input type="text" name="template" value="{{ page.template|default('page') }}">
+            {% if availableTemplates is not empty %}
+                <select name="template">
+                    {% for tpl in availableTemplates %}
+                        <option value="{{ tpl }}" {% if tpl == (page.template|default('page')) %}selected{% endif %}>{{ tpl }}</option>
+                    {% endfor %}
+                </select>
+            {% else %}
+                <input type="text" name="template" value="{{ page.template|default('page') }}">
+            {% endif %}
         </div>
     </div>
 

@@ -249,6 +249,7 @@ final class Bootstrap
             $c->get(BlockRegistry::class),
             $c->get(PageRenderer::class),
             $config['adminPath'],
+            $config['paths']['templates'],
         ));
 
         $container->set(UserController::class, fn ($c) => new UserController(
