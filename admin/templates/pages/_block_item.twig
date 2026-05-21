@@ -72,9 +72,10 @@
                     </div>
 
                 {% elseif field.type == 'list' %}
+                    {% set hasImage = (field.item_fields|default([]))|filter(sf => sf.type == 'image')|length > 0 %}
                     <div class="field">
                         <label>{{ field.label }}</label>
-                        <div class="list-field" data-field="{{ field.name }}"
+                        <div class="list-field{% if hasImage %} list-field--images{% endif %}" data-field="{{ field.name }}"
                              data-item-fields="{{ field.item_fields|json_encode|e('html_attr') }}">
                             {% for item in attribute(block, field.name)|default([]) %}
                                 <div class="list-item">
@@ -106,12 +107,18 @@
                                         </div>
                                     {% endfor %}
                                     <div class="list-item-btns">
-                                        <button type="button" class="btn btn-sm upload-trigger">Nahrát</button>
                                         <button type="button" class="btn btn-sm list-item-remove">✕ Odebrat</button>
                                     </div>
                                 </div>
                             {% endfor %}
-                            <button type="button" class="btn btn-sm list-item-add">+ Přidat položku</button>
+                            {% if hasImage %}
+                                <label class="gallery-uploader" title="Klikněte nebo přetáhněte obrázky sem">
+                                    <input type="file" class="gallery-upload-input" hidden multiple accept="image/*,.svg">
+                                    <span>+ Nahrát obrázky</span>
+                                </label>
+                            {% else %}
+                                <button type="button" class="btn btn-sm list-item-add">+ Přidat položku</button>
+                            {% endif %}
                         </div>
                     </div>
 

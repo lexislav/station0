@@ -124,6 +124,41 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* ── Gallery multi-upload ──────────────────────────────────────────────── */
+.gallery-uploader {
+    display: flex; align-items: center; justify-content: center; gap: .4rem;
+    padding: .9rem;
+    border: 2px dashed #c8cdd6;
+    border-radius: 6px;
+    background: #f9fafb;
+    color: #5a6478;
+    font-size: .82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.gallery-uploader:hover { background: #eef1f5; border-color: #aab1bd; color: #2c3e50; }
+.list-field--images.drag-over { outline: 2px dashed #2c3e50; outline-offset: 3px; }
+.list-field--images.drag-over .gallery-uploader {
+    border-color: #2c3e50;
+    background: #eaf1f8;
+    color: #2c3e50;
+}
+.img-thumb-upload.uploading .img-thumb-wrap { position: relative; cursor: default; }
+.img-thumb-upload.uploading img { opacity: .55; }
+.img-thumb-progress {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 6px;
+    background: rgba(0,0,0,.3);
+    border-radius: 0 0 4px 4px;
+    overflow: hidden;
+}
+.img-thumb-progress-bar {
+    display: block; height: 100%; width: 0;
+    background: #3a7bd5;
+    transition: width .15s ease;
+}
+
 /* ── ToastUI: no inner wrapper, floating toolbar dock ──────────────────── */
 .block-editor .toastui-editor-defaultUI {
     border: none;
@@ -490,9 +525,7 @@
                       + `<input type="text" data-subfield="${sf.name}" value=""></div>`;
             }
         });
-        const hasImage = (itemFields || []).some(sf => sf.type === 'image');
         html += `<div class="list-item-btns">`
-              + (hasImage ? `<button type="button" class="btn btn-sm upload-trigger">Nahrát</button>` : '')
               + `<button type="button" class="btn btn-sm list-item-remove">✕ Odebrat</button>`
               + `</div>`;
         div.innerHTML = html;
@@ -505,26 +538,121 @@
      * Upload a file. Returns { filename, url } on success, null on failure.
      * `filename` is what we store in content (page-local reference); `url`
      * is only useful for previews / ToastUI inline display.
+     * `onProgress` (optional) receives a 0–1 fraction during the upload.
      */
-    async function uploadFile(file) {
+    function uploadFile(file, onProgress) {
+        return new Promise(resolve => {
+            if (!pagePath) {
+                alert('Uložte stránku nejdřív — soubory se ukládají do její složky.');
+                resolve(null);
+                return;
+            }
+            const fd = new FormData();
+            fd.append('image', file);
+            fd.append('pagePath', pagePath);
+            fd.append(csrf.nameKey, csrf.name);
+            fd.append(csrf.valueKey, csrf.value);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '{{ app.adminPath }}/upload');
+            xhr.withCredentials = true;
+
+            if (onProgress) {
+                xhr.upload.addEventListener('progress', ev => {
+                    if (ev.lengthComputable) onProgress(ev.loaded / ev.total);
+                });
+            }
+            xhr.addEventListener('load', () => {
+                let json = {};
+                try { json = JSON.parse(xhr.responseText); } catch { /* non-JSON body */ }
+                if (xhr.status >= 200 && xhr.status < 300 && json.filename) {
+                    resolve({ filename: json.filename, url: json.url });
+                } else {
+                    alert('Upload selhal: ' + (json.error || 'Upload failed'));
+                    resolve(null);
+                }
+            });
+            xhr.addEventListener('error', () => { alert('Upload selhal: chyba sítě'); resolve(null); });
+            xhr.send(fd);
+        });
+    }
+
+    // ── Gallery multi-upload ───────────────────────────────────────────────
+
+    /**
+     * Build a list-item already showing a local preview of `file` with a
+     * progress-bar overlay, ready to be inserted while the upload runs.
+     */
+    function createUploadingItem(itemFields, file) {
+        const div     = createListItem(itemFields);
+        const imgWrap = div.querySelector('.img-thumb-upload');
+        if (imgWrap) {
+            imgWrap.classList.add('uploading');
+            const thumbWrap   = imgWrap.querySelector('.img-thumb-wrap');
+            const placeholder = thumbWrap.querySelector('.img-thumb-placeholder');
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            img.alt = file.name;
+            if (placeholder) thumbWrap.replaceChild(img, placeholder);
+            const prog = document.createElement('span');
+            prog.className = 'img-thumb-progress';
+            prog.innerHTML = '<span class="img-thumb-progress-bar"></span>';
+            thumbWrap.appendChild(prog);
+        }
+        return div;
+    }
+
+    /** Upload one file into an already-inserted uploading row. */
+    async function uploadOneIntoRow(file, row) {
+        const imgWrap = row.querySelector('.img-thumb-upload');
+        const bar     = imgWrap && imgWrap.querySelector('.img-thumb-progress-bar');
+        const result  = await uploadFile(file, frac => {
+            if (bar) bar.style.width = Math.round(frac * 100) + '%';
+        });
+        if (!result) { row.remove(); return; }
+
+        const hidden = imgWrap.querySelector('input[type="hidden"][data-subfield]');
+        if (hidden) hidden.value = result.filename;
+
+        const img = imgWrap.querySelector('.img-thumb-wrap img');
+        if (img) {
+            const oldSrc = img.src;
+            img.src = result.url;
+            img.alt = result.filename;
+            if (oldSrc.startsWith('blob:')) URL.revokeObjectURL(oldSrc);
+        }
+        const prog = imgWrap.querySelector('.img-thumb-progress');
+        if (prog) prog.remove();
+        imgWrap.classList.remove('uploading');
+
+        const captionInput = row.querySelector('[data-subfield="caption"]');
+        if (captionInput && !captionInput.value) {
+            captionInput.value = filenameToCaption(result.filename);
+        }
+    }
+
+    /** Create populated rows for each image file and upload them in parallel. */
+    function uploadToGallery(listEl, files) {
+        if (!listEl) return;
         if (!pagePath) {
             alert('Uložte stránku nejdřív — soubory se ukládají do její složky.');
-            return null;
+            return;
         }
-        const fd = new FormData();
-        fd.append('image', file);
-        fd.append('pagePath', pagePath);
-        fd.append(csrf.nameKey, csrf.name);
-        fd.append(csrf.valueKey, csrf.value);
-        try {
-            const res  = await fetch('{{ app.adminPath }}/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
-            const json = await res.json();
-            if (!res.ok || !json.filename) throw new Error(json.error || 'Upload failed');
-            return { filename: json.filename, url: json.url };
-        } catch (e) {
-            alert('Upload selhal: ' + e.message);
-            return null;
-        }
+        const subFields = JSON.parse(listEl.dataset.itemFields || '[]');
+        if (!subFields.some(sf => sf.type === 'image')) return;
+
+        const images = Array.from(files).filter(
+            f => f.type.startsWith('image/') || /\.svg$/i.test(f.name)
+        );
+        if (!images.length) return;
+
+        const uploader = listEl.querySelector('.gallery-uploader');
+        enableSave();
+        images.forEach(file => {
+            const row = createUploadingItem(subFields, file);
+            listEl.insertBefore(row, uploader);
+            uploadOneIntoRow(file, row);
+        });
     }
 
     // ── Event delegation ───────────────────────────────────────────────────
@@ -550,20 +678,44 @@
         }
         if (e.target.matches('.list-item-remove')) { e.target.closest('.list-item').remove(); return; }
 
-        // Upload button → trigger hidden file input
+        // Upload button (top-level image field) → trigger hidden file input
         if (e.target.matches('.upload-trigger')) {
-            const listItem = e.target.closest('.list-item');
-            const fileInput = listItem
-                ? listItem.querySelector('.upload-file-input')
-                : e.target.closest('.input-with-btn')?.querySelector('.upload-file-input');
+            const fileInput = e.target.closest('.input-with-btn')?.querySelector('.upload-file-input');
             if (fileInput) fileInput.click();
             return;
         }
         // Clicking the thumbnail (or placeholder) also triggers upload
         if (e.target.closest('.img-thumb-wrap')) {
-            e.target.closest('.img-thumb-upload').querySelector('.upload-file-input').click();
+            const wrap = e.target.closest('.img-thumb-upload');
+            if (wrap.classList.contains('uploading')) return;
+            wrap.querySelector('.upload-file-input').click();
             return;
         }
+    });
+
+    // ── Gallery drag & drop ────────────────────────────────────────────────
+
+    function galleryDropZone(target) {
+        return target && target.closest ? target.closest('.list-field--images') : null;
+    }
+
+    document.addEventListener('dragover', e => {
+        const zone = galleryDropZone(e.target);
+        if (!zone) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        zone.classList.add('drag-over');
+    });
+    document.addEventListener('dragleave', e => {
+        const zone = galleryDropZone(e.target);
+        if (zone && !zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+    });
+    document.addEventListener('drop', e => {
+        const zone = galleryDropZone(e.target);
+        if (!zone) return;
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) uploadToGallery(zone, e.dataTransfer.files);
     });
 
     blockList.addEventListener('dblclick', e => {
@@ -580,6 +732,12 @@
     });
 
     document.addEventListener('change', async e => {
+        // Gallery multi-upload input → create populated rows
+        if (e.target.matches('.gallery-upload-input')) {
+            uploadToGallery(e.target.closest('.list-field'), e.target.files);
+            e.target.value = '';
+            return;
+        }
         if (!e.target.matches('.upload-file-input')) return;
         const file = e.target.files[0];
         if (!file) return;
