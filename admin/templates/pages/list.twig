@@ -43,6 +43,7 @@
 }
 .drag-handle:active { cursor: grabbing; }
 .page-tree .page-row.root .drag-handle { visibility: hidden; }
+.page-tree .page-row.root .drag-handle.home-icon { visibility: visible; cursor: default; color: #8a94a6; font-size: 1.1rem; }
 .page-row .title a { text-decoration: none; color: #2c3e50; font-weight: 500; }
 .page-row .title a:hover { text-decoration: underline; }
 .page-row .url code { font-size: .8rem; color: #6b7280; }
@@ -267,16 +268,12 @@
 
 {% block body %}
 <div class="toolbar">
-    <h1>Pages</h1>
+    <h1>{{ t.pages_title }}</h1>
     <div class="view-tabs">
-        <button class="view-tab active" data-view="structure">
-            ⛶ Web structure
-        </button>
-        <button class="view-tab" data-view="streams">
-            ≡ Streams
-        </button>
+        <button class="view-tab active" data-view="structure">{{ t.pages_tab_structure }}</button>
+        <button class="view-tab" data-view="streams">{{ t.pages_tab_streams }}</button>
     </div>
-    <a class="btn primary" href="{{ app.adminPath }}/pages/new">+ New</a>
+    <a class="btn primary" href="{{ app.adminPath }}/pages/new">{{ t.pages_new }}</a>
 </div>
 
 {# ── Tree node macro ─────────────────────────────────────────────────────────
@@ -294,7 +291,11 @@
         {% if isStream %}data-is-stream="1"{% endif %}>
 
         <div class="page-row {% if isRoot %}root{% endif %}">
-            <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+            {% if isRoot %}
+                <span class="drag-handle home-icon" aria-hidden="true">⌂</span>
+            {% else %}
+                <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+            {% endif %}
 
             <span class="title">
                 <a href="{{ adminPath }}/pages/{{ editPath }}/edit">{{ p.title }}</a>
@@ -310,11 +311,11 @@
             <span class="right-meta">
                 <span class="status">
                     {% if not p.published %}
-                        <span class="tag">draft</span>
+                        <span class="tag">{{ t.pages_status_draft }}</span>
                     {% elseif p.publishedAt and date(p.publishedAt) > date() %}
-                        <span class="tag planned">scheduled</span>
+                        <span class="tag planned">{{ t.pages_status_scheduled }}</span>
                     {% else %}
-                        <span class="tag ok">published</span>
+                        <span class="tag ok">{{ t.pages_status_published }}</span>
                     {% endif %}
                 </span>
                 <span class="updated">{{ p.updated ? p.updated|slice(0, 10) : '' }}</span>
@@ -322,15 +323,15 @@
                     <details class="row-actions">
                         <summary>⋯</summary>
                         <div class="menu">
-                            <a href="{{ p.urlPath }}" target="_blank" rel="noopener">View ↗</a>
-                            <a href="{{ adminPath }}/pages/new?parent={{ p.urlPath|url_encode }}">+ Add child page</a>
-                            <a href="{{ adminPath }}/pages/{{ editPath }}/edit">Edit</a>
+                            <a href="{{ p.urlPath }}" target="_blank" rel="noopener">{{ t.pages_view }}</a>
+                            <a href="{{ adminPath }}/pages/new?parent={{ p.urlPath|url_encode }}">{{ t.pages_add_child }}</a>
+                            <a href="{{ adminPath }}/pages/{{ editPath }}/edit">{{ t.pages_edit }}</a>
                             {% if not isRoot %}
                             <form method="post" action="{{ adminPath }}/pages/{{ editPath }}/delete"
                                   onsubmit="return confirm('Delete {{ p.urlPath }}?');">
                                 <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
                                 <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
-                                <button type="submit" class="danger">Delete</button>
+                                <button type="submit" class="danger">{{ t.pages_delete }}</button>
                             </form>
                             {% endif %}
                         </div>
@@ -353,11 +354,11 @@
                         <span class="right-meta">
                             <span class="status">
                                 {% if not cp.published %}
-                                    <span class="tag">draft</span>
+                                    <span class="tag">{{ t.pages_status_draft }}</span>
                                 {% elseif cp.publishedAt and date(cp.publishedAt) > date() %}
-                                    <span class="tag planned">scheduled</span>
+                                    <span class="tag planned">{{ t.pages_status_scheduled }}</span>
                                 {% else %}
-                                    <span class="tag ok">published</span>
+                                    <span class="tag ok">{{ t.pages_status_published }}</span>
                                 {% endif %}
                             </span>
                             <span class="updated">{{ cp.updated ? cp.updated|slice(0, 10) : '' }}</span>
@@ -367,7 +368,7 @@
                 {% endfor %}
             </ul>
             <a class="stream-see-all" href="#streams" data-stream="{{ p.urlPath }}">
-                All {{ item.children|length }} stream records…
+                {{ t.pages_all_records|replace({'%count%': item.children|length}) }}
             </a>
             {% endif %}
 
@@ -388,7 +389,7 @@
 ════════════════════════════════════════════════════════════════════════════ #}
 <div id="view-structure">
     {% if tree is empty %}
-        <p class="empty">No pages yet. <a href="{{ app.adminPath }}/pages/new">Create the first one.</a></p>
+        <p class="empty">{{ t.pages_empty }} <a href="{{ app.adminPath }}/pages/new">{{ t.pages_empty_create }}</a></p>
     {% else %}
     <ul class="page-tree" data-parent="/">
         {% for item in tree %}
@@ -403,7 +404,7 @@
 ════════════════════════════════════════════════════════════════════════════ #}
 <div id="view-streams" hidden>
     {% if streams is empty %}
-        <p class="empty">No stream pages yet. A page becomes a stream when it declares <code>AllowedChildTemplates</code>.</p>
+        <p class="empty">{{ t.streams_empty|raw }}</p>
     {% else %}
 
         {# Stream selector pills (only shown when there are multiple streams) #}
@@ -436,7 +437,7 @@
                         <strong>{{ sp.title }}</strong>
                         <span class="stream-meta">{{ sp.urlPath }}</span>
                     </div>
-                    <a class="btn btn-sm" href="{{ app.adminPath }}/pages/new?parent={{ sp.urlPath|url_encode }}">+ New record</a>
+                    <a class="btn btn-sm" href="{{ app.adminPath }}/pages/new?parent={{ sp.urlPath|url_encode }}">{{ t.streams_new_record }}</a>
                 </div>
 
                 <ul class="stream-records-list" data-parent="{{ sp.urlPath }}">
@@ -452,11 +453,11 @@
                                 <span class="right-meta">
                                     <span class="status">
                                         {% if not cp.published %}
-                                            <span class="tag">draft</span>
+                                            <span class="tag">{{ t.pages_status_draft }}</span>
                                         {% elseif cp.publishedAt and date(cp.publishedAt) > date() %}
-                                            <span class="tag planned">scheduled</span>
+                                            <span class="tag planned">{{ t.pages_status_scheduled }}</span>
                                         {% else %}
-                                            <span class="tag ok">published</span>
+                                            <span class="tag ok">{{ t.pages_status_published }}</span>
                                         {% endif %}
                                     </span>
                                     <span class="updated">{{ cp.updated ? cp.updated|slice(0, 10) : '' }}</span>
@@ -464,13 +465,13 @@
                                         <details class="row-actions">
                                             <summary>⋯</summary>
                                             <div class="menu">
-                                                <a href="{{ cp.urlPath }}" target="_blank" rel="noopener">View ↗</a>
-                                                <a href="{{ app.adminPath }}/pages/{{ cEdit }}/edit">Edit</a>
+                                                <a href="{{ cp.urlPath }}" target="_blank" rel="noopener">{{ t.pages_view }}</a>
+                                                <a href="{{ app.adminPath }}/pages/{{ cEdit }}/edit">{{ t.pages_edit }}</a>
                                                 <form method="post" action="{{ app.adminPath }}/pages/{{ cEdit }}/delete"
                                                       onsubmit="return confirm('Delete {{ cp.urlPath }}?');">
                                                     <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
                                                     <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
-                                                    <button type="submit" class="danger">Delete</button>
+                                                    <button type="submit" class="danger">{{ t.pages_delete }}</button>
                                                 </form>
                                             </div>
                                         </details>

@@ -1,10 +1,10 @@
 {% extends '@admin/layout.twig' %}
 {% block body %}
-<h1>Dashboard</h1>
-<p>Logged in as: <strong>{{ user.email }}</strong></p>
+<h1>{{ t.dashboard_title }}</h1>
+<p>{{ t.dashboard_logged_in_as }}: <strong>{{ user.email }}</strong></p>
 <ul class="cards">
-    <li><a href="{{ app.adminPath }}/pages"><span class="big">{{ pageCount }}</span> pages</a></li>
-    <li><a href="{{ app.adminPath }}/pages/new">+ new page</a></li>
-    {% if user.isAdmin %}<li><a href="{{ app.adminPath }}/users">Users</a></li>{% endif %}
+    <li><a href="{{ app.adminPath }}/pages"><span class="big">{{ pageCount }}</span> {{ t.dashboard_pages }}</a></li>
+    <li><a href="{{ app.adminPath }}/pages/new">{{ t.dashboard_new_page }}</a></li>
+    {% if user.isAdmin %}<li><a href="{{ app.adminPath }}/users">{{ t.dashboard_users }}</a></li>{% endif %}
 </ul>
 {% endblock %}

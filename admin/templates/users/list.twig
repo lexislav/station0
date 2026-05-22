@@ -1,11 +1,18 @@
 {% extends '@admin/layout.twig' %}
 {% block body %}
 <div class="toolbar">
-    <h1>Users</h1>
-    <a class="btn primary" href="{{ app.adminPath }}/users/new">+ New</a>
+    <h1>{{ t.users_title }}</h1>
+    <a class="btn primary" href="{{ app.adminPath }}/users/new">{{ t.users_new }}</a>
 </div>
 <table class="users">
-    <thead><tr><th>Username</th><th>E-mail</th><th>Role</th><th>Created</th><th>Last login</th><th></th></tr></thead>
+    <thead><tr>
+        <th>{{ t.users_th_username }}</th>
+        <th>{{ t.users_th_email }}</th>
+        <th>{{ t.users_th_role }}</th>
+        <th>{{ t.users_th_created }}</th>
+        <th>{{ t.users_th_last_login }}</th>
+        <th></th>
+    </tr></thead>
     <tbody>
     {% for u in users %}
         <tr>
@@ -15,10 +22,11 @@
             <td>{{ u.created_at|date('Y-m-d') }}</td>
             <td>{{ u.last_login ? u.last_login|date('Y-m-d H:i') : '—' }}</td>
             <td>
-                <form method="post" action="{{ app.adminPath }}/users/{{ u.id }}/delete" onsubmit="return confirm('Delete {{ u.email }}?');" class="inline">
+                <form method="post" action="{{ app.adminPath }}/users/{{ u.id }}/delete"
+                      onsubmit="return confirm('Delete {{ u.email }}?');" class="inline">
                     <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
                     <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
-                    <button class="link danger">delete</button>
+                    <button class="link danger">{{ t.users_delete }}</button>
                 </form>
             </td>
         </tr>

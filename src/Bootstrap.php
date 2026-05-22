@@ -125,7 +125,7 @@ final class Bootstrap
             return new Auth($c->get(PDO::class), $_SERVER['REMOTE_ADDR'] ?? null);
         });
 
-        $container->set(Twig::class, function ($c) use ($config) {
+        $container->set(Twig::class, function ($c) use ($config, $station0Root) {
             $twig = Twig::create([
                 FilesystemLoader::MAIN_NAMESPACE => $config['paths']['templates'],
                 'admin'                          => $config['paths']['adminTemplates'],
@@ -139,6 +139,14 @@ final class Bootstrap
                 'adminPath'     => $config['adminPath'],
                 'blockCollapse' => $config['admin']['blockCollapse'] ?? 'remember',
             ]);
+
+            // Admin UI translations — set 'admin_locale' in site/config.php ('en' default).
+            $locale   = preg_replace('/[^a-z]/', '', strtolower($config['admin_locale'] ?? 'en'));
+            $langFile = $station0Root . '/admin/lang/' . $locale . '.php';
+            if (!is_file($langFile)) {
+                $langFile = $station0Root . '/admin/lang/en.php';
+            }
+            $twig->getEnvironment()->addGlobal('t', require $langFile);
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'top_level_pages',
                 function () use ($c) {

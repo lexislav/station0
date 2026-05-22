@@ -5,9 +5,9 @@
         <span class="block-label">{{ blockLabel }}</span>
         <span class="block-toggle" aria-hidden="true">▾</span>
         <div class="block-actions">
-            <button type="button" class="block-btn block-up"    title="Move up">↑</button>
-            <button type="button" class="block-btn block-down"  title="Move down">↓</button>
-            <button type="button" class="block-btn block-remove" title="Remove">×</button>
+            <button type="button" class="block-btn block-up"     title="{{ t.block_move_up }}">↑</button>
+            <button type="button" class="block-btn block-down"   title="{{ t.block_move_down }}">↓</button>
+            <button type="button" class="block-btn block-remove" title="{{ t.block_remove }}">×</button>
         </div>
     </div>
     <div class="block-fields">
@@ -37,7 +37,7 @@
                             <input type="text" data-field="{{ field.name }}"
                                    value="{{ attribute(block, field.name)|default('') }}"
                                    placeholder="filename.jpg">
-                            <button type="button" class="btn btn-sm upload-trigger">Upload</button>
+                            <button type="button" class="btn btn-sm upload-trigger">{{ t.block_upload }}</button>
                             <input type="file" class="upload-file-input" hidden accept="image/*,.svg">
                         </div>
                     </div>
@@ -50,9 +50,9 @@
                                 <input type="text" data-field="{{ field.name }}"
                                        value="{{ attribute(block, field.name)|default('') }}"
                                        placeholder="document.pdf" readonly>
-                                <button type="button" class="btn btn-sm file-upload-trigger">Upload</button>
+                                <button type="button" class="btn btn-sm file-upload-trigger">{{ t.block_upload }}</button>
                                 <button type="button" class="btn btn-sm file-upload-clear"
-                                    style="display:{{ attribute(block, field.name)|default('') ? 'inline-block' : 'none' }}">× Clear</button>
+                                    style="display:{{ attribute(block, field.name)|default('') ? 'inline-block' : 'none' }}">{{ t.block_file_clear }}</button>
                             </div>
                             <input type="file" class="file-upload-input" hidden
                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">
@@ -117,11 +117,11 @@
                                                 {% set _thumbSrc = _fname ? (_isUrl ? _fname : _mediaBase ~ '/' ~ _fname) : '' %}
                                                 <div class="img-thumb-upload">
                                                     <input type="hidden" data-subfield="{{ subfield.name }}" value="{{ _fname }}">
-                                                    <label class="img-thumb-wrap" title="Click to upload image">
+                                                    <label class="img-thumb-wrap" title="{{ t.block_upload_image_ph|replace({'\n': ' '}) }}">
                                                         {% if _fname %}
                                                             <img src="{{ _thumbSrc }}" alt="{{ _fname }}">
                                                         {% else %}
-                                                            <span class="img-thumb-placeholder">Upload<br>image</span>
+                                                            <span class="img-thumb-placeholder">{{ t.block_upload_image_ph|nl2br }}</span>
                                                         {% endif %}
                                                     </label>
                                                     <input type="file" class="upload-file-input" hidden accept="image/*,.svg">
@@ -133,9 +133,9 @@
                                                     <div class="input-with-btn">
                                                         <input type="text" data-subfield="{{ subfield.name }}"
                                                                value="{{ _fname }}" placeholder="document.pdf" readonly>
-                                                        <button type="button" class="btn btn-sm file-upload-trigger">Upload</button>
+                                                        <button type="button" class="btn btn-sm file-upload-trigger">{{ t.block_upload }}</button>
                                                         <button type="button" class="btn btn-sm file-upload-clear"
-                                                            style="display:{{ _fname ? 'inline-block' : 'none' }}">× Clear</button>
+                                                            style="display:{{ _fname ? 'inline-block' : 'none' }}">{{ t.block_file_clear }}</button>
                                                     </div>
                                                     <input type="file" class="file-upload-input" hidden
                                                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">
@@ -152,23 +152,23 @@
                                         </div>
                                     {% endfor %}
                                     <div class="list-item-btns">
-                                        <button type="button" class="btn btn-sm list-item-remove">✕ Remove</button>
+                                        <button type="button" class="btn btn-sm list-item-remove">{{ t.block_list_item_remove }}</button>
                                     </div>
                                 </div>
                             {% endfor %}
                             {% if hasImage %}
-                                <label class="gallery-uploader" title="Click or drag images here">
+                                <label class="gallery-uploader" title="{{ t.block_gallery_placeholder }}">
                                     <input type="file" class="gallery-upload-input" hidden multiple accept="image/*,.svg">
-                                    <span>+ Upload images</span>
+                                    <span>{{ t.block_gallery_upload }}</span>
                                 </label>
                             {% elseif hasFile %}
-                                <label class="files-uploader" title="Click or drag files here">
+                                <label class="files-uploader" title="{{ t.block_files_placeholder }}">
                                     <input type="file" class="files-upload-input" hidden multiple
                                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">
-                                    <span>+ Upload files</span>
+                                    <span>{{ t.block_files_upload }}</span>
                                 </label>
                             {% else %}
-                                <button type="button" class="btn btn-sm list-item-add">+ Add item</button>
+                                <button type="button" class="btn btn-sm list-item-add">{{ t.block_list_item_add }}</button>
                             {% endif %}
                         </div>
                     </div>

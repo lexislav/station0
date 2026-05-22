@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ t.html_lang }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Log in · {{ app.name }}</title>
+    <title>{{ t.login_title }} · {{ app.name }}</title>
     <link rel="stylesheet" href="{{ app.adminPath }}/assets/admin.css">
 </head>
 <body class="admin login-page">
@@ -12,11 +12,11 @@
     <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
     <h1>{{ app.name }}</h1>
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
-    {% if reset %}<p class="success">Password changed successfully. Please log in.</p>{% endif %}
-    <label>Username<input type="text" name="username" autofocus required autocomplete="username"></label>
-    <label>Password<input type="password" name="password" required></label>
-    <button type="submit">Log in</button>
-    <a class="link-small" href="{{ app.adminPath }}/forgot-password">Forgot password</a>
+    {% if reset %}<p class="success">{{ t.login_password_changed }}</p>{% endif %}
+    <label>{{ t.login_username }}<input type="text" name="username" autofocus required autocomplete="username"></label>
+    <label>{{ t.login_password }}<input type="password" name="password" required></label>
+    <button type="submit">{{ t.login_submit }}</button>
+    <a class="link-small" href="{{ app.adminPath }}/forgot-password">{{ t.login_forgot }}</a>
 </form>
 </body>
 </html>

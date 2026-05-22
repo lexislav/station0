@@ -265,18 +265,18 @@
     {% endif %}
 
     <div class="field">
-        <label>Title</label>
+        <label>{{ t.page_field_title }}</label>
         <input type="text" name="title" value="{{ page.title }}" required autofocus>
     </div>
 
     <div class="row">
         {% if mode == 'new' %}
         <div class="field">
-            <label>Slug <small>(optional — generated from title)</small></label>
+            <label>{{ t.page_field_slug }} <small>{{ t.page_field_slug_hint }}</small></label>
             <input type="text" name="slug" value="{{ page.slug }}" placeholder="my-page-slug">
         </div>
         <div class="field">
-            <label>Parent page</label>
+            <label>{{ t.page_field_parent }}</label>
             <select name="parent">
                 {% for opt in parents %}
                     <option value="{{ opt.url }}" {% if opt.url == (selectedParent|default('/')) %}selected{% endif %}>{{ opt.label }}</option>
@@ -285,13 +285,13 @@
         </div>
         {% elseif page.slug != '' %}
         <div class="field">
-            <label>Slug <small class="muted">– <code>{{ page.urlPath }}</code></small></label>
+            <label>{{ t.page_field_slug }} <small class="muted">– <code>{{ page.urlPath }}</code></small></label>
             <input type="text" name="slug" value="{{ page.slug }}" placeholder="my-page-slug">
         </div>
         {% endif %}
 
         <div class="field">
-            <label>Template</label>
+            <label>{{ t.page_field_template }}</label>
             {% if availableTemplates is not empty %}
                 <select name="template" id="template-select">
                     {% for tpl in availableTemplates %}
@@ -305,7 +305,7 @@
     </div>
 
     <div class="field">
-        <label>Meta title <small>(used for HTML &lt;title&gt; — falls back to Title if empty)</small></label>
+        <label>{{ t.page_field_metatitle }} <small>{{ t.page_field_metatitle_hint|raw }}</small></label>
         <input type="text" name="metatitle" value="{{ page.metatitle }}" placeholder="{{ page.title }}">
     </div>
 
@@ -313,11 +313,11 @@
         <div class="field checkbox">
             <label>
                 <input type="checkbox" name="published" value="1" {% if page.published %}checked{% endif %}>
-                Published
+                {{ t.page_field_published }}
             </label>
         </div>
         <div class="field">
-            <label>Publish date <small>(future date = scheduled)</small></label>
+            <label>{{ t.page_field_publish_date }} <small>{{ t.page_field_publish_date_hint }}</small></label>
             <input type="datetime-local" name="published_at"
                    value="{{ page.publishedAt ? page.publishedAt|date('Y-m-d\\TH:i') : '' }}">
         </div>
@@ -333,7 +333,7 @@
             {% endfor %}
         </div>
         <div class="block-add-bar">
-            <span class="muted" style="font-size:.85rem">+ Add block:</span>
+            <span class="muted" style="font-size:.85rem">{{ t.page_add_block }}</span>
             {% for bt in blockTypes %}
                 <button type="button" class="btn btn-sm block-type-btn"
                         data-type="{{ bt.type }}">{{ bt.label }}</button>
@@ -355,13 +355,21 @@
     <script id="block-schemas" type="application/json">{{ blockTypes|json_encode|raw }}</script>
 
     <div class="toolbar sticky">
-        <a class="btn" href="{{ app.adminPath }}/pages">Cancel</a>
-        <button type="submit" class="btn primary" id="save-btn" disabled>Save</button>
+        <a class="btn" href="{{ app.adminPath }}/pages">{{ t.page_cancel }}</a>
+        <button type="submit" class="btn primary" id="save-btn" disabled>{{ t.page_save }}</button>
     </div>
 </form>
 
 <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<script>
+const i18n = {{ {
+    savePFirst:     t.js_save_first,
+    uploadFailed:   t.js_upload_failed,
+    uploadNetwork:  t.js_upload_network,
+    selectImages:   t.js_select_images
+}|json_encode|raw }};
+</script>
 <script>
 (function () {
     const form       = document.getElementById('page-edit-form');
@@ -577,7 +585,7 @@
     function uploadFile(file, onProgress) {
         return new Promise(resolve => {
             if (!pagePath) {
-                alert('Save the page first — files are stored in the page folder.');
+                alert(i18n.savePFirst);
                 resolve(null);
                 return;
             }
@@ -602,11 +610,11 @@
                 if (xhr.status >= 200 && xhr.status < 300 && json.filename) {
                     resolve({ filename: json.filename, url: json.url });
                 } else {
-                    alert('Upload failed: ' + (json.error || xhr.status));
+                    alert(i18n.uploadFailed + (json.error || xhr.status));
                     resolve(null);
                 }
             });
-            xhr.addEventListener('error', () => { alert('Upload failed: network error'); resolve(null); });
+            xhr.addEventListener('error', () => { alert(i18n.uploadNetwork); resolve(null); });
             xhr.send(fd);
         });
     }
@@ -669,7 +677,7 @@
     function uploadToGallery(listEl, files) {
         if (!listEl) return;
         if (!pagePath) {
-            alert('Save the page first — files are stored in the page folder.');
+            alert(i18n.savePFirst);
             return;
         }
         const subFields = JSON.parse(listEl.dataset.itemFields || '[]');
@@ -678,7 +686,7 @@
         const images = Array.from(files).filter(
             f => f.type.startsWith('image/') || /\.svg$/i.test(f.name)
         );
-        if (!images.length) { alert('Please select image files.'); return; }
+        if (!images.length) { alert(i18n.selectImages); return; }
 
         const uploader = listEl.querySelector('.gallery-uploader');
         enableSave();
@@ -725,7 +733,7 @@
     function uploadToFileList(listEl, files) {
         if (!listEl) return;
         if (!pagePath) {
-            alert('Save the page first — files are stored in the page folder.');
+            alert(i18n.savePFirst);
             return;
         }
         const subFields = JSON.parse(listEl.dataset.itemFields || '[]');

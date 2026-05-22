@@ -1,0 +1,119 @@
+<?php
+
+/**
+ * Czech admin UI strings.
+ * Set  'admin_locale' => 'cs'  in site/config.php to activate.
+ */
+return [
+    'html_lang' => 'cs',
+
+    // Navigace
+    'nav_dashboard' => 'Přehled',
+    'nav_pages'     => 'Stránky',
+    'nav_users'     => 'Uživatelé',
+    'nav_logout'    => 'Odhlásit',
+
+    // Přihlášení
+    'login_title'            => 'Přihlášení',
+    'login_password_changed' => 'Heslo bylo úspěšně změněno. Přihlaste se.',
+    'login_username'         => 'Uživatelské jméno',
+    'login_password'         => 'Heslo',
+    'login_submit'           => 'Přihlásit se',
+    'login_forgot'           => 'Zapomenuté heslo',
+
+    // Nastavení
+    'setup_title'    => 'Nastavení',
+    'setup_intro'    => 'Vítejte! Vytvořte první správcovský účet.',
+    'setup_username' => 'Uživatelské jméno',
+    'setup_email'    => 'E-mail',
+    'setup_password' => 'Heslo',
+    'setup_submit'   => 'Vytvořit účet a přihlásit se',
+
+    // Zapomenuté / obnovení hesla
+    'forgot_title'  => 'Zapomenuté heslo',
+    'forgot_sent'   => 'Pokud e-mail existuje, brzy obdržíte odkaz pro obnovení hesla.',
+    'forgot_email'  => 'E-mail',
+    'forgot_submit' => 'Odeslat odkaz',
+    'forgot_back'   => 'Zpět na přihlášení',
+    'reset_title'        => 'Obnovení hesla',
+    'reset_new_link'     => 'Požádat o nový odkaz',
+    'reset_new_password' => 'Nové heslo',
+    'reset_submit'       => 'Nastavit heslo',
+
+    // Přehled
+    'dashboard_title'        => 'Přehled',
+    'dashboard_logged_in_as' => 'Přihlášen jako',
+    'dashboard_pages'        => 'stránek',
+    'dashboard_new_page'     => '+ nová stránka',
+    'dashboard_users'        => 'Uživatelé',
+
+    // Seznam stránek
+    'pages_title'            => 'Stránky',
+    'pages_new'              => '+ Nová',
+    'pages_status_draft'     => 'koncept',
+    'pages_status_scheduled' => 'plánováno',
+    'pages_status_published' => 'publikováno',
+    'pages_view'             => 'Zobrazit ↗',
+    'pages_add_child'        => '+ Přidat podstránku',
+    'pages_edit'             => 'Upravit',
+    'pages_delete'           => 'Smazat',
+    'pages_empty'            => 'Žádné stránky.',
+    'pages_empty_create'     => 'Vytvořte první stránku.',
+    'pages_tab_structure'    => '⛶ Webová struktura',
+    'pages_tab_streams'      => '≡ Streamy',
+    'pages_all_records'      => 'Všech %count% záznamů…',
+    'streams_empty'          => 'Žádné stream stránky. Stránka se stane streamem, když deklaruje <code>AllowedChildTemplates</code>.',
+    'streams_new_record'     => '+ Nový záznam',
+
+    // Úprava stránky
+    'page_field_title'             => 'Titulek',
+    'page_field_slug'              => 'Slug',
+    'page_field_slug_hint'         => '(volitelné — generováno z názvu)',
+    'page_field_parent'            => 'Rodičovská stránka',
+    'page_field_template'          => 'Šablona',
+    'page_field_metatitle'         => 'Meta titulek',
+    'page_field_metatitle_hint'    => '(HTML &lt;title&gt; — pokud prázdné, použije se Titulek)',
+    'page_field_published'         => 'Publikováno',
+    'page_field_publish_date'      => 'Datum publikování',
+    'page_field_publish_date_hint' => '(budoucí datum = plánováno)',
+    'page_add_block'               => '+ Přidat blok:',
+    'page_cancel'                  => 'Zrušit',
+    'page_save'                    => 'Uložit',
+
+    // Editor bloků
+    'block_move_up'             => 'Nahoru',
+    'block_move_down'           => 'Dolů',
+    'block_remove'              => 'Odstranit',
+    'block_upload'              => 'Nahrát',
+    'block_upload_image_ph'     => "Nahrát\nobrázek",
+    'block_file_clear'          => '× Smazat',
+    'block_list_item_remove'    => '✕ Odebrat',
+    'block_list_item_add'       => '+ Přidat položku',
+    'block_gallery_placeholder' => 'Klikněte nebo přetáhněte obrázky',
+    'block_gallery_upload'      => '+ Nahrát obrázky',
+    'block_files_placeholder'   => 'Klikněte nebo přetáhněte soubory',
+    'block_files_upload'        => '+ Nahrát soubory',
+
+    // Editor bloků — JS hlášení
+    'js_save_first'     => 'Nejprve uložte stránku — soubory jsou uloženy ve složce stránky.',
+    'js_upload_failed'  => 'Nahrání selhalo: ',
+    'js_upload_network' => 'Nahrání selhalo: chyba sítě',
+    'js_select_images'  => 'Vyberte prosím soubory obrázků.',
+
+    // Uživatelé
+    'users_title'         => 'Uživatelé',
+    'users_new'           => '+ Nový',
+    'users_th_username'   => 'Uživatelské jméno',
+    'users_th_email'      => 'E-mail',
+    'users_th_role'       => 'Role',
+    'users_th_created'    => 'Vytvořeno',
+    'users_th_last_login' => 'Poslední přihlášení',
+    'users_delete'        => 'smazat',
+    'user_new_title'      => 'Nový uživatel',
+    'user_field_username' => 'Uživatelské jméno',
+    'user_field_email'    => 'E-mail',
+    'user_field_password' => 'Heslo',
+    'user_field_role'     => 'Role',
+    'user_cancel'         => 'Zrušit',
+    'user_create'         => 'Vytvořit',
+];
