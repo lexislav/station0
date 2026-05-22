@@ -97,8 +97,8 @@
 {% endblock %}
 {% block body %}
 <div class="toolbar">
-    <h1>Stránky</h1>
-    <a class="btn primary" href="{{ app.adminPath }}/pages/new">+ Nová</a>
+    <h1>Pages</h1>
+    <a class="btn primary" href="{{ app.adminPath }}/pages/new">+ New</a>
 </div>
 
 {% macro node(item, csrf, adminPath) %}
@@ -114,11 +114,11 @@
             <span class="right-meta">
             <span class="status">
                 {% if not p.published %}
-                    <span class="tag">koncept</span>
+                    <span class="tag">draft</span>
                 {% elseif p.publishedAt and date(p.publishedAt) > date() %}
-                    <span class="tag planned">plánováno</span>
+                    <span class="tag planned">scheduled</span>
                 {% else %}
-                    <span class="tag ok">publikováno</span>
+                    <span class="tag ok">published</span>
                 {% endif %}
             </span>
             <span class="updated">{{ p.updated ? p.updated|slice(0, 10) : '' }}</span>
@@ -126,15 +126,15 @@
                 <details class="row-actions">
                     <summary>⋯</summary>
                     <div class="menu">
-                        <a href="{{ p.urlPath }}" target="_blank" rel="noopener">Zobrazit ↗</a>
-                        <a href="{{ adminPath }}/pages/new?parent={{ p.urlPath|url_encode }}">+ Přidat podstránku</a>
-                        <a href="{{ adminPath }}/pages/{{ editPath }}/edit">Upravit</a>
+                        <a href="{{ p.urlPath }}" target="_blank" rel="noopener">View ↗</a>
+                        <a href="{{ adminPath }}/pages/new?parent={{ p.urlPath|url_encode }}">+ Add child page</a>
+                        <a href="{{ adminPath }}/pages/{{ editPath }}/edit">Edit</a>
                         {% if not isRoot %}
                         <form method="post" action="{{ adminPath }}/pages/{{ editPath }}/delete"
-                              onsubmit="return confirm('Smazat {{ p.urlPath }}?');">
+                              onsubmit="return confirm('Delete {{ p.urlPath }}?');">
                             <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
                             <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
-                            <button type="submit" class="danger">Smazat</button>
+                            <button type="submit" class="danger">Delete</button>
                         </form>
                         {% endif %}
                     </div>
@@ -151,7 +151,7 @@
 {% endmacro %}
 
 {% if tree is empty %}
-    <p class="empty">Žádné stránky. <a href="{{ app.adminPath }}/pages/new">Vytvořit první.</a></p>
+    <p class="empty">No pages yet. <a href="{{ app.adminPath }}/pages/new">Create the first one.</a></p>
 {% else %}
 <ul class="page-tree" data-parent="/">
     {% for item in tree %}

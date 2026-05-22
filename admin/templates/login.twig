@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="cs">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Přihlášení · {{ app.name }}</title>
-    <link rel="stylesheet" href="/assets/admin.css">
+    <title>Log in · {{ app.name }}</title>
+    <link rel="stylesheet" href="{{ app.adminPath }}/assets/admin.css">
 </head>
 <body class="admin login-page">
 <form class="login-card" method="post" action="{{ app.adminPath }}/login">
@@ -12,11 +12,11 @@
     <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
     <h1>{{ app.name }}</h1>
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
-    {% if reset %}<p class="success">Heslo bylo úspěšně změněno. Přihlaste se.</p>{% endif %}
-    <label>Uživatelské jméno<input type="text" name="username" autofocus required autocomplete="username"></label>
-    <label>Heslo<input type="password" name="password" required></label>
-    <button type="submit">Přihlásit</button>
-    <a class="link-small" href="{{ app.adminPath }}/forgot-password">Zapomenuté heslo</a>
+    {% if reset %}<p class="success">Password changed successfully. Please log in.</p>{% endif %}
+    <label>Username<input type="text" name="username" autofocus required autocomplete="username"></label>
+    <label>Password<input type="password" name="password" required></label>
+    <button type="submit">Log in</button>
+    <a class="link-small" href="{{ app.adminPath }}/forgot-password">Forgot password</a>
 </form>
 </body>
 </html>

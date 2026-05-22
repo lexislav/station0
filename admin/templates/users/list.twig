@@ -1,11 +1,11 @@
 {% extends '@admin/layout.twig' %}
 {% block body %}
 <div class="toolbar">
-    <h1>Uživatelé</h1>
-    <a class="btn primary" href="{{ app.adminPath }}/users/new">+ Nový</a>
+    <h1>Users</h1>
+    <a class="btn primary" href="{{ app.adminPath }}/users/new">+ New</a>
 </div>
 <table class="users">
-    <thead><tr><th>Uživatelské jméno</th><th>E-mail</th><th>Role</th><th>Vytvořen</th><th>Poslední přihlášení</th><th></th></tr></thead>
+    <thead><tr><th>Username</th><th>E-mail</th><th>Role</th><th>Created</th><th>Last login</th><th></th></tr></thead>
     <tbody>
     {% for u in users %}
         <tr>
@@ -15,10 +15,10 @@
             <td>{{ u.created_at|date('Y-m-d') }}</td>
             <td>{{ u.last_login ? u.last_login|date('Y-m-d H:i') : '—' }}</td>
             <td>
-                <form method="post" action="{{ app.adminPath }}/users/{{ u.id }}/delete" onsubmit="return confirm('Smazat {{ u.email }}?');" class="inline">
+                <form method="post" action="{{ app.adminPath }}/users/{{ u.id }}/delete" onsubmit="return confirm('Delete {{ u.email }}?');" class="inline">
                     <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
                     <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
-                    <button class="link danger">smazat</button>
+                    <button class="link danger">delete</button>
                 </form>
             </td>
         </tr>

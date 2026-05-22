@@ -1,22 +1,22 @@
 <!doctype html>
-<html lang="cs">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Nastavení · {{ app.name }}</title>
-    <link rel="stylesheet" href="/assets/admin.css">
+    <title>Setup · {{ app.name }}</title>
+    <link rel="stylesheet" href="{{ app.adminPath }}/assets/admin.css">
 </head>
 <body class="admin login-page">
 <form class="login-card" method="post" action="{{ app.adminPath }}/setup">
     <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
     <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
     <h1>{{ app.name }}</h1>
-    <p class="setup-intro">Vítejte! Vytvořte první administrátorský účet.</p>
+    <p class="setup-intro">Welcome! Create your first admin account.</p>
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
-    <label>Uživatelské jméno<input type="text" name="username" value="{{ username ?? '' }}" autofocus required autocomplete="username"></label>
+    <label>Username<input type="text" name="username" value="{{ username ?? '' }}" autofocus required autocomplete="username"></label>
     <label>E-mail<input type="email" name="email" value="{{ email ?? '' }}" required autocomplete="email"></label>
-    <label>Heslo<input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
-    <button type="submit">Vytvořit účet a přihlásit se</button>
+    <label>Password<input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+    <button type="submit">Create account and log in</button>
 </form>
 </body>
 </html>

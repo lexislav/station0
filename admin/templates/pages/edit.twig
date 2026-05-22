@@ -231,7 +231,7 @@
 
     {% if mode == 'edit' %}
         <p class="breadcrumb">
-            <a href="{{ app.adminPath }}/pages">Stránky</a>
+            <a href="{{ app.adminPath }}/pages">Pages</a>
             {% for crumb in breadcrumb %}
                 <span>›</span>
                 {% if not loop.last %}
@@ -244,18 +244,18 @@
     {% endif %}
 
     <div class="field">
-        <label>Titulek</label>
+        <label>Title</label>
         <input type="text" name="title" value="{{ page.title }}" required autofocus>
     </div>
 
     <div class="row">
         {% if mode == 'new' %}
         <div class="field">
-            <label>Slug <small>(volitelné – vygeneruje se z titulku)</small></label>
-            <input type="text" name="slug" value="{{ page.slug }}" placeholder="napr-muj-clanek">
+            <label>Slug <small>(optional — generated from title)</small></label>
+            <input type="text" name="slug" value="{{ page.slug }}" placeholder="my-page-slug">
         </div>
         <div class="field">
-            <label>Rodičovská stránka</label>
+            <label>Parent page</label>
             <select name="parent">
                 {% for opt in parents %}
                     <option value="{{ opt.url }}" {% if opt.url == (selectedParent|default('/')) %}selected{% endif %}>{{ opt.label }}</option>
@@ -265,12 +265,12 @@
         {% elseif page.slug != '' %}
         <div class="field">
             <label>Slug <small class="muted">– <code>{{ page.urlPath }}</code></small></label>
-            <input type="text" name="slug" value="{{ page.slug }}" placeholder="napr-muj-clanek">
+            <input type="text" name="slug" value="{{ page.slug }}" placeholder="my-page-slug">
         </div>
         {% endif %}
 
         <div class="field">
-            <label>Šablona</label>
+            <label>Template</label>
             {% if availableTemplates is not empty %}
                 <select name="template" id="template-select">
                     {% for tpl in availableTemplates %}
@@ -284,7 +284,7 @@
     </div>
 
     <div class="field">
-        <label>Meta title <small>(pro HTML &lt;title&gt; – pokud prázdné, použije se Titulek)</small></label>
+        <label>Meta title <small>(used for HTML &lt;title&gt; — falls back to Title if empty)</small></label>
         <input type="text" name="metatitle" value="{{ page.metatitle }}" placeholder="{{ page.title }}">
     </div>
 
@@ -292,11 +292,11 @@
         <div class="field checkbox">
             <label>
                 <input type="checkbox" name="published" value="1" {% if page.published %}checked{% endif %}>
-                Publikováno
+                Published
             </label>
         </div>
         <div class="field">
-            <label>Datum publikování <small>(budoucí datum = naplánováno)</small></label>
+            <label>Publish date <small>(future date = scheduled)</small></label>
             <input type="datetime-local" name="published_at"
                    value="{{ page.publishedAt ? page.publishedAt|date('Y-m-d\\TH:i') : '' }}">
         </div>
@@ -312,7 +312,7 @@
             {% endfor %}
         </div>
         <div class="block-add-bar">
-            <span class="muted" style="font-size:.85rem">+ Přidat blok:</span>
+            <span class="muted" style="font-size:.85rem">+ Add block:</span>
             {% for bt in blockTypes %}
                 <button type="button" class="btn btn-sm block-type-btn"
                         data-type="{{ bt.type }}">{{ bt.label }}</button>
@@ -334,8 +334,8 @@
     <script id="block-schemas" type="application/json">{{ blockTypes|json_encode|raw }}</script>
 
     <div class="toolbar sticky">
-        <a class="btn" href="{{ app.adminPath }}/pages">Zrušit</a>
-        <button type="submit" class="btn primary" id="save-btn" disabled>Uložit</button>
+        <a class="btn" href="{{ app.adminPath }}/pages">Cancel</a>
+        <button type="submit" class="btn primary" id="save-btn" disabled>Save</button>
     </div>
 </form>
 
@@ -515,8 +515,8 @@
                 html += `<div class="field field--img">`
                       + `<div class="img-thumb-upload">`
                       + `<input type="hidden" data-subfield="${sf.name}" value="">`
-                      + `<label class="img-thumb-wrap" title="Kliknutím nahrajte obrázek">`
-                      + `<span class="img-thumb-placeholder">Nahrát<br>obrázek</span>`
+                      + `<label class="img-thumb-wrap" title="Click to upload image">`
+                      + `<span class="img-thumb-placeholder">Upload<br>image</span>`
                       + `</label>`
                       + `<input type="file" class="upload-file-input" hidden accept="image/*,.svg">`
                       + `</div></div>`;
@@ -526,7 +526,7 @@
             }
         });
         html += `<div class="list-item-btns">`
-              + `<button type="button" class="btn btn-sm list-item-remove">✕ Odebrat</button>`
+              + `<button type="button" class="btn btn-sm list-item-remove">✕ Remove</button>`
               + `</div>`;
         div.innerHTML = html;
         return div;

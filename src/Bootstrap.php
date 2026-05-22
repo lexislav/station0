@@ -58,7 +58,7 @@ final class Bootstrap
 
         self::startSession($config);
 
-        $container = self::buildContainer($config, $roles);
+        $container = self::buildContainer($config, $roles, $station0Root);
 
         AppFactory::setContainer($container);
         $app = AppFactory::create();
@@ -95,12 +95,13 @@ final class Bootstrap
         session_start();
     }
 
-    private static function buildContainer(array $config, array $roles): Container
+    private static function buildContainer(array $config, array $roles, string $station0Root): Container
     {
         $container = new Container();
 
         $container->set('config', $config);
         $container->set('roles', $roles);
+        $container->set('station0Root', $station0Root);
 
         $container->set(Logger::class, function () use ($config) {
             $logger = new Logger('station0');
@@ -320,6 +321,23 @@ final class Bootstrap
                 })->add($roleMiddleware('admin'));
             })->add(AuthMiddleware::class);
         });
+
+        // Admin static assets (CSS, JS) served from the library package — no auth required.
+        $app->get($adminPath . '/assets/{file:[a-z0-9._-]+}', function ($request, $response, $args) use ($container) {
+            $filePath = $container->get('station0Root') . '/admin/assets/' . $args['file'];
+            if (!is_file($filePath)) {
+                return $response->withStatus(404);
+            }
+            $mime = match(pathinfo($filePath, PATHINFO_EXTENSION)) {
+                'css'  => 'text/css',
+                'js'   => 'application/javascript',
+                default => 'application/octet-stream',
+            };
+            $response->getBody()->write((string) file_get_contents($filePath));
+            return $response
+                ->withHeader('Content-Type', $mime . '; charset=utf-8')
+                ->withHeader('Cache-Control', 'public, max-age=86400');
+        })->setName('admin.assets');
 
         // Page-local assets — must precede the page catch-all below.
         $app->get('/media/{path:.+}', [AssetController::class, 'show'])->setName('media.show');

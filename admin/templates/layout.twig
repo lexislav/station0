@@ -1,25 +1,25 @@
 <!doctype html>
-<html lang="cs">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Admin · {{ app.name }}{% endblock %}</title>
-    <link rel="stylesheet" href="/assets/admin.css">
+    <link rel="stylesheet" href="{{ app.adminPath }}/assets/admin.css">
     {% block head %}{% endblock %}
 </head>
 <body class="admin">
 <header class="admin-header">
     <a class="brand" href="{{ app.adminPath }}">{{ app.name }}</a>
     <nav>
-        <a href="{{ app.adminPath }}">Přehled</a>
-        <a href="{{ app.adminPath }}/pages">Stránky</a>
-        {% if user is defined and user.isAdmin %}<a href="{{ app.adminPath }}/users">Uživatelé</a>{% endif %}
+        <a href="{{ app.adminPath }}">Dashboard</a>
+        <a href="{{ app.adminPath }}/pages">Pages</a>
+        {% if user is defined and user.isAdmin %}<a href="{{ app.adminPath }}/users">Users</a>{% endif %}
         <form method="post" action="{{ app.adminPath }}/logout" class="inline">
             {% if csrf is defined %}
                 <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
                 <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
             {% endif %}
-            <button type="submit" class="link">Odhlásit</button>
+            <button type="submit" class="link">Log out</button>
         </form>
     </nav>
 </header>
