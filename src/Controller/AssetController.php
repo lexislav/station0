@@ -34,10 +34,21 @@ final class AssetController
         }
         fclose($stream);
 
-        return $response
+        $response = $response
             ->withHeader('Content-Type', $asset['mime'])
             ->withHeader('Content-Length', (string) filesize($asset['path']))
             ->withHeader('Cache-Control', 'public, max-age=31536000, immutable')
             ->withHeader('X-Content-Type-Options', 'nosniff');
+
+        // Documents are downloaded; images are rendered inline.
+        if ($asset['download']) {
+            $filename = rawurlencode(basename($asset['path']));
+            $response = $response->withHeader(
+                'Content-Disposition',
+                'attachment; filename="' . basename($asset['path']) . '"; filename*=UTF-8\'\'' . $filename,
+            );
+        }
+
+        return $response;
     }
 }

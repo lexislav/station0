@@ -150,7 +150,7 @@ final class PageRenderer
                 continue;
             }
 
-            if ($type === 'image' && is_string($data[$name])) {
+            if (($type === 'image' || $type === 'file') && is_string($data[$name])) {
                 $data[$name] = $this->media->resolveRef($data[$name], $pageUrlPath);
                 continue;
             }

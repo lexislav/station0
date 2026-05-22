@@ -42,6 +42,31 @@
                         </div>
                     </div>
 
+                {% elseif field.type == 'file' %}
+                    <div class="field">
+                        <label>{{ field.label }}</label>
+                        <div class="file-upload-widget" data-field="{{ field.name }}">
+                            <div class="input-with-btn">
+                                <input type="text" data-field="{{ field.name }}"
+                                       value="{{ attribute(block, field.name)|default('') }}"
+                                       placeholder="document.pdf" readonly>
+                                <button type="button" class="btn btn-sm file-upload-trigger">Upload</button>
+                                <button type="button" class="btn btn-sm file-upload-clear"
+                                    style="display:{{ attribute(block, field.name)|default('') ? 'inline-block' : 'none' }}">× Clear</button>
+                            </div>
+                            <input type="file" class="file-upload-input" hidden
+                                   accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">
+                            {% set _fname = attribute(block, field.name)|default('') %}
+                            {% if _fname %}
+                                <p class="file-upload-name" style="margin:.35rem 0 0; font-size:.82rem; color:#5a6478;">
+                                    📎 {{ _fname }}
+                                </p>
+                            {% else %}
+                                <p class="file-upload-name" style="margin:.35rem 0 0; font-size:.82rem; color:#5a6478; display:none;"></p>
+                            {% endif %}
+                        </div>
+                    </div>
+
                 {% elseif field.type == 'textarea' %}
                     <div class="field">
                         <label>{{ field.label }}</label>
@@ -73,15 +98,16 @@
 
                 {% elseif field.type == 'list' %}
                     {% set hasImage = (field.item_fields|default([]))|filter(sf => sf.type == 'image')|length > 0 %}
+                    {% set hasFile  = (field.item_fields|default([]))|filter(sf => sf.type == 'file')|length > 0 %}
                     <div class="field">
                         <label>{{ field.label }}</label>
-                        <div class="list-field{% if hasImage %} list-field--images{% endif %}" data-field="{{ field.name }}"
+                        <div class="list-field{% if hasImage %} list-field--images{% elseif hasFile %} list-field--files{% endif %}"
+                             data-field="{{ field.name }}"
                              data-item-fields="{{ field.item_fields|json_encode|e('html_attr') }}">
                             {% for item in attribute(block, field.name)|default([]) %}
                                 <div class="list-item">
                                     {% for subfield in field.item_fields %}
                                         <div class="field{% if subfield.type == 'image' %} field--img{% endif %}">
-                                            {% if subfield.type != 'image' %}<label>{{ subfield.label }}</label>{% endif %}
                                             {% if subfield.type == 'image' %}
                                                 {% set _fname = attribute(item, subfield.name)|default('') %}
                                                 {% set _isUrl = _fname starts with 'http' or _fname starts with '/' %}
@@ -100,7 +126,26 @@
                                                     </label>
                                                     <input type="file" class="upload-file-input" hidden accept="image/*,.svg">
                                                 </div>
+                                            {% elseif subfield.type == 'file' %}
+                                                {% set _fname = attribute(item, subfield.name)|default('') %}
+                                                <label>{{ subfield.label }}</label>
+                                                <div class="file-upload-widget">
+                                                    <div class="input-with-btn">
+                                                        <input type="text" data-subfield="{{ subfield.name }}"
+                                                               value="{{ _fname }}" placeholder="document.pdf" readonly>
+                                                        <button type="button" class="btn btn-sm file-upload-trigger">Upload</button>
+                                                        <button type="button" class="btn btn-sm file-upload-clear"
+                                                            style="display:{{ _fname ? 'inline-block' : 'none' }}">× Clear</button>
+                                                    </div>
+                                                    <input type="file" class="file-upload-input" hidden
+                                                           accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">
+                                                    <p class="file-upload-name"
+                                                       style="margin:.35rem 0 0;font-size:.82rem;color:#5a6478;{% if not _fname %}display:none;{% endif %}">
+                                                        {% if _fname %}📎 {{ _fname }}{% endif %}
+                                                    </p>
+                                                </div>
                                             {% else %}
+                                                <label>{{ subfield.label }}</label>
                                                 <input type="text" data-subfield="{{ subfield.name }}"
                                                        value="{{ attribute(item, subfield.name)|default('') }}">
                                             {% endif %}
@@ -115,6 +160,12 @@
                                 <label class="gallery-uploader" title="Click or drag images here">
                                     <input type="file" class="gallery-upload-input" hidden multiple accept="image/*,.svg">
                                     <span>+ Upload images</span>
+                                </label>
+                            {% elseif hasFile %}
+                                <label class="files-uploader" title="Click or drag files here">
+                                    <input type="file" class="files-upload-input" hidden multiple
+                                           accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">
+                                    <span>+ Upload files</span>
                                 </label>
                             {% else %}
                                 <button type="button" class="btn btn-sm list-item-add">+ Add item</button>

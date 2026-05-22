@@ -159,6 +159,27 @@
     transition: width .15s ease;
 }
 
+/* ── Files multi-upload drop zone ─────────────────────────────────────── */
+.files-uploader {
+    display: flex; align-items: center; justify-content: center; gap: .4rem;
+    padding: .9rem;
+    border: 2px dashed #c8cdd6;
+    border-radius: 6px;
+    background: #f9fafb;
+    color: #5a6478;
+    font-size: .82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.files-uploader:hover { background: #eef1f5; border-color: #aab1bd; color: #2c3e50; }
+.list-field--files.drag-over { outline: 2px dashed #2c3e50; outline-offset: 3px; }
+.list-field--files.drag-over .files-uploader {
+    border-color: #2c3e50;
+    background: #eaf1f8;
+    color: #2c3e50;
+}
+
 /* ── ToastUI: no inner wrapper, floating toolbar dock ──────────────────── */
 .block-editor .toastui-editor-defaultUI {
     border: none;
@@ -520,6 +541,19 @@
                       + `</label>`
                       + `<input type="file" class="upload-file-input" hidden accept="image/*,.svg">`
                       + `</div></div>`;
+            } else if (sf.type === 'file') {
+                html += `<div class="field">`
+                      + `<label>${sf.label}</label>`
+                      + `<div class="file-upload-widget" data-field="${sf.name}">`
+                      + `<div class="input-with-btn">`
+                      + `<input type="text" data-subfield="${sf.name}" value="" placeholder="document.pdf" readonly>`
+                      + `<button type="button" class="btn btn-sm file-upload-trigger">Upload</button>`
+                      + `<button type="button" class="btn btn-sm file-upload-clear" style="display:none">× Clear</button>`
+                      + `</div>`
+                      + `<input type="file" class="file-upload-input" hidden`
+                      + ` accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">`
+                      + `<p class="file-upload-name" style="margin:.35rem 0 0;font-size:.82rem;color:#5a6478;display:none;"></p>`
+                      + `</div></div>`;
             } else {
                 html += `<div class="field"><label>${sf.label}</label>`
                       + `<input type="text" data-subfield="${sf.name}" value=""></div>`;
@@ -543,12 +577,12 @@
     function uploadFile(file, onProgress) {
         return new Promise(resolve => {
             if (!pagePath) {
-                alert('Uložte stránku nejdřív — soubory se ukládají do její složky.');
+                alert('Save the page first — files are stored in the page folder.');
                 resolve(null);
                 return;
             }
             const fd = new FormData();
-            fd.append('image', file);
+            fd.append('file', file);
             fd.append('pagePath', pagePath);
             fd.append(csrf.nameKey, csrf.name);
             fd.append(csrf.valueKey, csrf.value);
@@ -568,11 +602,11 @@
                 if (xhr.status >= 200 && xhr.status < 300 && json.filename) {
                     resolve({ filename: json.filename, url: json.url });
                 } else {
-                    alert('Upload selhal: ' + (json.error || 'Upload failed'));
+                    alert('Upload failed: ' + (json.error || xhr.status));
                     resolve(null);
                 }
             });
-            xhr.addEventListener('error', () => { alert('Upload selhal: chyba sítě'); resolve(null); });
+            xhr.addEventListener('error', () => { alert('Upload failed: network error'); resolve(null); });
             xhr.send(fd);
         });
     }
@@ -635,7 +669,7 @@
     function uploadToGallery(listEl, files) {
         if (!listEl) return;
         if (!pagePath) {
-            alert('Uložte stránku nejdřív — soubory se ukládají do její složky.');
+            alert('Save the page first — files are stored in the page folder.');
             return;
         }
         const subFields = JSON.parse(listEl.dataset.itemFields || '[]');
@@ -644,7 +678,7 @@
         const images = Array.from(files).filter(
             f => f.type.startsWith('image/') || /\.svg$/i.test(f.name)
         );
-        if (!images.length) return;
+        if (!images.length) { alert('Please select image files.'); return; }
 
         const uploader = listEl.querySelector('.gallery-uploader');
         enableSave();
@@ -652,6 +686,59 @@
             const row = createUploadingItem(subFields, file);
             listEl.insertBefore(row, uploader);
             uploadOneIntoRow(file, row);
+        });
+    }
+
+    // ── File list multi-upload ────────────────────────────────────────────
+
+    /**
+     * Create a list-item row showing a pending file — name + spinner — ready
+     * to be inserted before the upload finishes so the UI feels instant.
+     */
+    function createUploadingFileItem(itemFields, file) {
+        const div = createListItem(itemFields);
+        // Show the filename immediately in the text input so the user gets
+        // instant feedback even before the XHR completes.
+        const inp = div.querySelector('input[type="text"][data-subfield]');
+        if (inp) inp.value = '⏳ ' + file.name;
+        return div;
+    }
+
+    /** Upload one file into an already-inserted file-list row. */
+    async function uploadOneFileIntoRow(file, row) {
+        const result = await uploadFile(file);
+        if (!result) { row.remove(); return; }
+
+        const inp    = row.querySelector('input[type="text"][data-subfield]');
+        if (inp) inp.value = result.filename;
+
+        const widget = row.querySelector('.file-upload-widget');
+        if (widget) {
+            const nameEl  = widget.querySelector('.file-upload-name');
+            const clearBtn = widget.querySelector('.file-upload-clear');
+            if (nameEl)   { nameEl.textContent = '📎 ' + result.filename; nameEl.style.display = ''; }
+            if (clearBtn) clearBtn.style.display = 'inline-block';
+        }
+    }
+
+    /** Upload multiple document files into a list-field--files container. */
+    function uploadToFileList(listEl, files) {
+        if (!listEl) return;
+        if (!pagePath) {
+            alert('Save the page first — files are stored in the page folder.');
+            return;
+        }
+        const subFields = JSON.parse(listEl.dataset.itemFields || '[]');
+        if (!subFields.some(sf => sf.type === 'file')) return;
+
+        if (!files.length) return;
+
+        const uploader = listEl.querySelector('.files-uploader');
+        enableSave();
+        Array.from(files).forEach(file => {
+            const row = createUploadingFileItem(subFields, file);
+            listEl.insertBefore(row, uploader);
+            uploadOneFileIntoRow(file, row);
         });
     }
 
@@ -691,6 +778,25 @@
             wrap.querySelector('.upload-file-input').click();
             return;
         }
+
+        // File field: upload trigger
+        if (e.target.matches('.file-upload-trigger')) {
+            const widget = e.target.closest('.file-upload-widget');
+            if (widget) widget.querySelector('.file-upload-input').click();
+            return;
+        }
+        // File field: clear button
+        if (e.target.matches('.file-upload-clear')) {
+            const widget  = e.target.closest('.file-upload-widget');
+            if (!widget) return;
+            const inp = widget.querySelector('input[type="text"][data-field], input[type="text"][data-subfield]');
+            if (inp) inp.value = '';
+            const nameEl = widget.querySelector('.file-upload-name');
+            if (nameEl) { nameEl.textContent = ''; nameEl.style.display = 'none'; }
+            e.target.style.display = 'none';
+            enableSave();
+            return;
+        }
     });
 
     // ── Gallery drag & drop ────────────────────────────────────────────────
@@ -718,6 +824,31 @@
         if (e.dataTransfer.files.length) uploadToGallery(zone, e.dataTransfer.files);
     });
 
+    // ── File-list drag & drop ──────────────────────────────────────────────
+
+    function fileListDropZone(target) {
+        return target && target.closest ? target.closest('.list-field--files') : null;
+    }
+
+    document.addEventListener('dragover', e => {
+        const zone = fileListDropZone(e.target);
+        if (!zone) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        zone.classList.add('drag-over');
+    });
+    document.addEventListener('dragleave', e => {
+        const zone = fileListDropZone(e.target);
+        if (zone && !zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+    });
+    document.addEventListener('drop', e => {
+        const zone = fileListDropZone(e.target);
+        if (!zone) return;
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) uploadToFileList(zone, e.dataTransfer.files);
+    });
+
     blockList.addEventListener('dblclick', e => {
         const header = e.target.closest('.block-header');
         if (!header) return;
@@ -738,6 +869,34 @@
             e.target.value = '';
             return;
         }
+
+        // File list multi-upload input → create populated rows
+        if (e.target.matches('.files-upload-input')) {
+            uploadToFileList(e.target.closest('.list-field'), e.target.files);
+            e.target.value = '';
+            return;
+        }
+
+        // File field upload input
+        if (e.target.matches('.file-upload-input')) {
+            const file   = e.target.files[0];
+            const widget = e.target.closest('.file-upload-widget');
+            if (!file || !widget) { e.target.value = ''; return; }
+            const result = await uploadFile(file);
+            if (result) {
+                // Works for both top-level fields (data-field) and list subfields (data-subfield).
+                const inp = widget.querySelector('input[type="text"][data-field], input[type="text"][data-subfield]');
+                if (inp) inp.value = result.filename;
+                const nameEl = widget.querySelector('.file-upload-name');
+                if (nameEl) { nameEl.textContent = '📎 ' + result.filename; nameEl.style.display = ''; }
+                const clearBtn = widget.querySelector('.file-upload-clear');
+                if (clearBtn) clearBtn.style.display = 'inline-block';
+                enableSave();
+            }
+            e.target.value = '';
+            return;
+        }
+
         if (!e.target.matches('.upload-file-input')) return;
         const file = e.target.files[0];
         if (!file) return;
