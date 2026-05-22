@@ -10,7 +10,7 @@
     margin-left: 1.4rem;
     border-left: 1px dashed #dde1e7;
     padding-left: .4rem;
-    min-height: .5rem; /* allow drops onto empty children */
+    min-height: .5rem;
 }
 .page-row {
     display: flex;
@@ -21,10 +21,8 @@
     border-radius: 4px;
 }
 .page-row .drag-handle { flex: 0 0 1.6rem; }
-.page-row .title       { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Right-side cluster: pushed to the row's right edge with margin-left:auto so
-   columns line up across nesting depths (child rows share the same right
-   edge as the parent — no per-level right padding on .page-children). */
+.page-row .title       { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: .4rem; }
+.page-row .title a     { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page-row .right-meta {
     margin-left: auto;
     display: grid;
@@ -93,72 +91,407 @@
 .row-actions .menu button:hover { background: #f4f6f9; }
 .row-actions .menu .danger { color: #c0392b; }
 .row-actions .menu .danger:hover { background: #ffe4e4; }
+
+/* ── View tab toggle ───────────────────────────────────────────────────── */
+.view-tabs {
+    display: flex;
+    border: 1px solid #dde1e7;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #f4f6f9;
+    gap: 0;
+}
+.view-tab {
+    display: flex; align-items: center; gap: .35rem;
+    padding: .35rem .9rem;
+    font: inherit;
+    font-size: .82rem;
+    font-weight: 500;
+    background: none;
+    border: none;
+    border-left: 1px solid #dde1e7;
+    cursor: pointer;
+    color: #5a6478;
+    white-space: nowrap;
+}
+.view-tab:first-child { border-left: none; }
+.view-tab.active { background: #fff; color: #2c3e50; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+.view-tab:not(.active):hover { background: #edf0f4; color: #2c3e50; }
+
+/* ── Stream badges ─────────────────────────────────────────────────────── */
+.badge-stream {
+    display: inline-flex; align-items: center;
+    padding: .1rem .45rem;
+    border-radius: 99px;
+    background: #2c3e50;
+    color: #fff;
+    font-size: .63rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    flex-shrink: 0;
+}
+.badge-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.4rem;
+    padding: .1rem .35rem;
+    border-radius: 99px;
+    background: #2c3e50;
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+.badge-drafts {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.4rem;
+    padding: .1rem .35rem;
+    border-radius: 99px;
+    background: #8a94a6;
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+/* ── Stream record preview (tree view) ────────────────────────────────── */
+.stream-preview {
+    list-style: none;
+    margin: .1rem 0 .2rem 2.1rem;
+    padding: 0;
+}
+.stream-preview-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .18rem .55rem;
+    font-size: .85rem;
+}
+.stream-preview-row .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stream-preview-row .title a { text-decoration: none; color: #5a6478; font-weight: 400; }
+.stream-preview-row .title a:hover { text-decoration: underline; color: #2c3e50; }
+.stream-preview-row .right-meta {
+    margin-left: auto;
+    display: grid;
+    grid-template-columns: 7rem 6rem 2.2rem;
+    align-items: center;
+    gap: .5rem;
+    flex: 0 0 auto;
+}
+.stream-see-all {
+    display: block;
+    margin: .05rem 0 .4rem 2.6rem;
+    font-size: .82rem;
+    color: #3a7bd5;
+    text-decoration: none;
+}
+.stream-see-all:hover { text-decoration: underline; }
+
+/* ── Streams tab ───────────────────────────────────────────────────────── */
+.stream-selector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin-bottom: 1.25rem;
+}
+.stream-selector-btn {
+    display: flex; align-items: center; gap: .4rem;
+    padding: .3rem .8rem;
+    border: 1px solid #c8cdd6;
+    border-radius: 99px;
+    background: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-size: .82rem;
+    color: #5a6478;
+}
+.stream-selector-btn.active { background: #2c3e50; border-color: #2c3e50; color: #fff; }
+.stream-selector-btn.active .badge-count { background: rgba(255,255,255,.25); }
+.stream-selector-btn:not(.active):hover { background: #f0f2f5; }
+
+.stream-records-view { display: none; }
+.stream-records-view.active { display: block; }
+
+.stream-records-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: .75rem;
+}
+.stream-records-header strong { font-size: 1rem; }
+.stream-records-header .stream-meta { font-size: .82rem; color: #8a94a6; margin-left: .5rem; }
+
+.stream-records-list { list-style: none; margin: 0; padding: 0; }
+.stream-record-row {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .35rem .55rem;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+.stream-record-row:hover { background: #f7f8fb; border-color: #eceff3; }
+.stream-record-row .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stream-record-row .title a { text-decoration: none; color: #2c3e50; font-weight: 500; }
+.stream-record-row .title a:hover { text-decoration: underline; }
+.stream-record-row .right-meta {
+    margin-left: auto;
+    display: grid;
+    grid-template-columns: 7rem 6rem 2.2rem;
+    align-items: center;
+    gap: .5rem;
+    flex: 0 0 auto;
+}
+
+/* ── Pagination ────────────────────────────────────────────────────────── */
+.stream-pagination {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-top: .75rem;
+    font-size: .85rem;
+    color: #5a6478;
+}
+.stream-pagination button {
+    padding: .3rem .7rem;
+    border: 1px solid #c8cdd6;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-size: .82rem;
+    color: #2c3e50;
+}
+.stream-pagination button:disabled { opacity: .4; cursor: default; }
+.stream-pagination button:not(:disabled):hover { background: #f0f2f5; }
+.stream-pagination .page-info { flex: 1; text-align: center; }
 </style>
 {% endblock %}
+
 {% block body %}
 <div class="toolbar">
     <h1>Pages</h1>
+    <div class="view-tabs">
+        <button class="view-tab active" data-view="structure">
+            ⛶ Web structure
+        </button>
+        <button class="view-tab" data-view="streams">
+            ≡ Streams
+        </button>
+    </div>
     <a class="btn primary" href="{{ app.adminPath }}/pages/new">+ New</a>
 </div>
 
+{# ── Tree node macro ─────────────────────────────────────────────────────────
+   Renders one page row. Stream pages show inline child previews instead of
+   a recursive .page-children list so they don't bloat the tree.
+────────────────────────────────────────────────────────────────────────────── #}
 {% macro node(item, csrf, adminPath) %}
-    {% set p = item.page %}
-    {% set isRoot = p.urlPath == '/' %}
+    {% set p        = item.page %}
+    {% set isRoot   = p.urlPath == '/' %}
+    {% set isStream = item.isStream ?? false %}
     {% set editPath = isRoot ? '~' : p.urlPath|trim('/') %}
-    <li data-slug="{{ isRoot ? '' : p.slug }}" data-url="{{ p.urlPath }}" {% if isRoot %}data-root="1"{% endif %}>
+    <li data-slug="{{ isRoot ? '' : p.slug }}"
+        data-url="{{ p.urlPath }}"
+        {% if isRoot %}data-root="1"{% endif %}
+        {% if isStream %}data-is-stream="1"{% endif %}>
+
         <div class="page-row {% if isRoot %}root{% endif %}">
             <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+
             <span class="title">
                 <a href="{{ adminPath }}/pages/{{ editPath }}/edit">{{ p.title }}</a>
-            </span>
-            <span class="right-meta">
-            <span class="status">
-                {% if not p.published %}
-                    <span class="tag">draft</span>
-                {% elseif p.publishedAt and date(p.publishedAt) > date() %}
-                    <span class="tag planned">scheduled</span>
-                {% else %}
-                    <span class="tag ok">published</span>
+                {% if isStream %}
+                    <span class="badge-stream">STREAM</span>
+                    <span class="badge-count">{{ item.children|length }}</span>
+                    {% if (item.draftCount ?? 0) > 0 %}
+                        <span class="badge-drafts">{{ item.draftCount }}</span>
+                    {% endif %}
                 {% endif %}
             </span>
-            <span class="updated">{{ p.updated ? p.updated|slice(0, 10) : '' }}</span>
-            <span class="actions">
-                <details class="row-actions">
-                    <summary>⋯</summary>
-                    <div class="menu">
-                        <a href="{{ p.urlPath }}" target="_blank" rel="noopener">View ↗</a>
-                        <a href="{{ adminPath }}/pages/new?parent={{ p.urlPath|url_encode }}">+ Add child page</a>
-                        <a href="{{ adminPath }}/pages/{{ editPath }}/edit">Edit</a>
-                        {% if not isRoot %}
-                        <form method="post" action="{{ adminPath }}/pages/{{ editPath }}/delete"
-                              onsubmit="return confirm('Delete {{ p.urlPath }}?');">
-                            <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
-                            <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
-                            <button type="submit" class="danger">Delete</button>
-                        </form>
-                        {% endif %}
-                    </div>
-                </details>
-            </span>
+
+            <span class="right-meta">
+                <span class="status">
+                    {% if not p.published %}
+                        <span class="tag">draft</span>
+                    {% elseif p.publishedAt and date(p.publishedAt) > date() %}
+                        <span class="tag planned">scheduled</span>
+                    {% else %}
+                        <span class="tag ok">published</span>
+                    {% endif %}
+                </span>
+                <span class="updated">{{ p.updated ? p.updated|slice(0, 10) : '' }}</span>
+                <span class="actions">
+                    <details class="row-actions">
+                        <summary>⋯</summary>
+                        <div class="menu">
+                            <a href="{{ p.urlPath }}" target="_blank" rel="noopener">View ↗</a>
+                            <a href="{{ adminPath }}/pages/new?parent={{ p.urlPath|url_encode }}">+ Add child page</a>
+                            <a href="{{ adminPath }}/pages/{{ editPath }}/edit">Edit</a>
+                            {% if not isRoot %}
+                            <form method="post" action="{{ adminPath }}/pages/{{ editPath }}/delete"
+                                  onsubmit="return confirm('Delete {{ p.urlPath }}?');">
+                                <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+                                <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+                                <button type="submit" class="danger">Delete</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </details>
+                </span>
             </span>
         </div>
-        <ul class="page-children" data-parent="{{ p.urlPath }}">
-            {% for child in item.children %}
-                {{ _self.node(child, csrf, adminPath) }}
-            {% endfor %}
-        </ul>
+
+        {% if isStream %}
+            {# Inline preview: first 3 children, then a link to the full Streams tab #}
+            {% if item.children is not empty %}
+            <ul class="stream-preview">
+                {% for child in item.children|slice(0, 3) %}
+                    {% set cp       = child.page %}
+                    {% set cEditPath = cp.urlPath|trim('/') %}
+                    <li class="stream-preview-row">
+                        <span class="title">
+                            <a href="{{ adminPath }}/pages/{{ cEditPath }}/edit">{{ cp.title }}</a>
+                        </span>
+                        <span class="right-meta">
+                            <span class="status">
+                                {% if not cp.published %}
+                                    <span class="tag">draft</span>
+                                {% elseif cp.publishedAt and date(cp.publishedAt) > date() %}
+                                    <span class="tag planned">scheduled</span>
+                                {% else %}
+                                    <span class="tag ok">published</span>
+                                {% endif %}
+                            </span>
+                            <span class="updated">{{ cp.updated ? cp.updated|slice(0, 10) : '' }}</span>
+                            <span></span>{# keeps right-meta grid aligned #}
+                        </span>
+                    </li>
+                {% endfor %}
+            </ul>
+            <a class="stream-see-all" href="#streams" data-stream="{{ p.urlPath }}">
+                All {{ item.children|length }} stream records…
+            </a>
+            {% endif %}
+
+        {% else %}
+            {# Regular pages: recursive children tree #}
+            <ul class="page-children" data-parent="{{ p.urlPath }}">
+                {% for child in item.children %}
+                    {{ _self.node(child, csrf, adminPath) }}
+                {% endfor %}
+            </ul>
+        {% endif %}
+
     </li>
 {% endmacro %}
 
-{% if tree is empty %}
-    <p class="empty">No pages yet. <a href="{{ app.adminPath }}/pages/new">Create the first one.</a></p>
-{% else %}
-<ul class="page-tree" data-parent="/">
-    {% for item in tree %}
-        {{ _self.node(item, csrf, app.adminPath) }}
-    {% endfor %}
-</ul>
-{% endif %}
+{# ════════════════════════════════════════════════════════════════════════════
+   Web structure view
+════════════════════════════════════════════════════════════════════════════ #}
+<div id="view-structure">
+    {% if tree is empty %}
+        <p class="empty">No pages yet. <a href="{{ app.adminPath }}/pages/new">Create the first one.</a></p>
+    {% else %}
+    <ul class="page-tree" data-parent="/">
+        {% for item in tree %}
+            {{ _self.node(item, csrf, app.adminPath) }}
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+
+{# ════════════════════════════════════════════════════════════════════════════
+   Streams tab view
+════════════════════════════════════════════════════════════════════════════ #}
+<div id="view-streams" hidden>
+    {% if streams is empty %}
+        <p class="empty">No stream pages yet. A page becomes a stream when it declares <code>AllowedChildTemplates</code>.</p>
+    {% else %}
+
+        {# Stream selector pills (only shown when there are multiple streams) #}
+        {% if streams|length > 1 %}
+        <div class="stream-selector">
+            {% for i, stream in streams %}
+                {% set sp = stream.page %}
+                <button class="stream-selector-btn {% if i == 0 %}active{% endif %}"
+                        data-stream-idx="{{ i }}">
+                    {{ sp.title }}
+                    <span class="badge-count">{{ stream.children|length }}</span>
+                    {% if (stream.draftCount ?? 0) > 0 %}
+                        <span class="badge-drafts">{{ stream.draftCount }}</span>
+                    {% endif %}
+                </button>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# One panel per stream #}
+        {% for i, stream in streams %}
+            {% set sp       = stream.page %}
+            {% set spEdit   = sp.urlPath|trim('/') %}
+            <div class="stream-records-view {% if i == 0 %}active{% endif %}"
+                 data-stream-idx="{{ i }}"
+                 data-stream-url="{{ sp.urlPath }}">
+
+                <div class="stream-records-header">
+                    <div>
+                        <strong>{{ sp.title }}</strong>
+                        <span class="stream-meta">{{ sp.urlPath }}</span>
+                    </div>
+                    <a class="btn btn-sm" href="{{ app.adminPath }}/pages/new?parent={{ sp.urlPath|url_encode }}">+ New record</a>
+                </div>
+
+                <ul class="stream-records-list" data-parent="{{ sp.urlPath }}">
+                    {% for child in stream.children %}
+                        {% set cp      = child.page %}
+                        {% set cEdit   = cp.urlPath|trim('/') %}
+                        <li data-slug="{{ cp.slug }}" data-url="{{ cp.urlPath }}">
+                            <div class="stream-record-row">
+                                <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+                                <span class="title">
+                                    <a href="{{ app.adminPath }}/pages/{{ cEdit }}/edit">{{ cp.title }}</a>
+                                </span>
+                                <span class="right-meta">
+                                    <span class="status">
+                                        {% if not cp.published %}
+                                            <span class="tag">draft</span>
+                                        {% elseif cp.publishedAt and date(cp.publishedAt) > date() %}
+                                            <span class="tag planned">scheduled</span>
+                                        {% else %}
+                                            <span class="tag ok">published</span>
+                                        {% endif %}
+                                    </span>
+                                    <span class="updated">{{ cp.updated ? cp.updated|slice(0, 10) : '' }}</span>
+                                    <span class="actions">
+                                        <details class="row-actions">
+                                            <summary>⋯</summary>
+                                            <div class="menu">
+                                                <a href="{{ cp.urlPath }}" target="_blank" rel="noopener">View ↗</a>
+                                                <a href="{{ app.adminPath }}/pages/{{ cEdit }}/edit">Edit</a>
+                                                <form method="post" action="{{ app.adminPath }}/pages/{{ cEdit }}/delete"
+                                                      onsubmit="return confirm('Delete {{ cp.urlPath }}?');">
+                                                    <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+                                                    <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+                                                    <button type="submit" class="danger">Delete</button>
+                                                </form>
+                                            </div>
+                                        </details>
+                                    </span>
+                                </span>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+
+                <div class="stream-pagination" data-stream-idx="{{ i }}" style="display:none">
+                    <button class="pg-prev">← Prev</button>
+                    <span class="page-info"></span>
+                    <button class="pg-next">Next →</button>
+                </div>
+
+            </div>
+        {% endfor %}
+
+    {% endif %}
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>
@@ -171,9 +504,9 @@
         value:    {{ csrf.value|json_encode|raw }},
     };
 
-    function parentUrlOf(ul) {
-        return ul.getAttribute('data-parent') || '/';
-    }
+    // ── Shared helpers ─────────────────────────────────────────────────────
+
+    function parentUrlOf(ul) { return ul.getAttribute('data-parent') || '/'; }
 
     function siblingsOrder(ul) {
         return Array.from(ul.children)
@@ -194,10 +527,7 @@
         const res = await fetch(adminPath + '/pages/reorder', { method: 'POST', body });
         if (!res.ok) {
             let msg = 'Reorder failed (HTTP ' + res.status + ')';
-            try {
-                const j = await res.json();
-                if (j && j.error) msg = j.error;
-            } catch (_) {}
+            try { const j = await res.json(); if (j && j.error) msg = j.error; } catch (_) {}
             alert(msg);
             window.location.reload();
             return false;
@@ -205,39 +535,62 @@
         return true;
     }
 
-    function onEnd(evt) {
-        // Don't allow dragging the root page itself.
-        if (evt.item.hasAttribute('data-root')) {
-            window.location.reload();
-            return;
-        }
+    // ── Tab switching ──────────────────────────────────────────────────────
+
+    const viewStructure = document.getElementById('view-structure');
+    const viewStreams    = document.getElementById('view-streams');
+    const tabs          = document.querySelectorAll('.view-tab');
+    const LS_KEY        = 's0_pages_view';
+
+    function switchView(view) {
+        const isStructure  = view === 'structure';
+        viewStructure.hidden = !isStructure;
+        viewStreams.hidden   = isStructure;
+        tabs.forEach(t => t.classList.toggle('active', t.dataset.view === view));
+        try { localStorage.setItem(LS_KEY, view); } catch (_) {}
+    }
+
+    tabs.forEach(t => t.addEventListener('click', () => switchView(t.dataset.view)));
+
+    // Restore last tab
+    try { const v = localStorage.getItem(LS_KEY); if (v === 'streams') switchView('streams'); }
+    catch (_) {}
+
+    // "All stream records…" links → jump to Streams tab, select matching stream
+    document.querySelectorAll('.stream-see-all').forEach(a => {
+        a.addEventListener('click', e => {
+            e.preventDefault();
+            switchView('streams');
+            const targetUrl = a.dataset.stream;
+            document.querySelectorAll('.stream-selector-btn').forEach(btn => {
+                const idx  = btn.dataset.streamIdx;
+                const view = document.querySelector(`.stream-records-view[data-stream-idx="${idx}"]`);
+                if (view && view.dataset.streamUrl === targetUrl) btn.click();
+            });
+        });
+    });
+
+    // ── Web structure drag-drop ────────────────────────────────────────────
+
+    function onTreeEnd(evt) {
+        if (evt.item.hasAttribute('data-root')) { window.location.reload(); return; }
         const toUl   = evt.to;
         const fromUl = evt.from;
         const slug   = evt.item.getAttribute('data-slug');
         const parent = parentUrlOf(toUl);
-
         const payload = { parent, order: siblingsOrder(toUl) };
-
         if (toUl !== fromUl) {
-            // Page changed parents. Compute its old URL from the previous parent.
             const fromParent = parentUrlOf(fromUl);
             const oldUrl = (fromParent === '/' ? '' : fromParent.replace(/\/$/, '')) + '/' + slug;
             payload.moved = { from: oldUrl, slug };
             postReorder(payload).then(ok => {
-                if (ok) {
-                    // Reorder the old parent's siblings too (gaps closed).
-                    postReorder({ parent: fromParent, order: siblingsOrder(fromUl) });
-                }
+                if (ok) postReorder({ parent: fromParent, order: siblingsOrder(fromUl) });
             });
         } else {
             postReorder(payload);
         }
     }
 
-    // Only `.page-children` lists are sortable — the outer `.page-tree` wraps
-    // the Home page and must not accept drops (would create a phantom sibling
-    // of root). Reordering top-level pages happens inside Home's own
-    // `.page-children` (data-parent="/").
     document.querySelectorAll('ul.page-children').forEach(ul => {
         new Sortable(ul, {
             group: 'pages',
@@ -246,27 +599,106 @@
             fallbackOnBody: true,
             swapThreshold: 0.65,
             filter: '[data-root]',
-            onMove: (evt) => {
-                // Block dropping anything into the root <li>'s parent slot (root never moves).
-                if (evt.dragged.hasAttribute('data-root')) return false;
-                return true;
-            },
-            onEnd,
+            onMove: evt => !evt.dragged.hasAttribute('data-root'),
+            onEnd: onTreeEnd,
         });
     });
 
-    // ── Row actions dropdown positioning (unchanged) ──
+    // ── Stream records drag-drop ───────────────────────────────────────────
+
+    document.querySelectorAll('.stream-records-list').forEach(ul => {
+        new Sortable(ul, {
+            handle: '.drag-handle',
+            animation: 150,
+            fallbackOnBody: true,
+            swapThreshold: 0.65,
+            onEnd: () => postReorder({ parent: parentUrlOf(ul), order: siblingsOrder(ul) }),
+        });
+    });
+
+    // ── Stream selector pills ──────────────────────────────────────────────
+
+    function activateStream(idx) {
+        document.querySelectorAll('.stream-selector-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.streamIdx === idx));
+        document.querySelectorAll('.stream-records-view').forEach(v =>
+            v.classList.toggle('active', v.dataset.streamIdx === idx));
+        initPagination(idx);
+    }
+
+    document.querySelectorAll('.stream-selector-btn').forEach(btn =>
+        btn.addEventListener('click', () => activateStream(btn.dataset.streamIdx)));
+
+    // ── Client-side pagination (stream records) ────────────────────────────
+
+    const PAGE_SIZE = 20;
+    const paginationState = {}; // idx → { page }
+
+    function initPagination(idx) {
+        const view = document.querySelector(`.stream-records-view[data-stream-idx="${idx}"]`);
+        if (!view) return;
+        const ul    = view.querySelector('.stream-records-list');
+        const pgEl  = view.querySelector('.stream-pagination');
+        if (!ul || !pgEl) return;
+
+        const items = Array.from(ul.children);
+        const total = items.length;
+
+        if (total <= PAGE_SIZE) {
+            pgEl.style.display = 'none';
+            items.forEach(li => { li.hidden = false; });
+            return;
+        }
+
+        pgEl.style.display = 'flex';
+        if (!paginationState[idx]) paginationState[idx] = { page: 0 };
+        const state      = paginationState[idx];
+        const totalPages = Math.ceil(total / PAGE_SIZE);
+
+        const prevBtn  = pgEl.querySelector('.pg-prev');
+        const nextBtn  = pgEl.querySelector('.pg-next');
+        const pageInfo = pgEl.querySelector('.page-info');
+
+        function render() {
+            const start = state.page * PAGE_SIZE;
+            const end   = start + PAGE_SIZE;
+            items.forEach((li, i) => { li.hidden = i < start || i >= end; });
+            pageInfo.textContent = `${start + 1}–${Math.min(end, total)} of ${total}`;
+            prevBtn.disabled = state.page === 0;
+            nextBtn.disabled = state.page >= totalPages - 1;
+        }
+
+        // Bind once by checking for a flag
+        if (!pgEl._bound) {
+            pgEl._bound = true;
+            prevBtn.addEventListener('click', () => {
+                if (state.page > 0) { state.page--; render(); }
+            });
+            nextBtn.addEventListener('click', () => {
+                if (state.page < totalPages - 1) { state.page++; render(); }
+            });
+        }
+
+        render();
+    }
+
+    // Init pagination for the first active stream
+    const firstView = document.querySelector('.stream-records-view.active');
+    if (firstView) initPagination(firstView.dataset.streamIdx);
+
+    // ── Row actions dropdown positioning ──────────────────────────────────
+
     function place(details) {
         const summary = details.querySelector('summary');
         const menu    = details.querySelector('.menu');
         if (!summary || !menu) return;
-        const r = summary.getBoundingClientRect();
+        const r  = summary.getBoundingClientRect();
         const mh = menu.offsetHeight;
         const below = window.innerHeight - r.bottom;
         const top = (below > mh + 8 || below > r.top) ? r.bottom + 4 : r.top - mh - 4;
-        const mw = menu.offsetWidth;
+        const mw  = menu.offsetWidth;
         const left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8));
-        menu.style.top  = top  + 'px';
+        menu.style.top  = top + 'px';
         menu.style.left = left + 'px';
     }
     document.querySelectorAll('details.row-actions').forEach(d => {

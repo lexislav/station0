@@ -35,10 +35,18 @@ final class PageController
     public function index(Request $request, Response $response): Response
     {
         $pages = $this->content->all();
+        $tree  = $this->buildTree($pages);
+
+        // Flat list of stream nodes (pages with AllowedChildTemplates) in tree
+        // order, used by the Streams tab in the list view.
+        $streams = [];
+        $this->collectStreamNodes($tree, $streams);
+
         return $this->twig->render($response, '@admin/pages/list.twig', [
-            'pages' => $pages,
-            'tree'  => $this->buildTree($pages),
-            'csrf'  => $this->csrfFields($request),
+            'pages'   => $pages,
+            'tree'    => $tree,
+            'streams' => $streams,
+            'csrf'    => $this->csrfFields($request),
         ]);
     }
 
@@ -93,14 +101,21 @@ final class PageController
 
     /**
      * Build a nested tree from the flat (already hierarchically sorted) list.
-     * @param Page[] $pages
-     * @return list<array{page: Page, children: array}>
+     * Each node: {page, children, isStream, draftCount}
+     *
+     * @param  Page[] $pages
+     * @return list<array{page: Page, children: array, isStream: bool, draftCount: int}>
      */
     private function buildTree(array $pages): array
     {
         $byUrl = [];
         foreach ($pages as $p) {
-            $byUrl[$p->urlPath] = ['page' => $p, 'children' => []];
+            $byUrl[$p->urlPath] = [
+                'page'       => $p,
+                'children'   => [],
+                'isStream'   => !empty($p->allowedChildTemplates),
+                'draftCount' => 0,
+            ];
         }
         $roots = [];
         foreach ($byUrl as $url => &$node) {
@@ -118,7 +133,31 @@ final class PageController
                 $roots[] = &$node;
             }
         }
+        unset($node);
+        // Annotate each node with the draft count among its direct children.
+        foreach ($byUrl as &$node) {
+            $node['draftCount'] = count(array_filter(
+                $node['children'],
+                static fn (array $c): bool => !$c['page']->published,
+            ));
+        }
         return $roots;
+    }
+
+    /**
+     * Walk the tree depth-first and collect all stream nodes into $out.
+     *
+     * @param list<array> $nodes
+     * @param list<array> $out
+     */
+    private function collectStreamNodes(array $nodes, array &$out): void
+    {
+        foreach ($nodes as $node) {
+            if ($node['isStream']) {
+                $out[] = $node;
+            }
+            $this->collectStreamNodes($node['children'], $out);
+        }
     }
 
     // ─── Templates API (used by the parent-change JS) ───
