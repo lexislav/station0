@@ -13,6 +13,7 @@
     <nav>
         <a href="{{ app.adminPath }}">{{ t.nav_dashboard }}</a>
         <a href="{{ app.adminPath }}/pages">{{ t.nav_pages }}</a>
+        <a href="{{ app.adminPath }}/collections">{{ t.nav_collections }}</a>
         {% if user is defined and user.isAdmin %}<a href="{{ app.adminPath }}/users">{{ t.nav_users }}</a>{% endif %}
         <form method="post" action="{{ app.adminPath }}/logout" class="inline">
             {% if csrf is defined %}

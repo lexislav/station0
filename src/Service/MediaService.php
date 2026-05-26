@@ -109,11 +109,13 @@ final class MediaService
         'application/octet-stream'                                                 => '',
     ];
 
-    public const ROOT_TOKEN = '~';
+    public const ROOT_TOKEN       = '~';
+    public const COLLECTIONS_TOKEN = '_collections';
 
     public function __construct(
         private readonly ContentRepository $content,
         private readonly string $pagesDir,
+        private readonly ?string $collectionsDir = null,
     ) {}
 
     // ─── Upload ───
@@ -200,11 +202,98 @@ final class MediaService
         return $this->urlFor($pageUrlPath, $value);
     }
 
+    // ─── Collection uploads ───
+
+    /**
+     * Store an uploaded file inside a collection item's directory.
+     *
+     * @return array{filename: string, url: string}
+     * @throws \RuntimeException
+     */
+    public function storeForCollection(string $collectionName, string $itemSlug, UploadedFileInterface $file): array
+    {
+        if ($this->collectionsDir === null) {
+            throw new \RuntimeException('CollectionsDir not configured in MediaService.');
+        }
+
+        $err = $file->getError();
+        if ($err !== UPLOAD_ERR_OK) {
+            throw new \RuntimeException(self::uploadErrorMessage($err));
+        }
+
+        $tmpPath = $file->getStream()->getMetadata('uri');
+        if (!is_string($tmpPath)) {
+            throw new \RuntimeException('Cannot read uploaded file');
+        }
+
+        $clientName = (string) $file->getClientFilename();
+        $mime       = $this->detectMime($tmpPath, $clientName);
+
+        if (isset(self::ALLOWED_MIME[$mime])) {
+            $maxBytes = self::MAX_BYTES;
+            if ($file->getSize() === null || $file->getSize() > $maxBytes) {
+                throw new \RuntimeException('File too large (max ' . ($maxBytes / 1024 / 1024) . ' MB for images)');
+            }
+            $targetDir = rtrim($this->collectionsDir, '/') . '/' . $collectionName . '/' . $itemSlug;
+            if (!is_dir($targetDir)) {
+                @mkdir($targetDir, 0775, true);
+            }
+            $name = $this->resolveFilename($targetDir, $clientName, self::ALLOWED_MIME[$mime]);
+        } elseif ($this->isAllowedDocument($mime, $clientName)) {
+            $maxBytes = self::MAX_BYTES_DOCUMENT;
+            if ($file->getSize() === null || $file->getSize() > $maxBytes) {
+                throw new \RuntimeException('File too large (max ' . ($maxBytes / 1024 / 1024) . ' MB for documents)');
+            }
+            $targetDir = rtrim($this->collectionsDir, '/') . '/' . $collectionName . '/' . $itemSlug;
+            if (!is_dir($targetDir)) {
+                @mkdir($targetDir, 0775, true);
+            }
+            $ext  = strtolower(pathinfo($clientName, PATHINFO_EXTENSION));
+            $name = $this->resolveFilename($targetDir, $clientName, $ext);
+        } else {
+            throw new \RuntimeException('Unsupported file type: ' . ($mime ?: 'unknown'));
+        }
+
+        $file->moveTo($targetDir . '/' . $name);
+
+        return [
+            'filename' => $name,
+            'url'      => $this->urlForCollection($collectionName, $itemSlug, $name),
+        ];
+    }
+
+    /**
+     * Build the public URL for a collection item's asset.
+     * Pattern: /media/_collections/{collection}/{slug}/{filename}
+     */
+    public function urlForCollection(string $collection, string $slug, string $filename): string
+    {
+        return '/media/' . self::COLLECTIONS_TOKEN . '/' . $collection . '/' . $slug . '/' . $filename;
+    }
+
+    /**
+     * Resolve a stored asset reference for a collection item to a public URL.
+     * Virtual path format: _collections/{collection}/{slug}
+     */
+    public function resolveCollectionRef(string $value, string $collection, string $slug): string
+    {
+        $value = trim($value);
+        if ($value === '' || str_contains($value, '://') || str_starts_with($value, '/') || str_starts_with($value, '#')) {
+            return $value;
+        }
+        return $this->urlForCollection($collection, $slug, $value);
+    }
+
     // ─── Serving ───
 
     /**
      * Resolve a `/media/...` path to a physical file. Returns null if not found
      * or the path escapes the content tree.
+     *
+     * Handles two namespaces:
+     *   /media/_collections/{collection}/{slug}/{file}  → collection item assets
+     *   /media/~/{file}                                  → root page assets
+     *   /media/{url-path}/{file}                         → page assets
      *
      * @return array{path: string, mime: string, download: bool}|null
      */
@@ -225,6 +314,30 @@ final class MediaService
         $mime = self::ALLOWED_EXT[$ext] ?? self::DOCUMENT_EXT[$ext] ?? null;
         if ($mime === null) {
             return null;
+        }
+
+        // Collection item asset: _collections/{collection}/{slug}/{file}
+        if (count($parts) >= 3 && $parts[0] === self::COLLECTIONS_TOKEN) {
+            if ($this->collectionsDir === null) {
+                return null;
+            }
+            $collection = $parts[1];
+            $slug       = $parts[2];
+            $dir        = rtrim($this->collectionsDir, '/') . '/' . $collection . '/' . $slug;
+            $full       = $dir . '/' . $file;
+            if (!is_file($full)) {
+                return null;
+            }
+            $real = realpath($full);
+            $base = realpath($this->collectionsDir);
+            if ($real === false || $base === false || !str_starts_with($real, $base . DIRECTORY_SEPARATOR)) {
+                return null;
+            }
+            return [
+                'path'     => $real,
+                'mime'     => $mime,
+                'download' => !isset(self::ALLOWED_EXT[$ext]),
+            ];
         }
 
         // Root page: /media/~/{filename}

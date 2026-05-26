@@ -22,6 +22,7 @@ use Slim\Views\Twig;
 use Slim\Views\TwigMiddleware;
 use Twig\Loader\FilesystemLoader;
 use Station0\Controller\Admin\AuthController;
+use Station0\Controller\Admin\CollectionController;
 use Station0\Controller\Admin\DashboardController;
 use Station0\Controller\Admin\PageController as AdminPageController;
 use Station0\Controller\Admin\SetupController;
@@ -32,6 +33,7 @@ use Station0\Controller\PageController;
 use Station0\Middleware\AuthMiddleware;
 use Station0\Middleware\RoleMiddleware;
 use Station0\Service\BlockRegistry;
+use Station0\Service\CollectionRepository;
 use Station0\Service\ContentRepository;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
@@ -174,6 +176,40 @@ final class Bootstrap
                     ));
                 }
             ));
+            // ── Collections Twig functions ────────────────────────────────────
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'collection',
+                function (string $name) use ($c) {
+                    return $c->get(CollectionRepository::class)->items($name);
+                }
+            ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'collection_item',
+                function (string $name, string $slug) use ($c) {
+                    return $c->get(CollectionRepository::class)->find($name, $slug);
+                }
+            ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'render_collection_item',
+                function (\Station0\Service\CollectionItem $item) use ($c) {
+                    $renderer = $c->get(PageRenderer::class);
+                    $virtualPath = CollectionRepository::virtualPath($item->collection, $item->slug);
+                    // Wrap item into a temporary Page-like structure for PageRenderer.
+                    $page = new \Station0\Service\Page(
+                        slug:      $item->slug,
+                        title:     $item->title,
+                        body:      $item->body,
+                        published: $item->published,
+                    );
+                    $page->urlPath  = $virtualPath;
+                    $page->filePath = $item->filePath;
+                    $mtime = $item->filePath && is_file($item->filePath)
+                        ? (int) filemtime($item->filePath)
+                        : 0;
+                    return $renderer->render($page, $mtime);
+                },
+                ['is_safe' => ['html']]
+            ));
             return $twig;
         });
 
@@ -271,13 +307,27 @@ final class Bootstrap
             $config['adminPath'],
         ));
 
+        $container->set(CollectionRepository::class, fn () => new CollectionRepository(
+            $config['paths']['content'] . '/collections'
+        ));
+
         $container->set(MediaService::class, fn ($c) => new MediaService(
             $c->get(ContentRepository::class),
             $config['paths']['content'] . '/pages',
+            $config['paths']['content'] . '/collections',
         ));
 
         $container->set(UploadController::class, fn ($c) => new UploadController(
             $c->get(MediaService::class),
+        ));
+
+        $container->set(CollectionController::class, fn ($c) => new CollectionController(
+            $c->get(CollectionRepository::class),
+            $c->get(Twig::class),
+            $c->get(Guard::class),
+            $c->get(FileCache::class),
+            $c->get(MediaService::class),
+            $config['adminPath'],
         ));
 
         $container->set(AssetController::class, fn ($c) => new AssetController(
@@ -320,6 +370,15 @@ final class Bootstrap
                 $authed->post('/pages/{path:.+}/delete', [AdminPageController::class, 'delete'])->setName('admin.pages.delete');
 
                 $authed->post('/upload', [UploadController::class, 'store'])->setName('admin.upload');
+                $authed->post('/upload-collection', [CollectionController::class, 'upload'])->setName('admin.upload-collection');
+
+                $authed->get('/collections', [CollectionController::class, 'index'])->setName('admin.collections.index');
+                $authed->get('/collections/{name}', [CollectionController::class, 'items'])->setName('admin.collections.items');
+                $authed->get('/collections/{name}/new', [CollectionController::class, 'createForm'])->setName('admin.collections.new');
+                $authed->post('/collections/{name}/create', [CollectionController::class, 'store'])->setName('admin.collections.store');
+                $authed->get('/collections/{name}/{slug}/edit', [CollectionController::class, 'editForm'])->setName('admin.collections.edit');
+                $authed->post('/collections/{name}/{slug}/update', [CollectionController::class, 'update'])->setName('admin.collections.update');
+                $authed->post('/collections/{name}/{slug}/delete', [CollectionController::class, 'delete'])->setName('admin.collections.delete');
 
                 $authed->group('/users', function ($admin) {
                     $admin->get('', [UserController::class, 'index'])->setName('admin.users.index');

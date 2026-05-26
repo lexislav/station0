@@ -1,0 +1,42 @@
+{% extends '@admin/layout.twig' %}
+{% block title %}{{ t.collections_title }} · {{ app.name }}{% endblock %}
+
+{% block body %}
+<div class="page-header">
+    <h1>{{ t.collections_title }}</h1>
+</div>
+
+{% if collections is empty %}
+    <p class="muted">{{ t.collections_empty }}</p>
+{% else %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>{{ t.collections_th_name }}</th>
+                <th>{{ t.collections_th_items }}</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for col in collections %}
+            <tr>
+                <td>
+                    <a href="{{ app.adminPath }}/collections/{{ col.name }}">
+                        <strong>{{ col.label }}</strong>
+                    </a>
+                    <code class="muted" style="font-size:.8rem; margin-left:.5rem;">{{ col.name }}</code>
+                </td>
+                <td class="muted">{{ col.count }}</td>
+                <td class="text-right">
+                    <a href="{{ app.adminPath }}/collections/{{ col.name }}">{{ t.collections_manage }} →</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+<p style="margin-top:2rem;" class="muted" style="font-size:.85rem;">
+    {{ t.collections_hint }}
+</p>
+{% endblock %}

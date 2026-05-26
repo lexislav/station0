@@ -8,10 +8,11 @@ return [
     'html_lang' => 'en',
 
     // Navigation
-    'nav_dashboard' => 'Dashboard',
-    'nav_pages'     => 'Pages',
-    'nav_users'     => 'Users',
-    'nav_logout'    => 'Log out',
+    'nav_dashboard'   => 'Dashboard',
+    'nav_pages'       => 'Pages',
+    'nav_collections' => 'Collections',
+    'nav_users'       => 'Users',
+    'nav_logout'      => 'Log out',
 
     // Login
     'login_title'             => 'Log in',
@@ -99,6 +100,23 @@ return [
     'js_upload_failed'      => 'Upload failed: ',
     'js_upload_network'     => 'Upload failed: network error',
     'js_select_images'      => 'Please select image files.',
+
+    // Collections
+    'collections_title'          => 'Collections',
+    'collections_empty'          => 'No collections found. Create a <code>_collection.yaml</code> file inside a collection directory to get started.',
+    'collections_hint'           => 'Collections are headless content stores — they have no public URL. Use the collection() Twig function to load them in templates.',
+    'collections_th_name'        => 'Collection',
+    'collections_th_items'       => 'Items',
+    'collections_manage'         => 'Manage',
+    'collections_new_item'       => '+ New item',
+    'collections_items_empty'    => 'No items yet.',
+    'collections_th_item_title'  => 'Title',
+    'collections_th_status'      => 'Status',
+    'collections_th_sort'        => 'Sort',
+    'collections_delete_confirm' => 'Delete this item?',
+    'collections_field_sort'     => 'Sort',
+    'collections_field_body'     => 'Body',
+    'collections_field_body_hint' => 'Markdown or YAML block list. Rendered via render_collection_item() in templates.',
 
     // Users
     'users_title'          => 'Users',

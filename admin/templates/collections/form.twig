@@ -1,0 +1,240 @@
+{% extends '@admin/layout.twig' %}
+{% block title %}{{ item ? item.title : t.collections_new_item }} · {{ collectionLabel }} · {{ app.name }}{% endblock %}
+
+{% block head %}
+<style>
+.collection-form { max-width: 760px; }
+.field { margin-bottom: 1rem; }
+.field label { display: block; font-weight: 600; margin-bottom: .3rem; font-size: .9rem; }
+.field input[type="text"],
+.field input[type="number"],
+.field select,
+.field textarea { width: 100%; box-sizing: border-box; }
+.field textarea { min-height: 5rem; font-family: monospace; font-size: .9rem; }
+.field textarea.body-area { min-height: 12rem; }
+.field .hint { font-size: .78rem; color: #8a94a6; margin-top: .2rem; }
+.input-with-btn { display: flex; gap: .4rem; align-items: center; }
+.input-with-btn input[type="text"] { flex: 1; }
+.img-preview {
+    display: none;
+    width: 80px; height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #dde1e7;
+    margin-top: .35rem;
+}
+.form-actions { display: flex; gap: .75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #eee; }
+.meta-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+.meta-row .field { flex: 1 1 140px; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="page-header">
+    <h1>{{ item ? item.title : t.collections_new_item }}</h1>
+</div>
+
+<p style="margin-bottom:1.25rem;">
+    <a href="{{ app.adminPath }}/collections/{{ collectionName }}">← {{ collectionLabel }}</a>
+</p>
+
+<form method="post"
+      action="{{ item
+          ? app.adminPath ~ '/collections/' ~ collectionName ~ '/' ~ item.slug ~ '/update'
+          : app.adminPath ~ '/collections/' ~ collectionName ~ '/create' }}"
+      class="collection-form"
+      id="collection-form">
+    <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+    <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+
+    {# ── Core fields ── #}
+    <div class="field">
+        <label for="f-title">{{ t.page_field_title }}</label>
+        <input type="text" id="f-title" name="title" value="{{ item ? item.title : '' }}" required autofocus>
+    </div>
+
+    <div class="meta-row">
+        <div class="field">
+            <label for="f-slug">{{ t.page_field_slug }}</label>
+            <input type="text" id="f-slug" name="slug" value="{{ item ? item.slug : '' }}" placeholder="{{ t.page_field_slug_hint }}">
+        </div>
+        <div class="field">
+            <label for="f-sort">{{ t.collections_field_sort }}</label>
+            <input type="number" id="f-sort" name="sort" value="{{ item and item.sort is not null ? item.sort : '' }}" style="width:90px;" placeholder="—">
+        </div>
+        <div class="field" style="padding-top:1.65rem;">
+            <label>
+                <input type="checkbox" name="published" value="1" {{ (item is null or item.published) ? 'checked' : '' }}>
+                {{ t.page_field_published }}
+            </label>
+        </div>
+    </div>
+
+    {# ── Schema-defined extra fields ── #}
+    {% if fields is not empty %}
+        <hr style="margin: 1rem 0; border-color: #eee;">
+        {% for field in fields %}
+            {% set fname = field.name %}
+            {% set ftype = field.type ?? 'text' %}
+            {% set flabel = field.label ?? fname %}
+            {% set fvalue = item and item.extra[fname] is defined ? item.extra[fname] : (field.default ?? '') %}
+
+            {% if ftype == 'textarea' %}
+                <div class="field">
+                    <label for="f-{{ fname }}">{{ flabel }}</label>
+                    <textarea id="f-{{ fname }}" name="{{ fname }}" rows="4">{{ fvalue }}</textarea>
+                </div>
+
+            {% elseif ftype == 'image' %}
+                <div class="field">
+                    <label for="f-{{ fname }}">{{ flabel }}</label>
+                    <div class="input-with-btn">
+                        <input type="text" id="f-{{ fname }}" name="{{ fname }}" value="{{ fvalue }}"
+                               placeholder="filename.jpg or https://...">
+                        <button type="button" class="btn btn-sm upload-image-btn"
+                                data-target="f-{{ fname }}"
+                                data-preview="prev-{{ fname }}"
+                                {% if item %}
+                                data-collection="{{ collectionName }}"
+                                data-slug="{{ item.slug }}"
+                                {% else %}
+                                data-collection="{{ collectionName }}"
+                                data-slug="__new__"
+                                {% endif %}>
+                            {{ t.block_upload }}
+                        </button>
+                    </div>
+                    {% if fvalue and not ('://' in fvalue) and not fvalue starts with '/' %}
+                        <img id="prev-{{ fname }}"
+                             src="/media/_collections/{{ collectionName }}/{{ item.slug }}/{{ fvalue }}"
+                             class="img-preview"
+                             style="display:block;"
+                             onerror="this.style.display='none'">
+                    {% elseif fvalue %}
+                        <img id="prev-{{ fname }}"
+                             src="{{ fvalue }}"
+                             class="img-preview"
+                             style="display:block;"
+                             onerror="this.style.display='none'">
+                    {% else %}
+                        <img id="prev-{{ fname }}" src="" class="img-preview">
+                    {% endif %}
+                </div>
+
+            {% elseif ftype == 'number' %}
+                <div class="field">
+                    <label for="f-{{ fname }}">{{ flabel }}</label>
+                    <input type="number" id="f-{{ fname }}" name="{{ fname }}"
+                           value="{{ fvalue }}"
+                           {% if field.min is defined %}min="{{ field.min }}"{% endif %}
+                           {% if field.max is defined %}max="{{ field.max }}"{% endif %}
+                           style="width:120px;">
+                </div>
+
+            {% elseif ftype == 'select' %}
+                <div class="field">
+                    <label for="f-{{ fname }}">{{ flabel }}</label>
+                    <select id="f-{{ fname }}" name="{{ fname }}">
+                        {% for opt in field.options ?? [] %}
+                            <option value="{{ opt }}" {{ fvalue == opt ? 'selected' : '' }}>{{ opt }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+            {% elseif ftype == 'boolean' %}
+                <div class="field">
+                    <label>
+                        <input type="checkbox" name="{{ fname }}" value="1"
+                               {{ fvalue == 'true' or fvalue == '1' ? 'checked' : '' }}>
+                        {{ flabel }}
+                    </label>
+                </div>
+
+            {% elseif ftype == 'color' %}
+                <div class="field">
+                    <label for="f-{{ fname }}">{{ flabel }}</label>
+                    <div style="display:flex; gap:.5rem; align-items:center;">
+                        <input type="color" id="f-{{ fname }}-picker" value="{{ fvalue ?: '#ffffff' }}"
+                               oninput="document.getElementById('f-{{ fname }}').value=this.value">
+                        <input type="text" id="f-{{ fname }}" name="{{ fname }}" value="{{ fvalue }}"
+                               style="width:120px; font-family:monospace;"
+                               oninput="document.getElementById('f-{{ fname }}-picker').value=this.value">
+                    </div>
+                </div>
+
+            {% else %} {# text (default) #}
+                <div class="field">
+                    <label for="f-{{ fname }}">{{ flabel }}</label>
+                    <input type="text" id="f-{{ fname }}" name="{{ fname }}" value="{{ fvalue }}">
+                </div>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+
+    {# ── Body ── #}
+    <hr style="margin: 1rem 0; border-color: #eee;">
+    <div class="field">
+        <label for="f-body">{{ t.collections_field_body }}</label>
+        <textarea id="f-body" name="body" class="body-area" rows="10">{{ item ? item.body : '' }}</textarea>
+        <p class="hint">{{ t.collections_field_body_hint }}</p>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">{{ t.page_save }}</button>
+        <a href="{{ app.adminPath }}/collections/{{ collectionName }}" class="btn">{{ t.page_cancel }}</a>
+    </div>
+</form>
+
+{# Hidden file input for image field uploads #}
+<input type="file" id="collection-file-input" accept="image/*" style="display:none;">
+
+<script>
+(function () {
+    var adminPath = {{ app.adminPath|json_encode|raw }};
+    var fileInput = document.getElementById('collection-file-input');
+    var activeTarget = null;
+    var activePreview = null;
+    var activeCollection = null;
+    var activeSlug = null;
+
+    document.querySelectorAll('.upload-image-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            activeTarget     = document.getElementById(btn.dataset.target);
+            activePreview    = document.getElementById(btn.dataset.preview);
+            activeCollection = btn.dataset.collection;
+            activeSlug       = btn.dataset.slug;
+            fileInput.click();
+        });
+    });
+
+    fileInput.addEventListener('change', function () {
+        var file = fileInput.files[0];
+        if (!file || !activeTarget) return;
+
+        var fd = new FormData();
+        fd.append('file', file);
+        fd.append('collectionName', activeCollection);
+        fd.append('itemSlug', activeSlug);
+        fd.append({{ csrf.nameKey|json_encode|raw }}, {{ csrf.name|json_encode|raw }});
+        fd.append({{ csrf.valueKey|json_encode|raw }}, {{ csrf.value|json_encode|raw }});
+
+        fetch(adminPath + '/upload-collection', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.filename) {
+                    activeTarget.value = data.filename;
+                    if (activePreview) {
+                        activePreview.src = data.url;
+                        activePreview.style.display = 'block';
+                    }
+                } else {
+                    alert('{{ t.js_upload_failed }}' + (data.error || ''));
+                }
+            })
+            .catch(function () { alert('{{ t.js_upload_network }}'); });
+
+        fileInput.value = '';
+    });
+})();
+</script>
+{% endblock %}

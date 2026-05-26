@@ -1,0 +1,57 @@
+{% extends '@admin/layout.twig' %}
+{% block title %}{{ collectionLabel }} · {{ t.collections_title }} · {{ app.name }}{% endblock %}
+
+{% block body %}
+<div class="page-header">
+    <h1>{{ collectionLabel }}</h1>
+    <a class="btn" href="{{ app.adminPath }}/collections/{{ collectionName }}/new">{{ t.collections_new_item }}</a>
+</div>
+
+<p style="margin-bottom:1.25rem;">
+    <a href="{{ app.adminPath }}/collections">← {{ t.collections_title }}</a>
+</p>
+
+{% if items is empty %}
+    <p class="muted">{{ t.collections_items_empty }}</p>
+{% else %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>{{ t.collections_th_item_title }}</th>
+                <th>{{ t.collections_th_status }}</th>
+                <th>{{ t.collections_th_sort }}</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>
+                    <a href="{{ app.adminPath }}/collections/{{ collectionName }}/{{ item.slug }}/edit">
+                        {{ item.title }}
+                    </a>
+                    <code class="muted" style="font-size:.78rem; margin-left:.4rem;">{{ item.slug }}</code>
+                </td>
+                <td>
+                    {% if item.published %}
+                        <span class="badge badge-published">{{ t.pages_status_published }}</span>
+                    {% else %}
+                        <span class="badge badge-draft">{{ t.pages_status_draft }}</span>
+                    {% endif %}
+                </td>
+                <td class="muted">{{ item.sort ?? '—' }}</td>
+                <td class="text-right" style="white-space:nowrap;">
+                    <a href="{{ app.adminPath }}/collections/{{ collectionName }}/{{ item.slug }}/edit">{{ t.pages_edit }}</a>
+                    &nbsp;
+                    <form method="post" action="{{ app.adminPath }}/collections/{{ collectionName }}/{{ item.slug }}/delete" style="display:inline;" onsubmit="return confirm('{{ t.collections_delete_confirm }}')">
+                        <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+                        <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+                        <button type="submit" class="link danger">{{ t.pages_delete }}</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+{% endblock %}

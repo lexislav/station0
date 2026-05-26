@@ -68,9 +68,12 @@ Markdown body (or YAML block list)
 | `BlockRegistry` | `src/Service/BlockRegistry.php` | Block schema/template loading |
 | `UserRepository` | `src/Service/UserRepository.php` | Wrapper around Delight\Auth |
 | `FileCache` | `src/Service/FileCache.php` | File-based cache (get/set/flush) |
-| `MediaService` | `src/Service/MediaService.php` | Page-local asset storage + ref resolution |
+| `MediaService` | `src/Service/MediaService.php` | Page-local asset storage + ref resolution; also serves collection assets via `_collections/` prefix |
 | `AssetController` | `src/Controller/AssetController.php` | Serves `/media/{path:.+}` |
 | `Slug` | `src/Support/Slug.php` | URL slug + filename slugification |
+| `CollectionItem` | `src/Service/CollectionItem.php` | Headless content item entity (no URL) |
+| `CollectionRepository` | `src/Service/CollectionRepository.php` | CRUD for Collections + items, reads `_collection.yaml` schemas |
+| `CollectionController` | `src/Controller/Admin/CollectionController.php` | Admin CRUD for collections and items |
 
 ## Local development
 
@@ -154,6 +157,64 @@ Cross-page references (`/media/other-page/...`) are left intact.
 
 When deleting a page, `ContentRepository::delete()` removes sibling asset
 files but never sub-directories (those belong to child pages).
+
+## Collections (headless content stores)
+
+**Collections** are content stores with no public URL and no place in the page tree. Editors manage items through the admin; webdesigners load them in Twig templates via `collection()` and `collection_item()`.
+
+**Key distinction from Streams:** Streams are routable content sections (a page with `AllowedChildTemplates`). Collections are headless — they have no URL at all.
+
+**Storage layout:**
+```
+site/content/collections/
+  banners/
+    _collection.yaml      ← optional schema + label
+    summer-sale/
+      item.txt            ← same Kirby front matter format as pages
+      bg.jpg              ← page-local assets
+  shared-blocks/
+    intro-cta/
+      item.txt
+```
+
+**`_collection.yaml` schema format** (mirrors block `schema.yaml`):
+```yaml
+label: Banners
+fields:
+  subtitle:
+    type: text
+    label: Subtitle
+  cta_url:
+    type: text
+    label: CTA URL
+  image:
+    type: image
+    label: Background Image
+```
+Supported field types: `text`, `textarea`, `image`, `number`, `select`, `boolean`, `color`. Schema is optional — without it, items are free-form (title + body only).
+
+**Twig functions (registered in Bootstrap):**
+```twig
+collection('banners')                    {# → CollectionItem[]  (published only) #}
+collection_item('banners', 'summer-sale') {# → ?CollectionItem #}
+render_collection_item(item)             {# → HTML string (markdown or blocks, is_safe html) #}
+```
+
+**Item body:** Same markdown or YAML block-list format as pages. `render_collection_item()` reuses `PageRenderer` internally, using a virtual URL path `_collections/{name}/{slug}` for asset resolution.
+
+**Asset URLs:** `/media/_collections/{collection}/{slug}/{filename}`. Served by `AssetController` via the extended `MediaService::resolveAsset()` which detects the `_collections/` prefix. Upload endpoint: `POST /admin/upload-collection` (fields: `collectionName`, `itemSlug`, `file`).
+
+**Admin routes:**
+```
+GET  /admin/collections                           → list all collections
+GET  /admin/collections/{name}                    → item list
+GET  /admin/collections/{name}/new                → create form
+POST /admin/collections/{name}/create             → store
+GET  /admin/collections/{name}/{slug}/edit        → edit form
+POST /admin/collections/{name}/{slug}/update      → update
+POST /admin/collections/{name}/{slug}/delete      → delete
+POST /admin/upload-collection                     → asset upload
+```
 
 ## Common gotchas
 
