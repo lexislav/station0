@@ -8,24 +8,57 @@
     {% block head %}{% endblock %}
 </head>
 <body class="admin">
-<header class="admin-header">
-    <a class="brand" href="{{ app.adminPath }}">{{ app.name }}</a>
-    <nav>
-        <a href="{{ app.adminPath }}">{{ t.nav_dashboard }}</a>
-        <a href="{{ app.adminPath }}/pages">{{ t.nav_pages }}</a>
-        <a href="{{ app.adminPath }}/collections">{{ t.nav_collections }}</a>
-        {% if user is defined and user.isAdmin %}<a href="{{ app.adminPath }}/users">{{ t.nav_users }}</a>{% endif %}
-        <form method="post" action="{{ app.adminPath }}/logout" class="inline">
-            {% if csrf is defined %}
-                <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
-                <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <a class="sidebar-brand" href="{{ app.adminPath }}">{{ app.name }}</a>
+        <nav class="sidebar-nav">
+            <a href="{{ app.adminPath }}">{{ t.nav_dashboard }}</a>
+            <a href="{{ app.adminPath }}/pages">{{ t.nav_structure }}</a>
+            <a href="{{ app.adminPath }}/pages?view=streams">{{ t.nav_streams }}</a>
+            <a href="{{ app.adminPath }}/collections">{{ t.nav_collections }}</a>
+            {% if user is defined and user.isAdmin %}
+                <a href="{{ app.adminPath }}/settings">{{ t.nav_site_settings }}</a>
             {% endif %}
-            <button type="submit" class="link">{{ t.nav_logout }}</button>
-        </form>
-    </nav>
-</header>
-<main class="admin-main">
-    {% block body %}{% endblock %}
-</main>
+        </nav>
+        <div class="sidebar-footer">
+            {% if user is defined %}
+                <div class="sidebar-user">{{ user.email }}</div>
+                <form method="post" action="{{ app.adminPath }}/logout" class="inline">
+                    {% if csrf is defined %}
+                        <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+                        <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+                    {% endif %}
+                    <button type="submit" class="link sidebar-logout">{{ t.nav_logout }}</button>
+                </form>
+            {% endif %}
+            <div class="sidebar-sig">Station0</div>
+        </div>
+    </aside>
+    <main class="admin-main">
+        {% block body %}{% endblock %}
+    </main>
+</div>
+<script>
+    (function() {
+        var ap = '{{ app.adminPath }}';
+        var links = document.querySelectorAll('.sidebar-nav a');
+        // Track which pathname+search combos are owned by a search-param link
+        var searchOwners = {};
+        links.forEach(function(a) {
+            if (a.search) searchOwners[a.pathname + a.search] = true;
+        });
+        links.forEach(function(a) {
+            var active = false;
+            if (a.search) {
+                active = location.pathname === a.pathname && location.search === a.search;
+            } else if (a.pathname === ap) {
+                active = location.pathname === ap || location.pathname === ap + '/';
+            } else if (location.pathname.startsWith(a.pathname)) {
+                active = !searchOwners[location.pathname + location.search];
+            }
+            a.classList.toggle('active', active);
+        });
+    })();
+</script>
 </body>
 </html>

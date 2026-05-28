@@ -8,11 +8,14 @@ return [
     'html_lang' => 'en',
 
     // Navigation
-    'nav_dashboard'   => 'Dashboard',
-    'nav_pages'       => 'Pages',
-    'nav_collections' => 'Collections',
-    'nav_users'       => 'Users',
-    'nav_logout'      => 'Log out',
+    'nav_dashboard'     => 'Dashboard',
+    'nav_structure'     => 'Pages',
+    'nav_streams'       => 'Streams',
+    'nav_pages'         => 'Pages',
+    'nav_collections'   => 'Collections',
+    'nav_site_settings' => 'Site Settings',
+    'nav_users'         => 'Users',
+    'nav_logout'        => 'Log out',
 
     // Login
     'login_title'             => 'Log in',
@@ -117,6 +120,18 @@ return [
     'collections_field_sort'     => 'Sort',
     'collections_field_body'     => 'Body',
     'collections_field_body_hint' => 'Markdown or YAML block list. Rendered via render_collection_item() in templates.',
+
+    // Settings
+    'settings_title'        => 'Site Settings',
+    'settings_environment'  => 'Environment',
+    'settings_php_version'  => 'PHP version',
+    'settings_cms_version'  => 'Station0 version',
+    'settings_site_name'    => 'Site name',
+    'settings_base_url'     => 'Base URL',
+    'settings_dependencies' => 'Dependencies',
+    'settings_page_templates' => 'Page templates',
+    'settings_block_types'  => 'Block types',
+    'settings_none'         => 'None found.',
 
     // Users
     'users_title'          => 'Users',

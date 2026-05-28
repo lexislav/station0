@@ -42,11 +42,17 @@ final class PageController
         $streams = [];
         $this->collectStreamNodes($tree, $streams);
 
+        $params      = $request->getQueryParams();
+        $view        = $params['view'] ?? 'structure';
+        $streamParam = $params['stream'] ?? null;
+
         return $this->twig->render($response, '@admin/pages/list.twig', [
-            'pages'   => $pages,
-            'tree'    => $tree,
-            'streams' => $streams,
-            'csrf'    => $this->csrfFields($request),
+            'pages'         => $pages,
+            'tree'          => $tree,
+            'streams'       => $streams,
+            'csrf'          => $this->csrfFields($request),
+            'currentView'   => in_array($view, ['structure', 'streams']) ? $view : 'structure',
+            'activeStream'  => $streamParam,
         ]);
     }
 

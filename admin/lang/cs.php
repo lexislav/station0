@@ -8,10 +8,27 @@ return [
     'html_lang' => 'cs',
 
     // Navigace
-    'nav_dashboard' => 'Přehled',
-    'nav_pages'     => 'Stránky',
-    'nav_users'     => 'Uživatelé',
-    'nav_logout'    => 'Odhlásit',
+    // Nastavení
+    'settings_title'          => 'Nastavení webu',
+    'settings_environment'    => 'Prostředí',
+    'settings_php_version'    => 'Verze PHP',
+    'settings_cms_version'    => 'Verze Station0',
+    'settings_site_name'      => 'Název webu',
+    'settings_base_url'       => 'Základní URL',
+    'settings_dependencies'   => 'Závislosti',
+    'settings_page_templates' => 'Šablony stránek',
+    'settings_block_types'    => 'Typy bloků',
+    'settings_none'           => 'Nic nenalezeno.',
+
+    'nav_dashboard'     => 'Přehled',
+    'nav_structure'     => 'Stránky',
+    'nav_streams'       => 'Příspěvky',
+    'nav_pages'         => 'Stránky',
+    'nav_collections'   => 'Kolekce',
+    'collections_title' => 'Kolekce',
+    'nav_site_settings' => 'Nastavení webu',
+    'nav_users'         => 'Uživatelé',
+    'nav_logout'        => 'Odhlásit',
 
     // Přihlášení
     'login_title'            => 'Přihlášení',

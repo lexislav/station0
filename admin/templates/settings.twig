@@ -1,0 +1,66 @@
+{% extends '@admin/layout.twig' %}
+{% block title %}{{ t.settings_title }} · {{ app.name }}{% endblock %}
+{% block body %}
+<div class="toolbar">
+    <h1>{{ t.settings_title }}</h1>
+</div>
+
+<div class="settings-grid">
+
+    <section class="settings-section">
+        <h2>{{ t.settings_environment }}</h2>
+        <table>
+            <tbody>
+                <tr><td>{{ t.settings_php_version }}</td><td><code>{{ phpVersion }}</code></td></tr>
+                <tr><td>{{ t.settings_cms_version }}</td><td><code>{{ cmsVersion }}</code></td></tr>
+                <tr><td>{{ t.settings_site_name }}</td><td>{{ app.name }}</td></tr>
+                <tr><td>{{ t.settings_base_url }}</td><td><code>{{ app.baseUrl }}</code></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    {% if deps %}
+    <section class="settings-section">
+        <h2>{{ t.settings_dependencies }}</h2>
+        <table>
+            <tbody>
+                {% for pkg, version in deps %}
+                <tr><td><code>{{ pkg }}</code></td><td><code>{{ version }}</code></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    <section class="settings-section">
+        <h2>{{ t.settings_page_templates }}</h2>
+        {% if pageTemplates %}
+        <table>
+            <tbody>
+                {% for tpl in pageTemplates %}
+                <tr><td><code>{{ tpl }}</code></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">{{ t.settings_none }}</p>
+        {% endif %}
+    </section>
+
+    <section class="settings-section">
+        <h2>{{ t.settings_block_types }}</h2>
+        {% if blockTypes %}
+        <table>
+            <tbody>
+                {% for bt in blockTypes %}
+                <tr><td><code>{{ bt }}</code></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">{{ t.settings_none }}</p>
+        {% endif %}
+    </section>
+
+</div>
+{% endblock %}

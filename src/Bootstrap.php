@@ -25,6 +25,7 @@ use Station0\Controller\Admin\AuthController;
 use Station0\Controller\Admin\CollectionController;
 use Station0\Controller\Admin\DashboardController;
 use Station0\Controller\Admin\PageController as AdminPageController;
+use Station0\Controller\Admin\SettingsController;
 use Station0\Controller\Admin\SetupController;
 use Station0\Controller\Admin\UploadController;
 use Station0\Controller\Admin\UserController;
@@ -143,12 +144,14 @@ final class Bootstrap
             ]);
 
             // Admin UI translations — set 'admin_locale' in site/config.php ('en' default).
+            // Missing keys always fall back to the English base.
             $locale   = preg_replace('/[^a-z]/', '', strtolower($config['admin_locale'] ?? 'en'));
             $langFile = $station0Root . '/admin/lang/' . $locale . '.php';
-            if (!is_file($langFile)) {
-                $langFile = $station0Root . '/admin/lang/en.php';
-            }
-            $twig->getEnvironment()->addGlobal('t', require $langFile);
+            $base     = require $station0Root . '/admin/lang/en.php';
+            $strings  = is_file($langFile) && $langFile !== $station0Root . '/admin/lang/en.php'
+                ? array_merge($base, require $langFile)
+                : $base;
+            $twig->getEnvironment()->addGlobal('t', $strings);
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'top_level_pages',
                 function () use ($c) {
@@ -334,6 +337,15 @@ final class Bootstrap
             $c->get(MediaService::class),
         ));
 
+        $container->set(SettingsController::class, fn ($c) => new SettingsController(
+            $c->get(Auth::class),
+            $c->get(Twig::class),
+            $roles,
+            $config['paths']['projectRoot'],
+            $config['paths']['templates'],
+            $station0Root,
+        ));
+
         return $container;
     }
 
@@ -386,6 +398,10 @@ final class Bootstrap
                     $admin->post('', [UserController::class, 'store'])->setName('admin.users.store');
                     $admin->post('/{id}/delete', [UserController::class, 'delete'])->setName('admin.users.delete');
                 })->add($roleMiddleware('admin'));
+
+                $authed->get('/settings', [SettingsController::class, 'index'])
+                    ->setName('admin.settings')
+                    ->add($roleMiddleware('admin'));
             })->add(AuthMiddleware::class);
         });
 

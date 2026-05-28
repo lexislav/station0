@@ -93,32 +93,6 @@
 .row-actions .menu .danger { color: #c0392b; }
 .row-actions .menu .danger:hover { background: #ffe4e4; }
 
-/* ── View tab toggle ───────────────────────────────────────────────────── */
-.view-tabs {
-    display: flex;
-    border: 1px solid #dde1e7;
-    border-radius: 6px;
-    overflow: hidden;
-    background: #f4f6f9;
-    gap: 0;
-}
-.view-tab {
-    display: flex; align-items: center; gap: .35rem;
-    padding: .35rem .9rem;
-    font: inherit;
-    font-size: .82rem;
-    font-weight: 500;
-    background: none;
-    border: none;
-    border-left: 1px solid #dde1e7;
-    cursor: pointer;
-    color: #5a6478;
-    white-space: nowrap;
-}
-.view-tab:first-child { border-left: none; }
-.view-tab.active { background: #fff; color: #2c3e50; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
-.view-tab:not(.active):hover { background: #edf0f4; color: #2c3e50; }
-
 /* ── Stream badges ─────────────────────────────────────────────────────── */
 .badge-stream {
     display: inline-flex; align-items: center;
@@ -268,12 +242,8 @@
 
 {% block body %}
 <div class="toolbar">
-    <h1>{{ t.pages_title }}</h1>
-    <div class="view-tabs">
-        <button class="view-tab active" data-view="structure">{{ t.pages_tab_structure }}</button>
-        <button class="view-tab" data-view="streams">{{ t.pages_tab_streams }}</button>
-    </div>
-    <a class="btn primary" href="{{ app.adminPath }}/pages/new">{{ t.pages_new }}</a>
+    <h1 id="view-title">{{ t.pages_title }}</h1>
+    {% if currentView != 'streams' %}<a class="btn primary" href="{{ app.adminPath }}/pages/new">{{ t.pages_new }}</a>{% endif %}
 </div>
 
 {# ── Tree node macro ─────────────────────────────────────────────────────────
@@ -367,7 +337,7 @@
                     </li>
                 {% endfor %}
             </ul>
-            <a class="stream-see-all" href="#streams" data-stream="{{ p.urlPath }}">
+            <a class="stream-see-all" href="{{ app.adminPath }}/pages?view=streams" data-stream="{{ p.urlPath }}">
                 {{ t.pages_all_records|replace({'%count%': item.children|length}) }}
             </a>
             {% endif %}
@@ -387,7 +357,7 @@
 {# ════════════════════════════════════════════════════════════════════════════
    Web structure view
 ════════════════════════════════════════════════════════════════════════════ #}
-<div id="view-structure">
+<div id="view-structure"{% if currentView == 'streams' %} hidden{% endif %}>
     {% if tree is empty %}
         <p class="empty">{{ t.pages_empty }} <a href="{{ app.adminPath }}/pages/new">{{ t.pages_empty_create }}</a></p>
     {% else %}
@@ -402,7 +372,7 @@
 {# ════════════════════════════════════════════════════════════════════════════
    Streams tab view
 ════════════════════════════════════════════════════════════════════════════ #}
-<div id="view-streams" hidden>
+<div id="view-streams"{% if currentView != 'streams' %} hidden{% endif %}>
     {% if streams is empty %}
         <p class="empty">{{ t.streams_empty|raw }}</p>
     {% else %}
@@ -437,7 +407,7 @@
                         <strong>{{ sp.title }}</strong>
                         <span class="stream-meta">{{ sp.urlPath }}</span>
                     </div>
-                    <a class="btn btn-sm" href="{{ app.adminPath }}/pages/new?parent={{ sp.urlPath|url_encode }}">{{ t.streams_new_record }}</a>
+                    <a class="btn primary" href="{{ app.adminPath }}/pages/new?parent={{ sp.urlPath|url_encode }}">{{ t.streams_new_record }}</a>
                 </div>
 
                 <ul class="stream-records-list" data-parent="{{ sp.urlPath }}">
@@ -536,40 +506,36 @@
         return true;
     }
 
-    // ── Tab switching ──────────────────────────────────────────────────────
+    // ── View switching (driven by URL hash, no tab buttons) ───────────────
 
-    const viewStructure = document.getElementById('view-structure');
-    const viewStreams    = document.getElementById('view-streams');
-    const tabs          = document.querySelectorAll('.view-tab');
-    const LS_KEY        = 's0_pages_view';
+    // ── View title (set server-side via Twig, JS only updates for in-page stream pill switches)
+    const titleEl     = document.getElementById('view-title');
+    const titlePages  = {{ t.pages_title|json_encode|raw }};
+    const titleStreams = {{ t.nav_streams|json_encode|raw }};
+    {% if currentView == 'streams' %}
+    if (titleEl) titleEl.textContent = titleStreams;
+    {% endif %}
 
-    function switchView(view) {
-        const isStructure  = view === 'structure';
-        viewStructure.hidden = !isStructure;
-        viewStreams.hidden   = isStructure;
-        tabs.forEach(t => t.classList.toggle('active', t.dataset.view === view));
-        try { localStorage.setItem(LS_KEY, view); } catch (_) {}
-    }
-
-    tabs.forEach(t => t.addEventListener('click', () => switchView(t.dataset.view)));
-
-    // Restore last tab
-    try { const v = localStorage.getItem(LS_KEY); if (v === 'streams') switchView('streams'); }
-    catch (_) {}
-
-    // "All stream records…" links → jump to Streams tab, select matching stream
+    // "All stream records…" links → navigate to streams view, pre-select stream via URL
     document.querySelectorAll('.stream-see-all').forEach(a => {
         a.addEventListener('click', e => {
             e.preventDefault();
-            switchView('streams');
-            const targetUrl = a.dataset.stream;
-            document.querySelectorAll('.stream-selector-btn').forEach(btn => {
-                const idx  = btn.dataset.streamIdx;
-                const view = document.querySelector(`.stream-records-view[data-stream-idx="${idx}"]`);
-                if (view && view.dataset.streamUrl === targetUrl) btn.click();
-            });
+            const targetUrl = encodeURIComponent(a.dataset.stream);
+            window.location.href = a.href + '&stream=' + targetUrl;
         });
     });
+
+    // ── Auto-select stream pill from ?stream= param ───────────────────────
+    {% if activeStream %}
+    (function() {
+        const target = {{ activeStream|json_encode }};
+        document.querySelectorAll('.stream-selector-btn').forEach(btn => {
+            const idx  = btn.dataset.streamIdx;
+            const view = document.querySelector(`.stream-records-view[data-stream-idx="${idx}"]`);
+            if (view && view.dataset.streamUrl === target) btn.click();
+        });
+    })();
+    {% endif %}
 
     // ── Web structure drag-drop ────────────────────────────────────────────
 
