@@ -179,6 +179,23 @@ final class Bootstrap
                     ));
                 }
             ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'has_streams',
+                function () use ($c) {
+                    foreach ($c->get(ContentRepository::class)->all(false) as $page) {
+                        if (!empty($page->allowedChildTemplates)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'has_collections',
+                function () use ($c) {
+                    return !empty($c->get(CollectionRepository::class)->collections());
+                }
+            ));
             // ── Collections Twig functions ────────────────────────────────────
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'collection',

@@ -14,8 +14,12 @@
         <nav class="sidebar-nav">
             <a href="{{ app.adminPath }}">{{ t.nav_dashboard }}</a>
             <a href="{{ app.adminPath }}/pages">{{ t.nav_structure }}</a>
-            <a href="{{ app.adminPath }}/pages?view=streams">{{ t.nav_streams }}</a>
-            <a href="{{ app.adminPath }}/collections">{{ t.nav_collections }}</a>
+            {% if has_streams() %}
+                <a href="{{ app.adminPath }}/pages?view=streams">{{ t.nav_streams }}</a>
+            {% endif %}
+            {% if has_collections() %}
+                <a href="{{ app.adminPath }}/collections">{{ t.nav_collections }}</a>
+            {% endif %}
             {% if user is defined and user.isAdmin %}
                 <a href="{{ app.adminPath }}/settings">{{ t.nav_site_settings }}</a>
             {% endif %}
