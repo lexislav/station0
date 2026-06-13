@@ -155,7 +155,7 @@ final class CollectionRepository
      */
     public function find(string $name, string $slug): ?CollectionItem
     {
-        $file = $this->collectionDir($name) . '/' . $slug . '/item.txt';
+        $file = $this->collectionDir($name) . '/' . Slug::sanitize($slug) . '/item.txt';
         if (!is_file($file)) {
             return null;
         }
@@ -266,7 +266,7 @@ final class CollectionRepository
      */
     public function itemDir(string $name, string $slug): string
     {
-        return $this->collectionDir($name) . '/' . $slug;
+        return $this->collectionDir($name) . '/' . Slug::sanitize($slug);
     }
 
     /**
@@ -282,7 +282,9 @@ final class CollectionRepository
 
     private function collectionDir(string $name): string
     {
-        return rtrim($this->collectionsDir, '/') . '/' . $name;
+        // Sanitize — `$name` may originate from a route parameter. Slug::sanitize
+        // strips path separators and dots, so traversal is impossible.
+        return rtrim($this->collectionsDir, '/') . '/' . Slug::sanitize($name);
     }
 
     private function buildItem(string $collectionName, string $filePath): CollectionItem

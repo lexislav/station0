@@ -40,8 +40,19 @@ final class AssetController
             ->withHeader('Cache-Control', 'public, max-age=31536000, immutable')
             ->withHeader('X-Content-Type-Options', 'nosniff');
 
-        // Documents are downloaded; images are rendered inline.
-        if ($asset['download']) {
+        // SVGs can carry embedded <script>. They still render fine via <img>/CSS,
+        // but a sandbox CSP neutralizes script execution if one is opened directly,
+        // and we force-download rather than render as a top-level document.
+        $isSvg = $asset['mime'] === 'image/svg+xml';
+        if ($isSvg) {
+            $response = $response->withHeader(
+                'Content-Security-Policy',
+                "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            );
+        }
+
+        // Documents and SVGs are downloaded; raster images are rendered inline.
+        if ($asset['download'] || $isSvg) {
             $filename = rawurlencode(basename($asset['path']));
             $response = $response->withHeader(
                 'Content-Disposition',

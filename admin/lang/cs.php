@@ -133,4 +133,27 @@ return [
     'user_field_role'     => 'Role',
     'user_cancel'         => 'Zrušit',
     'user_create'         => 'Vytvořit',
+
+    // Chybové / stavové zprávy (z controllerů)
+    'err_invalid_credentials'   => 'Neplatné přihlašovací údaje.',
+    'err_too_many_attempts'     => 'Příliš mnoho pokusů. Zkuste to za chvíli.',
+    'err_login_failed'          => 'Přihlášení selhalo.',
+    'err_email_not_found'       => 'E-mailová adresa nebyla nalezena.',
+    'err_reset_disabled'        => 'Reset hesla je pro tento účet zakázán.',
+    'err_email_send_failed'     => 'Odeslání e-mailu selhalo. Zkontrolujte nastavení SMTP.',
+    'err_reset_link_invalid'    => 'Odkaz pro reset hesla je neplatný nebo vypršel.',
+    'err_reset_verify_error'    => 'Nastala chyba při ověřování odkazu.',
+    'err_password_min'          => 'Heslo musí mít alespoň 8 znaků.',
+    'err_reset_failed'          => 'Reset hesla selhal.',
+    'err_fill_all_fields'       => 'Vyplňte všechna pole.',
+    'err_invalid_email'         => 'Zadejte platnou e-mailovou adresu.',
+    'err_account_create_failed' => 'Vytvoření účtu selhalo. Zkuste to prosím znovu.',
+    'err_username_empty'        => 'Uživatelské jméno nesmí být prázdné.',
+    'err_delete_self'           => 'Nemůžete smazat vlastní účet.',
+    'err_delete_last_admin'     => 'Nelze smazat posledního administrátora.',
+
+    // E-mail pro reset hesla
+    'email_reset_subject' => 'Reset hesla – Station0',
+    'email_reset_intro'   => 'Pro reset hesla klikněte na odkaz níže. Odkaz je platný 6 hodin.',
+    'email_reset_ignore'  => 'Pokud jste reset hesla nepožadovali, tento e-mail ignorujte.',
 ];

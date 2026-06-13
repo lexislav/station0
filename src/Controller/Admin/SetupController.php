@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Station0\Controller\Admin;
 
 use Delight\Auth\Auth;
+use Monolog\Logger;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Csrf\Guard;
@@ -19,6 +20,8 @@ final class SetupController
         private readonly Twig $twig,
         private readonly Guard $csrf,
         private readonly string $adminPath,
+        private readonly array $lang = [],
+        private readonly ?Logger $logger = null,
     ) {}
 
     public function showSetup(Request $request, Response $response): Response
@@ -45,11 +48,11 @@ final class SetupController
         $error    = null;
 
         if ($username === '' || $email === '' || $password === '') {
-            $error = 'Vyplňte všechna pole.';
+            $error = $this->t('err_fill_all_fields');
         } elseif (strlen($password) < 8) {
-            $error = 'Heslo musí mít alespoň 8 znaků.';
+            $error = $this->t('err_password_min');
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Zadejte platnou e-mailovou adresu.';
+            $error = $this->t('err_invalid_email');
         }
 
         if ($error !== null) {
@@ -66,11 +69,19 @@ final class SetupController
             $this->auth->loginWithUsername($username, $password);
             return $response->withStatus(302)->withHeader('Location', $this->adminPath);
         } catch (\Throwable $e) {
+            $this->logger?->error('Admin setup failed: ' . $e->getMessage(), ['exception' => $e]);
             return $this->twig->render($response->withStatus(500), '@admin/setup.twig', [
-                'error' => 'Vytvoření účtu selhalo: ' . $e->getMessage(),
-                'csrf'  => $this->csrfFields($request),
+                'error'    => $this->t('err_account_create_failed'),
+                'csrf'     => $this->csrfFields($request),
+                'username' => $username,
+                'email'    => $email,
             ]);
         }
+    }
+
+    private function t(string $key): string
+    {
+        return $this->lang[$key] ?? $key;
     }
 
     private function csrfFields(Request $request): array

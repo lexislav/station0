@@ -60,8 +60,9 @@ final class PageController
 
     public function reorder(Request $request, Response $response): Response
     {
-        $raw  = (string) $request->getBody();
-        $data = json_decode($raw, true) ?: (array) $request->getParsedBody();
+        // The client posts this as multipart/form-data (so the CSRF token rides
+        // along as a normal field), so the parsed body is authoritative.
+        $data = (array) $request->getParsedBody();
 
         $parentUrl = (string) ($data['parent'] ?? '/');
         $order     = (array) ($data['order'] ?? []);

@@ -29,7 +29,13 @@ final class AuthController
         private readonly MailerService $mailer,
         private readonly string $baseUrl,
         private readonly string $adminPath,
+        private readonly array $lang = [],
     ) {}
+
+    private function t(string $key): string
+    {
+        return $this->lang[$key] ?? $key;
+    }
 
     public function showLogin(Request $request, Response $response): Response
     {
@@ -59,14 +65,14 @@ final class AuthController
                 $this->auth->login($username, $password, 60 * 60 * 24 * 14);
                 return $response->withStatus(302)->withHeader('Location', $this->adminPath);
             } catch (\Throwable) {
-                $error = 'Neplatné přihlašovací údaje.';
+                $error = $this->t('err_invalid_credentials');
             }
         } catch (AmbiguousUsernameException | InvalidPasswordException | InvalidEmailException) {
-            $error = 'Neplatné přihlašovací údaje.';
+            $error = $this->t('err_invalid_credentials');
         } catch (TooManyRequestsException) {
-            $error = 'Příliš mnoho pokusů. Zkuste to za chvíli.';
+            $error = $this->t('err_too_many_attempts');
         } catch (\Throwable) {
-            $error = 'Přihlášení selhalo.';
+            $error = $this->t('err_login_failed');
         }
 
         return $this->twig->render($response->withStatus(401), '@admin/login.twig', [
@@ -103,10 +109,10 @@ final class AuthController
         try {
             $this->auth->forgotPassword($email, function (string $selector, string $token) use ($email) {
                 $link = $this->baseUrl . $this->adminPath . '/reset-password?selector=' . rawurlencode($selector) . '&token=' . rawurlencode($token);
-                $body = '<p>Pro reset hesla klikněte na odkaz níže. Odkaz je platný 6 hodin.</p>'
+                $body = '<p>' . htmlspecialchars($this->t('email_reset_intro')) . '</p>'
                     . '<p><a href="' . htmlspecialchars($link) . '">' . htmlspecialchars($link) . '</a></p>'
-                    . '<p>Pokud jste reset hesla nepožadovali, tento e-mail ignorujte.</p>';
-                $this->mailer->send($email, 'Reset hesla – Station0', $body);
+                    . '<p>' . htmlspecialchars($this->t('email_reset_ignore')) . '</p>';
+                $this->mailer->send($email, $this->t('email_reset_subject'), $body);
             });
             return $this->twig->render($response, '@admin/forgot-password.twig', [
                 'csrf' => $this->csrfFields($request),
@@ -114,13 +120,13 @@ final class AuthController
                 'error' => null,
             ]);
         } catch (InvalidEmailException | EmailNotVerifiedException) {
-            $error = 'E-mailová adresa nebyla nalezena.';
+            $error = $this->t('err_email_not_found');
         } catch (ResetDisabledException) {
-            $error = 'Reset hesla je pro tento účet zakázán.';
+            $error = $this->t('err_reset_disabled');
         } catch (TooManyRequestsException) {
-            $error = 'Příliš mnoho pokusů. Zkuste to za chvíli.';
+            $error = $this->t('err_too_many_attempts');
         } catch (\Throwable) {
-            $error = 'Odeslání e-mailu selhalo. Zkontrolujte nastavení SMTP.';
+            $error = $this->t('err_email_send_failed');
         }
 
         return $this->twig->render($response->withStatus(422), '@admin/forgot-password.twig', [
@@ -144,9 +150,9 @@ final class AuthController
         try {
             $this->auth->canResetPasswordOrThrow($selector, $token);
         } catch (InvalidSelectorTokenPairException | TokenExpiredException) {
-            $error = 'Odkaz pro reset hesla je neplatný nebo vypršel.';
+            $error = $this->t('err_reset_link_invalid');
         } catch (\Throwable) {
-            $error = 'Nastala chyba při ověřování odkazu.';
+            $error = $this->t('err_reset_verify_error');
         }
 
         return $this->twig->render($response, '@admin/reset-password.twig', [
@@ -169,15 +175,15 @@ final class AuthController
             $this->auth->resetPassword($selector, $token, $password);
             return $response->withStatus(302)->withHeader('Location', $this->adminPath . '/login?reset=1');
         } catch (InvalidSelectorTokenPairException | TokenExpiredException) {
-            $error = 'Odkaz pro reset hesla je neplatný nebo vypršel.';
+            $error = $this->t('err_reset_link_invalid');
         } catch (ResetDisabledException) {
-            $error = 'Reset hesla je pro tento účet zakázán.';
+            $error = $this->t('err_reset_disabled');
         } catch (InvalidPasswordException) {
-            $error = 'Heslo musí mít alespoň 8 znaků.';
+            $error = $this->t('err_password_min');
         } catch (TooManyRequestsException) {
-            $error = 'Příliš mnoho pokusů. Zkuste to za chvíli.';
+            $error = $this->t('err_too_many_attempts');
         } catch (\Throwable) {
-            $error = 'Reset hesla selhal.';
+            $error = $this->t('err_reset_failed');
         }
 
         return $this->twig->render($response->withStatus(422), '@admin/reset-password.twig', [

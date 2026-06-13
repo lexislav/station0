@@ -216,6 +216,11 @@ final class MediaService
             throw new \RuntimeException('CollectionsDir not configured in MediaService.');
         }
 
+        // Sanitize both segments — they arrive straight from request input and
+        // must never be allowed to escape the collections tree (path traversal).
+        $collectionName = $this->safeSegment($collectionName);
+        $itemSlug       = $this->safeSegment($itemSlug);
+
         $err = $file->getError();
         if ($err !== UPLOAD_ERR_OK) {
             throw new \RuntimeException(self::uploadErrorMessage($err));
@@ -252,6 +257,15 @@ final class MediaService
             $name = $this->resolveFilename($targetDir, $clientName, $ext);
         } else {
             throw new \RuntimeException('Unsupported file type: ' . ($mime ?: 'unknown'));
+        }
+
+        // Defense in depth: ensure the (sanitized) target really sits inside the
+        // collections tree before writing.
+        $realTarget = realpath($targetDir);
+        $baseColl   = realpath($this->collectionsDir);
+        if ($realTarget === false || $baseColl === false
+            || !str_starts_with($realTarget . DIRECTORY_SEPARATOR, $baseColl . DIRECTORY_SEPARATOR)) {
+            throw new \RuntimeException('Resolved upload path escapes the collections directory.');
         }
 
         $file->moveTo($targetDir . '/' . $name);
@@ -372,6 +386,19 @@ final class MediaService
     }
 
     // ─── Helpers ───
+
+    /**
+     * Sanitize a single path segment (collection name or item slug) so it can
+     * never contain a directory separator or "..". Throws on empty result.
+     */
+    private function safeSegment(string $value): string
+    {
+        $clean = Slug::sanitize($value);
+        if ($clean === '') {
+            throw new \RuntimeException('Invalid collection name or item slug.');
+        }
+        return $clean;
+    }
 
     private function resolvePageDir(string $pageUrlPath): string
     {

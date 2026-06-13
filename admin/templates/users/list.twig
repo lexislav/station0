@@ -4,6 +4,7 @@
     <h1>{{ t.users_title }}</h1>
     <a class="btn primary" href="{{ app.adminPath }}/users/new">{{ t.users_new }}</a>
 </div>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
 <table class="users">
     <thead><tr>
         <th>{{ t.users_th_username }}</th>

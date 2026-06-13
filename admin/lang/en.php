@@ -149,4 +149,27 @@ return [
     'user_field_role'      => 'Role',
     'user_cancel'          => 'Cancel',
     'user_create'          => 'Create',
+
+    // Error / status messages (emitted by controllers)
+    'err_invalid_credentials'    => 'Invalid login credentials.',
+    'err_too_many_attempts'      => 'Too many attempts. Please try again shortly.',
+    'err_login_failed'           => 'Login failed.',
+    'err_email_not_found'        => 'E-mail address not found.',
+    'err_reset_disabled'         => 'Password reset is disabled for this account.',
+    'err_email_send_failed'      => 'Sending the e-mail failed. Check your SMTP settings.',
+    'err_reset_link_invalid'     => 'The password reset link is invalid or has expired.',
+    'err_reset_verify_error'     => 'An error occurred while verifying the link.',
+    'err_password_min'           => 'Password must be at least 8 characters.',
+    'err_reset_failed'           => 'Password reset failed.',
+    'err_fill_all_fields'        => 'Please fill in all fields.',
+    'err_invalid_email'          => 'Please enter a valid e-mail address.',
+    'err_account_create_failed'  => 'Account creation failed. Please try again.',
+    'err_username_empty'         => 'Username must not be empty.',
+    'err_delete_self'            => 'You cannot delete your own account.',
+    'err_delete_last_admin'      => 'Cannot delete the last administrator.',
+
+    // Password-reset e-mail
+    'email_reset_subject' => 'Password reset – Station0',
+    'email_reset_intro'   => 'To reset your password, click the link below. The link is valid for 6 hours.',
+    'email_reset_ignore'  => 'If you did not request a password reset, please ignore this e-mail.',
 ];

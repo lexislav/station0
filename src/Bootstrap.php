@@ -106,6 +106,18 @@ final class Bootstrap
         $container->set('roles', $roles);
         $container->set('station0Root', $station0Root);
 
+        // Admin UI translations — set 'admin_locale' in site/config.php ('en' default).
+        // Missing keys always fall back to the English base. Shared by Twig (as the
+        // `t` global) and by controllers that emit user-facing messages.
+        $container->set('lang', function () use ($config, $station0Root) {
+            $locale   = preg_replace('/[^a-z]/', '', strtolower($config['admin_locale'] ?? 'en'));
+            $langFile = $station0Root . '/admin/lang/' . $locale . '.php';
+            $base     = require $station0Root . '/admin/lang/en.php';
+            return is_file($langFile) && $langFile !== $station0Root . '/admin/lang/en.php'
+                ? array_merge($base, require $langFile)
+                : $base;
+        });
+
         $container->set(Logger::class, function () use ($config) {
             $logger = new Logger('station0');
             $logger->pushHandler(new StreamHandler($config['paths']['logs'] . '/app.log', Logger::DEBUG));
@@ -143,15 +155,7 @@ final class Bootstrap
                 'blockCollapse' => $config['admin']['blockCollapse'] ?? 'remember',
             ]);
 
-            // Admin UI translations — set 'admin_locale' in site/config.php ('en' default).
-            // Missing keys always fall back to the English base.
-            $locale   = preg_replace('/[^a-z]/', '', strtolower($config['admin_locale'] ?? 'en'));
-            $langFile = $station0Root . '/admin/lang/' . $locale . '.php';
-            $base     = require $station0Root . '/admin/lang/en.php';
-            $strings  = is_file($langFile) && $langFile !== $station0Root . '/admin/lang/en.php'
-                ? array_merge($base, require $langFile)
-                : $base;
-            $twig->getEnvironment()->addGlobal('t', $strings);
+            $twig->getEnvironment()->addGlobal('t', $c->get('lang'));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'top_level_pages',
                 function () use ($c) {
@@ -244,7 +248,12 @@ final class Bootstrap
         $container->set(FileCache::class, fn () => new FileCache($config['paths']['cache']));
 
         $container->set(MarkdownConverter::class, function () {
-            $env = new Environment();
+            // Escape raw HTML and drop unsafe (javascript:, data:) links so a
+            // semi-trusted editor cannot inject script into rendered page content.
+            $env = new Environment([
+                'html_input'         => 'escape',
+                'allow_unsafe_links' => false,
+            ]);
             $env->addExtension(new CommonMarkCoreExtension());
             $env->addExtension(new GithubFlavoredMarkdownExtension());
             $env->addExtension(new FrontMatterExtension());
@@ -282,6 +291,7 @@ final class Bootstrap
             $c->get(MailerService::class),
             $config['baseUrl'],
             $config['adminPath'],
+            $c->get('lang'),
         ));
 
         $container->set(AuthMiddleware::class, fn ($c) => new AuthMiddleware(
@@ -298,6 +308,8 @@ final class Bootstrap
             $c->get(Twig::class),
             $c->get(Guard::class),
             $config['adminPath'],
+            $c->get('lang'),
+            $c->get(Logger::class),
         ));
         $container->set('middleware.role', fn ($c) => fn (string $name) => new RoleMiddleware($c->get(Auth::class), $roles, $name));
 
@@ -325,6 +337,8 @@ final class Bootstrap
             $c->get(Guard::class),
             $roles,
             $config['adminPath'],
+            $c->get(Auth::class),
+            $c->get('lang'),
         ));
 
         $container->set(CollectionRepository::class, fn () => new CollectionRepository(
