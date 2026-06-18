@@ -60,6 +60,29 @@ final class BlockRegistry
         return ':::' . $type . "\n" . $yaml . ':::';
     }
 
+    /**
+     * Build a block-data array for $type populated with its schema's default
+     * field values — the same starting structure a freshly added block of this
+     * type has in the editor. Used to pre-seed new pages with default blocks.
+     *
+     * Reuses the per-field default resolution shared with {@see snippet()}, so
+     * a seeded block matches a manually added one of the same type.
+     *
+     * @return array<string, mixed>
+     */
+    public function defaults(string $type): array
+    {
+        $block  = ['type' => $type];
+        $schema = $this->schema($type);
+        foreach (($schema['fields'] ?? []) as $name => $def) {
+            if (!is_string($name) || !is_array($def)) {
+                continue;
+            }
+            $block[$name] = $this->fieldDefault($def);
+        }
+        return $block;
+    }
+
     /** @param list<array<string, mixed>> $fields */
     private function buildSnippetYaml(array $fields, int $depth): string
     {
@@ -83,19 +106,32 @@ final class BlockRegistry
                 } else {
                     $out .= $pad . "  - \n";
                 }
-            } elseif ($type === 'select') {
-                $default = $field['default'] ?? ($field['options'][0] ?? '');
-                $out .= $pad . $name . ': ' . $default . "\n";
             } elseif ($type === 'boolean') {
-                $raw     = $field['default'] ?? false;
-                $default = ($raw === true || $raw === 'true') ? 'true' : 'false';
-                $out    .= $pad . $name . ': ' . $default . "\n";
+                $out .= $pad . $name . ': ' . ($this->fieldDefault($field) ? 'true' : 'false') . "\n";
             } else {
-                $default = $field['default'] ?? '';
-                $out    .= $pad . $name . ': ' . $default . "\n";
+                $out .= $pad . $name . ': ' . $this->fieldDefault($field) . "\n";
             }
         }
 
         return $out;
+    }
+
+    /**
+     * Resolve a single field's default value from its schema definition.
+     * The one source of truth for "what does an empty block field start as",
+     * shared by {@see defaults()} and {@see buildSnippetYaml()}.
+     *
+     * @param  array<string, mixed> $field
+     * @return mixed  string for scalars, bool for booleans, [] for lists.
+     */
+    private function fieldDefault(array $field): mixed
+    {
+        return match ((string) ($field['type'] ?? 'text')) {
+            'list'    => [],
+            'boolean' => ($field['default'] ?? false) === true
+                         || ($field['default'] ?? null) === 'true',
+            'select'  => $field['default'] ?? ($field['options'][0] ?? ''),
+            default   => $field['default'] ?? '',
+        };
     }
 }

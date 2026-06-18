@@ -13,6 +13,7 @@ use Station0\Service\ContentRepository;
 use Station0\Service\FileCache;
 use Station0\Service\Page;
 use Station0\Service\PageRenderer;
+use Station0\Service\TemplateBlocks;
 use Station0\Support\Slug;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
@@ -26,6 +27,7 @@ final class PageController
         private readonly FileCache $cache,
         private readonly BlockRegistry $blocks,
         private readonly PageRenderer $renderer,
+        private readonly TemplateBlocks $templateBlocks,
         private readonly string $adminPath,
         private readonly string $templatesPath = '',
     ) {}
@@ -193,26 +195,63 @@ final class PageController
 
     public function createForm(Request $request, Response $response): Response
     {
-        [$blockTypes, $blockTypesMap] = $this->blockTypeData();
-
         $preselectedParent = (string) ($request->getQueryParams()['parent'] ?? '/');
         $parentPage        = $this->content->find($preselectedParent);
         if ($preselectedParent !== '/' && $parentPage === null) {
             $preselectedParent = '/';
         }
 
+        // The palette and pre-seeded blocks follow the template the form will
+        // open with — the one the <select> marks as selected (see edit.twig).
+        $availableTemplates = $this->availablePageTemplates($parentPage);
+        $template = $this->initialTemplate($availableTemplates);
+
+        [$blockTypes, $blockTypesMap] = $this->blockTypeData($template);
+
         return $this->twig->render($response, '@admin/pages/edit.twig', [
             'mode'               => 'new',
-            'page'               => new Page(slug: '', title: '', body: ''),
+            'page'               => new Page(slug: '', title: '', body: '', template: $template),
             'parents'            => $this->parentOptions(),
             'selectedParent'     => $preselectedParent,
-            'blocks'             => [['type' => 'text', 'body' => '']],
+            'blocks'             => $this->seedBlocks($template),
             'blockTypes'         => $blockTypes,
             'blockTypesMap'      => $blockTypesMap,
-            'availableTemplates' => $this->availablePageTemplates($parentPage),
+            'availableTemplates' => $availableTemplates,
             'csrf'               => $this->csrfFields($request),
             'activeNav'          => $this->navForParent($parentPage),
         ]);
+    }
+
+    /**
+     * The template a fresh "new page" form opens with: 'page' when available,
+     * otherwise the first available template, falling back to 'page'. Mirrors
+     * the option the <select> in edit.twig marks selected.
+     *
+     * @param list<string> $availableTemplates
+     */
+    private function initialTemplate(array $availableTemplates): string
+    {
+        if ($availableTemplates === [] || in_array('page', $availableTemplates, true)) {
+            return 'page';
+        }
+        return $availableTemplates[0];
+    }
+
+    /**
+     * Initial block list for a NEW page of $template. When the template's
+     * manifest declares DefaultBlocks, pre-insert those (with their schema
+     * default field values, so each matches a manually added block). Otherwise
+     * keep the historic default of a single empty text block.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function seedBlocks(string $template): array
+    {
+        $defaults = $this->templateBlocks->defaultBlocks($template);
+        if ($defaults === []) {
+            return [['type' => 'text', 'body' => '']];
+        }
+        return array_map(fn (string $type): array => $this->blocks->defaults($type), $defaults);
     }
 
     public function store(Request $request, Response $response): Response
@@ -237,7 +276,7 @@ final class PageController
         try {
             $this->content->assertChildTemplateAllowed($parentUrl, $template);
         } catch (\RuntimeException $e) {
-            [$blockTypes, $blockTypesMap] = $this->blockTypeData();
+            [$blockTypes, $blockTypesMap] = $this->blockTypeData($template);
             $draft = new Page(
                 slug: $rawSlug,
                 title: $title,
@@ -312,7 +351,7 @@ final class PageController
             return $response->withStatus(404);
         }
 
-        [$blockTypes, $blockTypesMap] = $this->blockTypeData();
+        [$blockTypes, $blockTypesMap] = $this->blockTypeData($page->template);
         $parentPage = $this->parentPageOf($page->urlPath);
 
         return $this->twig->render($response, '@admin/pages/edit.twig', [
@@ -389,7 +428,7 @@ final class PageController
             try {
                 $this->content->assertChildTemplateAllowed($parentUrl, $page->template);
             } catch (\RuntimeException $e) {
-                [$blockTypes, $blockTypesMap] = $this->blockTypeData();
+                [$blockTypes, $blockTypesMap] = $this->blockTypeData($page->template);
                 return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
                     'mode'               => 'edit',
                     'page'               => $page,
@@ -467,16 +506,24 @@ final class PageController
     }
 
     /**
-     * Returns [list, map] of available block types.
+     * Returns [list, map] of block types available to a page using $template.
      * list  → ordered array for rendering "+ Add block" buttons
      * map   → keyed by type for O(1) lookup in Twig partials
      *
+     * When $template declares an allow-list (via its <template>.blocks.yaml
+     * manifest) the palette is restricted to those types, in declared order.
+     * No allow-list (or $template === null) ⇒ all blocks, sorted as globbed.
+     *
      * @return array{list<array<string, mixed>>, array<string, array<string, mixed>>}
      */
-    private function blockTypeData(): array
+    private function blockTypeData(?string $template = null): array
     {
+        $allowed = $template !== null ? $this->templateBlocks->allowedBlocks($template) : [];
+        // Empty allow-list ⇒ unrestricted: fall back to every available block.
+        $types   = $allowed !== [] ? $allowed : $this->blocks->available();
+
         $list = [];
-        foreach ($this->blocks->available() as $type) {
+        foreach ($types as $type) {
             $schema = $this->blocks->schema($type);
             if ($schema === null) {
                 continue;

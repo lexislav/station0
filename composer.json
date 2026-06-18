@@ -27,10 +27,18 @@
             "Station0\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Station0\\Tests\\": "tests/"
+        }
+    },
     "bin": [
         "bin/console"
     ],
     "config": {
         "sort-packages": true
+    },
+    "scripts": {
+        "test": "phpunit"
     }
 }

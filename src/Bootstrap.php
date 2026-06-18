@@ -40,6 +40,7 @@ use Station0\Service\FileCache;
 use Station0\Service\MediaService;
 use Station0\Service\MailerService;
 use Station0\Service\PageRenderer;
+use Station0\Service\TemplateBlocks;
 use Station0\Service\UserRepository;
 
 final class Bootstrap
@@ -269,6 +270,11 @@ final class Bootstrap
             $c->get(Twig::class),
         ));
 
+        $container->set(TemplateBlocks::class, fn ($c) => new TemplateBlocks(
+            $config['paths']['templates'],
+            $c->get(BlockRegistry::class),
+        ));
+
         $container->set(PageRenderer::class, fn ($c) => new PageRenderer(
             $c->get(MarkdownConverter::class),
             $c->get(BlockRegistry::class),
@@ -327,6 +333,7 @@ final class Bootstrap
             $c->get(FileCache::class),
             $c->get(BlockRegistry::class),
             $c->get(PageRenderer::class),
+            $c->get(TemplateBlocks::class),
             $config['adminPath'],
             $config['paths']['templates'],
         ));

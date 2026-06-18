@@ -65,7 +65,8 @@ Markdown body (or YAML block list)
 | `ContentRepository` | `src/Service/ContentRepository.php` | Flat-file CRUD, front-matter parsing |
 | `Page` | `src/Service/Page.php` | Page entity |
 | `PageRenderer` | `src/Service/PageRenderer.php` | Markdown + block rendering, cache |
-| `BlockRegistry` | `src/Service/BlockRegistry.php` | Block schema/template loading |
+| `BlockRegistry` | `src/Service/BlockRegistry.php` | Block schema/template loading; `defaults()` builds a seeded block from schema defaults |
+| `TemplateBlocks` | `src/Service/TemplateBlocks.php` | Resolves per-template `allowedBlocks` / `defaultBlocks` from `<template>.blocks.yaml` |
 | `UserRepository` | `src/Service/UserRepository.php` | Wrapper around Delight\Auth |
 | `FileCache` | `src/Service/FileCache.php` | File-based cache (get/set/flush) |
 | `MediaService` | `src/Service/MediaService.php` | Page-local asset storage + ref resolution; also serves collection assets via `_collections/` prefix |
@@ -112,6 +113,58 @@ fields:
 ```
 
 Supported field types: `text`, `textarea`, `image`, `number`, `select`, `boolean`, `list`.
+
+## Per-template block restrictions
+
+A template can restrict which block types its pages may use, and pre-seed a new
+page with starter blocks. Configuration is a **per-template manifest** that sits
+beside the template file:
+
+```
+site/templates/gallery.twig         ← the template
+site/templates/gallery.blocks.yaml  ← its block manifest (optional)
+```
+
+```yaml
+# site/templates/gallery.blocks.yaml
+allowedBlocks:        # restrict the "+ Add block" palette to these types, in order
+  - text
+  - gallery
+defaultBlocks:        # pre-insert these into a NEW page of this template, in order
+  - gallery
+```
+
+Both keys are optional and **compose**:
+
+- **`allowedBlocks`** — the "+ Add block" palette (and the JS block templates /
+  schemas it emits) shows only these types, in declared order. Applied at every
+  `PageController::blockTypeData()` call site (new / create-error / edit /
+  update-error). **No `allowedBlocks` ⇒ all blocks available** (the historic
+  behavior). Unknown block names are dropped; if filtering empties the list,
+  it falls back to the full palette rather than rendering an empty one.
+- **`defaultBlocks`** — applied **only to new pages**: each listed type is
+  pre-inserted using its schema's default field values (via
+  `BlockRegistry::defaults()`, which shares the default-resolution logic with
+  `snippet()`), so a seeded block matches a manually added one. **No
+  `defaultBlocks` ⇒ a single empty `text` block** (the historic default).
+  Unknown names are dropped, and any default block **must be a member of the
+  effective allow-list** — non-members are dropped.
+
+Resolution lives in `Station0\Service\TemplateBlocks` (keyed/cached by template
+name). This is the block-level analogue of a page's **`AllowedChildTemplates`**
+front-matter field: `AllowedChildTemplates` restricts which *templates* a child
+*page* may use; `allowedBlocks` restricts which *block types* a page *body* may
+contain. The former is per-page front matter (parent → child); the latter is
+per-template manifest, which is why pre-seeding (inherently a property of the
+template, evaluated before the page exists) lives there too.
+
+**Worked example — a gallery-oriented template.** `site/templates/gallery.blocks.yaml`
+with `allowedBlocks: [text, gallery]` and `defaultBlocks: [gallery]` means: a new
+gallery page opens with one `gallery` block already inserted (columns/images at
+their schema defaults), and the palette offers only "text" and "gallery".
+
+Note: the palette is server-rendered for the template the form opens with;
+changing the template `<select>` on a new page does not re-fetch the palette.
 
 ## File uploads & media
 
