@@ -102,6 +102,38 @@ php vendor/bin/console assets:relink --dry-run # preview
 Public asset URLs follow the page URL: `/media/{page-path}/{filename}`.
 The root page uses `/media/~/{filename}`.
 
+## Per-template block restrictions
+
+A template can restrict which block types its pages may use, and pre-seed a new
+page with starter blocks. Drop an optional manifest beside the template file:
+
+```
+site/templates/gallery.twig         ← the template
+site/templates/gallery.blocks.yaml  ← its block manifest (optional)
+```
+
+```yaml
+# site/templates/gallery.blocks.yaml
+allowedBlocks:        # the "+ Add block" palette shows only these, in order
+  - text
+  - gallery
+defaultBlocks:        # a NEW page of this template opens with these inserted
+  - gallery
+```
+
+Both keys are optional and compose:
+
+- **`allowedBlocks`** — restricts the editor palette. No declaration ⇒ all
+  blocks are available (the default).
+- **`defaultBlocks`** — pre-inserts blocks into **new** pages only, at their
+  schema default field values. No declaration ⇒ a single empty `text` block.
+  Pre-seeded blocks must be a subset of the allow-list.
+
+Unknown block names are ignored, and an allow-list that filters down to nothing
+falls back to the full palette. This mirrors how a page's `AllowedChildTemplates`
+front-matter field restricts which child *templates* a page accepts — here it is
+the block types inside a page that are restricted, keyed by template.
+
 ## CLI (via skeleton)
 
 ```bash
