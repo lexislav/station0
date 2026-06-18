@@ -7,21 +7,21 @@
     <link rel="stylesheet" href="{{ app.adminPath }}/assets/admin.css">
     {% block head %}{% endblock %}
 </head>
-<body class="admin">
+<body class="admin" data-nav="{{ activeNav|default('') }}">
 <div class="admin-layout">
     <aside class="admin-sidebar">
         <a class="sidebar-brand" href="{{ app.adminPath }}">{{ app.name }}</a>
         <nav class="sidebar-nav">
-            <a href="{{ app.adminPath }}">{{ t.nav_dashboard }}</a>
-            <a href="{{ app.adminPath }}/pages">{{ t.nav_structure }}</a>
+            <a data-nav="dashboard" href="{{ app.adminPath }}">{{ t.nav_dashboard }}</a>
+            <a data-nav="pages" href="{{ app.adminPath }}/pages">{{ t.nav_structure }}</a>
             {% if has_streams() %}
-                <a href="{{ app.adminPath }}/pages?view=streams">{{ t.nav_streams }}</a>
+                <a data-nav="streams" href="{{ app.adminPath }}/pages?view=streams">{{ t.nav_streams }}</a>
             {% endif %}
             {% if has_collections() %}
-                <a href="{{ app.adminPath }}/collections">{{ t.nav_collections }}</a>
+                <a data-nav="collections" href="{{ app.adminPath }}/collections">{{ t.nav_collections }}</a>
             {% endif %}
             {% if user is defined and user.isAdmin %}
-                <a href="{{ app.adminPath }}/settings">{{ t.nav_site_settings }}</a>
+                <a data-nav="settings" href="{{ app.adminPath }}/settings">{{ t.nav_site_settings }}</a>
             {% endif %}
         </nav>
         <div class="sidebar-footer">
@@ -46,6 +46,18 @@
     (function() {
         var ap = '{{ app.adminPath }}';
         var links = document.querySelectorAll('.sidebar-nav a');
+
+        // If the server told us which section is active, trust that — the URL
+        // alone can't tell a stream record apart from a plain page (both live
+        // under /pages/...).
+        var hint = document.body.getAttribute('data-nav');
+        if (hint) {
+            links.forEach(function(a) {
+                a.classList.toggle('active', a.getAttribute('data-nav') === hint);
+            });
+            return;
+        }
+
         // Track which pathname+search combos are owned by a search-param link
         var searchOwners = {};
         links.forEach(function(a) {

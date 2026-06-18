@@ -53,7 +53,20 @@ final class PageController
             'csrf'          => $this->csrfFields($request),
             'currentView'   => in_array($view, ['structure', 'streams']) ? $view : 'structure',
             'activeStream'  => $streamParam,
+            'activeNav'     => $view === 'streams' ? 'streams' : 'pages',
         ]);
+    }
+
+    /**
+     * Which sidebar section (Pages vs Streams) owns the form for a page whose
+     * parent is $parentPage. Stream records live under a stream node, so the
+     * Streams nav item should stay highlighted while editing them.
+     */
+    private function navForParent(?Page $parentPage): string
+    {
+        return ($parentPage !== null && !empty($parentPage->allowedChildTemplates))
+            ? 'streams'
+            : 'pages';
     }
 
     // ─── Reorder (drag & drop) ───
@@ -198,6 +211,7 @@ final class PageController
             'blockTypesMap'      => $blockTypesMap,
             'availableTemplates' => $this->availablePageTemplates($parentPage),
             'csrf'               => $this->csrfFields($request),
+            'activeNav'          => $this->navForParent($parentPage),
         ]);
     }
 
@@ -245,6 +259,7 @@ final class PageController
                 'availableTemplates' => $this->availablePageTemplates($parentPage),
                 'error'              => $e->getMessage(),
                 'csrf'               => $this->csrfFields($request),
+                'activeNav'          => $this->navForParent($parentPage),
             ]);
         }
 
@@ -309,6 +324,7 @@ final class PageController
             'blockTypesMap'      => $blockTypesMap,
             'availableTemplates' => $this->availablePageTemplates($parentPage),
             'csrf'               => $this->csrfFields($request),
+            'activeNav'          => $this->navForParent($parentPage),
         ]);
     }
 
@@ -384,6 +400,7 @@ final class PageController
                     'availableTemplates' => $this->availablePageTemplates($parentPage),
                     'error'              => $e->getMessage(),
                     'csrf'               => $this->csrfFields($request),
+                    'activeNav'          => $this->navForParent($parentPage),
                 ]);
             }
         }
