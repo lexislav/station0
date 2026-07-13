@@ -356,7 +356,8 @@ final class MediaService
 
         // Root page: /media/~/{filename}
         if (count($parts) === 1 && $parts[0] === self::ROOT_TOKEN) {
-            $dir = rtrim($this->pagesDir, '/');
+            $page = $this->content->find('/');
+            $dir  = rtrim($this->pagesDir, '/');
         } else {
             $urlPath = '/' . implode('/', $parts);
             $page    = $this->content->find($urlPath);
@@ -368,6 +369,15 @@ final class MediaService
 
         $full = $dir . '/' . $file;
         if (!is_file($full)) {
+            return null;
+        }
+
+        // Never serve a page's own content source file (`<template>.txt`). It is
+        // not an asset — exposing it would leak raw front matter (incl. the
+        // Author username) and the body of unpublished/scheduled pages, which
+        // 404 on the public site but whose directory is reachable here.
+        if ($page !== null && $page->filePath !== ''
+            && realpath($full) === realpath($page->filePath)) {
             return null;
         }
 
