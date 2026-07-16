@@ -112,6 +112,9 @@ final class MediaService
     public const ROOT_TOKEN       = '~';
     public const COLLECTIONS_TOKEN = '_collections';
 
+    /** Filename of a collection item's content source (never a servable asset). */
+    private const CONTENT_SOURCE_FILE = 'item.txt';
+
     public function __construct(
         private readonly ContentRepository $content,
         private readonly string $pagesDir,
@@ -333,6 +336,13 @@ final class MediaService
         // Collection item asset: _collections/{collection}/{slug}/{file}
         if (count($parts) >= 3 && $parts[0] === self::COLLECTIONS_TOKEN) {
             if ($this->collectionsDir === null) {
+                return null;
+            }
+            // Never serve an item's content source file — same reasoning as the
+            // page-branch guard below. Collection item files are always named
+            // `item.txt` (see CollectionRepository), so this blocks disclosure of
+            // raw front matter and the body of unpublished items.
+            if ($file === self::CONTENT_SOURCE_FILE) {
                 return null;
             }
             $collection = $parts[1];
