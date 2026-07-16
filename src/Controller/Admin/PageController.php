@@ -261,10 +261,7 @@ final class PageController
         $rawSlug   = trim((string) ($data['slug'] ?? ''));
         $parentUrl = trim((string) ($data['parent'] ?? '/'));
 
-        $template = (string) ($data['template'] ?? 'page');
-        if ($template === '') {
-            $template = 'page';
-        }
+        $template = $this->safeTemplate((string) ($data['template'] ?? 'page'));
         $allowedChildTemplates = $this->parseTemplateList((string) ($data['allowed_child_templates'] ?? ''));
 
         if ($title === '') {
@@ -414,7 +411,7 @@ final class PageController
         $page->body      = (string) ($data['body'] ?? $page->body);
         $page->metatitle = trim((string) ($data['metatitle'] ?? '')) ?: null;
         $page->published = isset($data['published']);
-        $page->template  = (string) ($data['template'] ?? $page->template);
+        $page->template  = $this->safeTemplate((string) ($data['template'] ?? $page->template), $page->template);
         if (array_key_exists('allowed_child_templates', $data)) {
             $page->allowedChildTemplates = $this->parseTemplateList((string) $data['allowed_child_templates']);
         }
@@ -587,6 +584,30 @@ final class PageController
         }
 
         return $names;
+    }
+
+    /**
+     * Normalize a posted template name to a safe, existing template.
+     *
+     * The value drives both the on-disk content filename (`<template>.txt`) and
+     * the public Twig template, so it must never contain path separators or
+     * traversal sequences. Anything that isn't a bare `[A-Za-z0-9_-]` name backed
+     * by a real `<name>.twig` file collapses to $fallback ('page' by default).
+     * 'layout' is rejected too — it is the base layout, not a page template
+     * (mirrors the exclusion in availablePageTemplates() / SettingsController).
+     */
+    private function safeTemplate(string $template, string $fallback = 'page'): string
+    {
+        $template = trim($template);
+        if ($template === '' || $template === 'layout' || $template !== basename($template)
+            || !preg_match('/^[A-Za-z0-9_-]+$/', $template)) {
+            return $fallback;
+        }
+        if ($this->templatesPath !== ''
+            && !is_file(rtrim($this->templatesPath, '/') . '/' . $template . '.twig')) {
+            return $fallback;
+        }
+        return $template;
     }
 
     /** @return list<string> */

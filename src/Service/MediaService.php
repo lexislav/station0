@@ -112,6 +112,9 @@ final class MediaService
     public const ROOT_TOKEN       = '~';
     public const COLLECTIONS_TOKEN = '_collections';
 
+    /** Filename of a collection item's content source (never a servable asset). */
+    private const CONTENT_SOURCE_FILE = 'item.txt';
+
     public function __construct(
         private readonly ContentRepository $content,
         private readonly string $pagesDir,
@@ -335,6 +338,13 @@ final class MediaService
             if ($this->collectionsDir === null) {
                 return null;
             }
+            // Never serve an item's content source file — same reasoning as the
+            // page-branch guard below. Collection item files are always named
+            // `item.txt` (see CollectionRepository), so this blocks disclosure of
+            // raw front matter and the body of unpublished items.
+            if ($file === self::CONTENT_SOURCE_FILE) {
+                return null;
+            }
             $collection = $parts[1];
             $slug       = $parts[2];
             $dir        = rtrim($this->collectionsDir, '/') . '/' . $collection . '/' . $slug;
@@ -356,7 +366,8 @@ final class MediaService
 
         // Root page: /media/~/{filename}
         if (count($parts) === 1 && $parts[0] === self::ROOT_TOKEN) {
-            $dir = rtrim($this->pagesDir, '/');
+            $page = $this->content->find('/');
+            $dir  = rtrim($this->pagesDir, '/');
         } else {
             $urlPath = '/' . implode('/', $parts);
             $page    = $this->content->find($urlPath);
@@ -368,6 +379,15 @@ final class MediaService
 
         $full = $dir . '/' . $file;
         if (!is_file($full)) {
+            return null;
+        }
+
+        // Never serve a page's own content source file (`<template>.txt`). It is
+        // not an asset — exposing it would leak raw front matter (incl. the
+        // Author username) and the body of unpublished/scheduled pages, which
+        // 404 on the public site but whose directory is reachable here.
+        if ($page !== null && $page->filePath !== ''
+            && realpath($full) === realpath($page->filePath)) {
             return null;
         }
 

@@ -440,7 +440,14 @@ const i18n = {{ {
 
     function destroyTextEditor(blockEl) {
         const id = blockEl.dataset.blockId;
-        if (editors[id]) { editors[id].destroy(); delete editors[id]; }
+        if (editors[id]) {
+            // destroy() can throw because we relocate the editor's mode-switch
+            // into the block header (see initTextEditor) — ToastUI then fails to
+            // removeChild a node it no longer owns. Swallow it so block removal
+            // still proceeds; blockEl.remove() tears down the whole subtree anyway.
+            try { editors[id].destroy(); } catch (_) { /* node already detached */ }
+            delete editors[id];
+        }
     }
 
     function syncTextEditors() {
