@@ -5,6 +5,14 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `bin/console` failed with a symlinked dev install (path repository): it
+  resolved the project root from the library's real path and required a
+  non-existent `vendor/autoload.php`. It now mirrors
+  `Bootstrap::findProjectRoot()` and walks up from the working directory.
+
 ## [0.7.3] - 2026-09-24
 
 ### Added

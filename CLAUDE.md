@@ -22,7 +22,7 @@ Flat-file CMS built on **Slim 4**, **Twig 3**, **League/CommonMark**, and **Deli
 
 **Request flow:** `public/index.php` (skeleton) → dotenv → `Bootstrap::createApp()` → Slim app with PHP-DI container → middleware stack → controller → Twig response.
 
-**Path resolution:** `Bootstrap::findProjectRoot()` checks if `basename(dirname(dirname($packageRoot))) === 'vendor'` (real Composer install → 3 levels up). For symlinked dev installs and direct clones falls back to `getcwd()`, which resolves to the skeleton root when the server is started from there.
+**Path resolution:** `Bootstrap::findProjectRoot()` checks if `basename(dirname(dirname($packageRoot))) === 'vendor'` (real Composer install → 3 levels up). For symlinked dev installs and direct clones falls back to `getcwd()`, which resolves to the skeleton root when the server is started from there. `bin/console` mirrors the same logic (walking up from `getcwd()` to the first dir with `vendor/` + `composer.json`), so run it from the skeleton dir.
 
 **Config factory:** The skeleton provides `site/config.php` as `fn(string $station0Root, string $siteRoot, string $projectRoot): array`. Called by both Bootstrap and bin/console.
 
