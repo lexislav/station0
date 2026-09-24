@@ -161,6 +161,36 @@ exists, the editor keeps it as a "(not found)" option instead of dropping it.
 Static `options` also accept richer forms now — `{value: label}` maps and
 `[{value, label, group}]` entries — next to the plain string list.
 
+## Collection groups (admin menu tabs)
+
+Collections can be grouped into their own tab in the admin menu. The simple way
+is one key in the collection's `_collection.yaml`:
+
+```yaml
+# site/content/collections/products/_collection.yaml
+label: Products
+group: Shop
+```
+
+Every collection with `group: Shop` moves out of the generic **Collections** tab
+into a **Shop** tab. A group with several collections opens a list of them; a
+group with a single collection links straight to its items.
+
+When a group needs more settings, declare it centrally (optional):
+
+```yaml
+# site/content/collections/_groups.yaml
+shop:                 # id — `group: shop` and `group: Shop` both match
+  label: E-shop       # overrides the inline label
+  icon: "🛒"          # text/emoji, or inline <svg …> markup
+  roles: [editor]     # who sees the tab; admins always do; omit = everyone
+```
+
+Tabs follow the order of `_groups.yaml`, then inline-only groups alphabetically.
+A central group without any collection produces no tab. `roles` is enforced
+server-side too: the collection's list, forms, saves and uploads return 403
+for users without the role.
+
 ## CLI (via skeleton)
 
 ```bash

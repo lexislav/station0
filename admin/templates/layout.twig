@@ -20,6 +20,12 @@
             {% if has_collections() %}
                 <a data-nav="collections" href="{{ app.adminPath }}/collections">{{ t.nav_collections }}</a>
             {% endif %}
+            {% for g in collection_groups() %}
+                <a data-nav="group-{{ g.id }}" href="{{ g.url }}">
+                    {%- if g.icon starts with '<svg' %}<span class="nav-icon">{{ g.icon|raw }}</span>
+                    {%- elseif g.icon %}<span class="nav-icon">{{ g.icon }}</span>{% endif -%}
+                    {{ g.label }}</a>
+            {% endfor %}
             {% if user is defined and user.isAdmin %}
                 <a data-nav="settings" href="{{ app.adminPath }}/settings">{{ t.nav_site_settings }}</a>
             {% endif %}

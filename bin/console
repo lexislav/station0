@@ -5,11 +5,23 @@ declare(strict_types=1);
 
 $station0Root = dirname(__DIR__);
 
-// vendor/lexislav/station0 → vendor/lexislav → vendor → project root
-$projectRoot = dirname($station0Root, 3);
-if (!is_dir($projectRoot . '/vendor')) {
-    $projectRoot = dirname($station0Root); // fallback for direct clone
-}
+// Mirrors Bootstrap::findProjectRoot().
+$projectRoot = (function (string $station0Root): string {
+    // Real vendor install: vendor/lexislav/station0 → vendor/lexislav → vendor → project root
+    if (basename(dirname($station0Root, 2)) === 'vendor') {
+        return dirname($station0Root, 3);
+    }
+    // Symlinked dev install (__DIR__ is the real library path) or direct clone:
+    // walk up from CWD to the first dir with vendor/ + composer.json.
+    $dir = (string) getcwd();
+    while ($dir !== '' && $dir !== dirname($dir)) {
+        if (is_dir($dir . '/vendor') && is_file($dir . '/composer.json')) {
+            return $dir;
+        }
+        $dir = dirname($dir);
+    }
+    return $station0Root;
+})($station0Root);
 
 require $projectRoot . '/vendor/autoload.php';
 

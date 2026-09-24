@@ -5,6 +5,26 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- `bin/console` failed with a symlinked dev install (path repository): it
+  resolved the project root from the library's real path and required a
+  non-existent `vendor/autoload.php`. It now mirrors
+  `Bootstrap::findProjectRoot()` and walks up from the working directory.
+
+## [0.7.3] - 2026-09-24
+
+### Added
+- **Collection groups.** `group: <Name>` in a collection's `_collection.yaml`
+  moves it from the generic "Collections" tab into its own admin menu tab
+  (`/admin/collection-groups/{id}`; a single-collection group links straight
+  to its items). Optional `site/content/collections/_groups.yaml` sets
+  per-group `label`, `icon` and `roles` (admins always have access; enforced
+  on every collection route and the upload endpoint) and the tab order.
+- `Station0\Service\CollectionGroups`, `collection_groups()` admin Twig
+  function, `CollectionRepository::names()`; unit tests included.
+
 ## [0.7.2] - 2026-09-24
 
 ### Added
@@ -71,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.7.3]: https://github.com/lexislav/station0/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/lexislav/station0/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/lexislav/station0/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/lexislav/station0/compare/v0.6.1...v0.7.0
