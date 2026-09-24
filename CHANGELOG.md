@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.7.3]: https://github.com/lexislav/station0/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/lexislav/station0/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/lexislav/station0/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/lexislav/station0/compare/v0.6.1...v0.7.0
