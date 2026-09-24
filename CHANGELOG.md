@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolved the project root from the library's real path and required a
   non-existent `vendor/autoload.php`. It now mirrors
   `Bootstrap::findProjectRoot()` and walks up from the working directory.
+- The item list page title of a grouped collection named the generic
+  "Collections" section instead of its group.
 
 ## [0.7.3] - 2026-09-24
 

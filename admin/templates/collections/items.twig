@@ -1,5 +1,5 @@
 {% extends '@admin/layout.twig' %}
-{% block title %}{{ collectionLabel }} · {{ t.collections_title }} · {{ app.name }}{% endblock %}
+{% block title %}{{ collectionLabel }} · {{ sectionLabel ?? t.collections_title }} · {{ app.name }}{% endblock %}
 
 {% block body %}
 <div class="page-header">
