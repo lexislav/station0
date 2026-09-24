@@ -106,6 +106,7 @@ return [
     'block_file_clear'          => '× Smazat',
     'block_list_item_remove'    => '✕ Odebrat',
     'block_list_item_add'       => '+ Přidat položku',
+    'select_missing_option'     => 'nenalezeno',
     'block_gallery_placeholder' => 'Klikněte nebo přetáhněte obrázky',
     'block_gallery_upload'      => '+ Nahrát obrázky',
     'block_files_placeholder'   => 'Klikněte nebo přetáhněte soubory',

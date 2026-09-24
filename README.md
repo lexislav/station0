@@ -134,6 +134,33 @@ falls back to the full palette. This mirrors how a page's `AllowedChildTemplates
 front-matter field restricts which child *templates* a page accepts — here it is
 the block types inside a page that are restricted, keyed by template.
 
+## Select options from a collection
+
+A `select` field — in a block schema, in a list item, or in a collection
+schema — can take its options from a collection instead of a static list:
+
+```yaml
+# site/templates/blocks/route/schema.yaml
+label: Route
+fields:
+  from:
+    type: select
+    label: From
+    options_from: collection:points   # one option per published item
+    group_by: river                   # optional: item field → <optgroup>
+    sort_by: -km                      # optional: item field, "-" = descending
+    option_label: "{title} (km {km})" # optional: {title}, {slug}, {<field>}
+    placeholder: "— choose a point —" # optional, defaults to "—"
+```
+
+The stored value is the item **slug**; resolve it in the block template with
+`collection_item('points', block.from)`. Numeric sort values accept a decimal
+comma (`318,5`); items without the field sort last. If a stored slug no longer
+exists, the editor keeps it as a "(not found)" option instead of dropping it.
+
+Static `options` also accept richer forms now — `{value: label}` maps and
+`[{value, label, group}]` entries — next to the plain string list.
+
 ## CLI (via skeleton)
 
 ```bash

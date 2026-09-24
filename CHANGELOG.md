@@ -5,6 +5,27 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-09-24
+
+### Added
+- **Select options from a collection.** A `select` field (block schemas, list
+  item fields and collection schemas) can declare `options_from: collection:<name>`
+  to offer one option per published collection item (value = item slug).
+  Optional `group_by` (item field rendered as `<optgroup>`), `sort_by`
+  (`-field` for descending; numeric-aware, decimal comma accepted),
+  `option_label` template (`{title}`, `{slug}`, `{<field>}`) and `placeholder`.
+- Static select `options` accept `{value: label}` maps and
+  `[{value, label, group}]` entries besides the plain string list.
+- `select` fields inside `list` items are now rendered as selects (previously
+  they fell back to a text input).
+- `Station0\Service\FieldOptions` resolves select options; unit tests included.
+
+### Changed
+- A stored select value that is no longer among the options is shown as a
+  "(not found)" option instead of being silently replaced on save.
+- Selects backed by a data source or declaring `placeholder` start empty
+  instead of pre-selecting the first option.
+
 ## [0.7.1] - 2026-06-18
 
 ### Added
@@ -50,5 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.7.2]: https://github.com/lexislav/station0/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/lexislav/station0/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/lexislav/station0/compare/v0.6.1...v0.7.0

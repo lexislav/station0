@@ -10,6 +10,7 @@ use Slim\Csrf\Guard;
 use Slim\Views\Twig;
 use Station0\Service\BlockRegistry;
 use Station0\Service\ContentRepository;
+use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\Page;
 use Station0\Service\PageRenderer;
@@ -30,6 +31,7 @@ final class PageController
         private readonly TemplateBlocks $templateBlocks,
         private readonly string $adminPath,
         private readonly string $templatesPath = '',
+        private readonly FieldOptions $fieldOptions = new FieldOptions(),
     ) {}
 
     // ─── List ───
@@ -528,7 +530,7 @@ final class PageController
             $list[] = [
                 'type'   => $type,
                 'label'  => $schema['label'] ?? $type,
-                'fields' => $this->normalizeFields($schema['fields'] ?? []),
+                'fields' => $this->fieldOptions->resolveFields($this->normalizeFields($schema['fields'] ?? [])),
             ];
         }
         $map = array_combine(array_column($list, 'type'), $list);

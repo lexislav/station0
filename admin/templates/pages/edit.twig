@@ -542,6 +542,23 @@ const i18n = {{ {
 
     // ── List-item repeater ─────────────────────────────────────────────────
 
+    function escHtml(v) {
+        return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    // <option>s for a new list item's select — mirrors _select_options.twig.
+    function selectOptionsHtml(sf) {
+        const initial = sf.default != null ? String(sf.default) : '';
+        let html = sf.placeholder !== undefined ? `<option value="">${escHtml(sf.placeholder)}</option>` : '';
+        (sf.option_groups || [{ label: '', options: sf.options || [] }]).forEach(g => {
+            const opts = (g.options || []).map(o =>
+                `<option value="${escHtml(o.value)}"${String(o.value) === initial ? ' selected' : ''}>${escHtml(o.label)}</option>`
+            ).join('');
+            html += g.label ? `<optgroup label="${escHtml(g.label)}">${opts}</optgroup>` : opts;
+        });
+        return html;
+    }
+
     function createListItem(itemFields) {
         const div = document.createElement('div');
         div.className = 'list-item';
@@ -569,6 +586,9 @@ const i18n = {{ {
                       + ` accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">`
                       + `<p class="file-upload-name" style="margin:.35rem 0 0;font-size:.82rem;color:#5a6478;display:none;"></p>`
                       + `</div></div>`;
+            } else if (sf.type === 'select') {
+                html += `<div class="field"><label>${escHtml(sf.label ?? sf.name)}</label>`
+                      + `<select data-subfield="${escHtml(sf.name)}">${selectOptionsHtml(sf)}</select></div>`;
             } else {
                 html += `<div class="field"><label>${sf.label}</label>`
                       + `<input type="text" data-subfield="${sf.name}" value=""></div>`;

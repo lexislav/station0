@@ -36,6 +36,7 @@ use Station0\Middleware\RoleMiddleware;
 use Station0\Service\BlockRegistry;
 use Station0\Service\CollectionRepository;
 use Station0\Service\ContentRepository;
+use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
 use Station0\Service\MailerService;
@@ -336,6 +337,7 @@ final class Bootstrap
             $c->get(TemplateBlocks::class),
             $config['adminPath'],
             $config['paths']['templates'],
+            $c->get(FieldOptions::class),
         ));
 
         $container->set(UserController::class, fn ($c) => new UserController(
@@ -350,6 +352,10 @@ final class Bootstrap
 
         $container->set(CollectionRepository::class, fn () => new CollectionRepository(
             $config['paths']['content'] . '/collections'
+        ));
+
+        $container->set(FieldOptions::class, fn ($c) => new FieldOptions(
+            $c->get(CollectionRepository::class),
         ));
 
         $container->set(MediaService::class, fn ($c) => new MediaService(
@@ -369,6 +375,7 @@ final class Bootstrap
             $c->get(FileCache::class),
             $c->get(MediaService::class),
             $config['adminPath'],
+            $c->get(FieldOptions::class),
         ));
 
         $container->set(AssetController::class, fn ($c) => new AssetController(

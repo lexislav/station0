@@ -130,7 +130,7 @@ final class BlockRegistry
             'list'    => [],
             'boolean' => ($field['default'] ?? false) === true
                          || ($field['default'] ?? null) === 'true',
-            'select'  => $field['default'] ?? ($field['options'][0] ?? ''),
+            'select'  => FieldOptions::initialValue($field),
             default   => $field['default'] ?? '',
         };
     }
