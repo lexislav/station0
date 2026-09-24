@@ -60,8 +60,7 @@ final class CollectionRepository
     public function collections(): array
     {
         $result = [];
-        foreach (glob(rtrim($this->collectionsDir, '/') . '/*', GLOB_ONLYDIR) ?: [] as $dir) {
-            $name   = basename($dir);
+        foreach ($this->names() as $name) {
             $schema = $this->schema($name);
             $result[] = [
                 'name'   => $name,
@@ -71,6 +70,21 @@ final class CollectionRepository
             ];
         }
         return $result;
+    }
+
+    /**
+     * Collection names only — no item parsing (cheap enough for the admin nav).
+     *
+     * @return list<string>
+     */
+    public function names(): array
+    {
+        return array_map('basename', glob(rtrim($this->collectionsDir, '/') . '/*', GLOB_ONLYDIR) ?: []);
+    }
+
+    public function directory(): string
+    {
+        return $this->collectionsDir;
     }
 
     /**

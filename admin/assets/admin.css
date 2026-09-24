@@ -35,6 +35,8 @@ body.admin {
 }
 .sidebar-nav a:hover { background: var(--bg); }
 .sidebar-nav a.active { background: #eff6ff; color: var(--accent); font-weight: 500; }
+.nav-icon { display: inline-flex; width: 1.1em; margin-right: .45rem; justify-content: center; vertical-align: -.1em; }
+.nav-icon svg { width: 1em; height: 1em; }
 .sidebar-footer {
     margin-top: auto; padding: .75rem 1rem 1rem;
     border-top: 1px solid var(--border);

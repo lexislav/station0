@@ -1,9 +1,10 @@
 {% extends '@admin/layout.twig' %}
-{% block title %}{{ t.collections_title }} · {{ app.name }}{% endblock %}
+{% set heading = group is defined ? group.label : t.collections_title %}
+{% block title %}{{ heading }} · {{ app.name }}{% endblock %}
 
 {% block body %}
 <div class="toolbar">
-    <h1>{{ t.collections_title }}</h1>
+    <h1>{{ heading }}</h1>
 </div>
 
 {% if collections is empty %}
@@ -36,7 +37,9 @@
     </table>
 {% endif %}
 
+{% if group is not defined %}
 <p style="margin-top:2rem;" class="muted" style="font-size:.85rem;">
     {{ t.collections_hint }}
 </p>
+{% endif %}
 {% endblock %}

@@ -7,9 +7,11 @@
     <a class="btn" href="{{ app.adminPath }}/collections/{{ collectionName }}/new">{{ t.collections_new_item }}</a>
 </div>
 
+{% if backUrl is defined and backUrl %}
 <p style="margin-bottom:1.25rem;">
-    <a href="{{ app.adminPath }}/collections">← {{ t.collections_title }}</a>
+    <a href="{{ backUrl }}">← {{ backLabel ?: t.collections_title }}</a>
 </p>
+{% endif %}
 
 {% if items is empty %}
     <p class="muted">{{ t.collections_items_empty }}</p>

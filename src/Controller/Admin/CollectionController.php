@@ -8,6 +8,7 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Csrf\Guard;
 use Slim\Views\Twig;
+use Station0\Service\CollectionGroups;
 use Station0\Service\CollectionItem;
 use Station0\Service\CollectionRepository;
 use Station0\Service\FieldOptions;
@@ -25,14 +26,48 @@ final class CollectionController
         private readonly MediaService $media,
         private readonly string $adminPath,
         private readonly FieldOptions $fieldOptions = new FieldOptions(),
+        private readonly ?CollectionGroups $groups = null,
     ) {}
 
     // ─── Collection list ───
 
+    /** Generic "Collections" tab — only collections not assigned to a group. */
     public function index(Request $request, Response $response): Response
     {
+        $collections = array_values(array_filter(
+            $this->collections->collections(),
+            fn (array $col) => $this->groups?->groupOf($col['name']) === null,
+        ));
+
         return $this->twig->render($response, '@admin/collections/list.twig', [
-            'collections' => $this->collections->collections(),
+            'collections' => $collections,
+            'activeNav'   => 'collections',
+            'csrf'        => $this->csrfFields($request),
+        ]);
+    }
+
+    // ─── Group tab ───
+
+    public function group(Request $request, Response $response, array $args): Response
+    {
+        $group = $this->groups?->find((string) ($args['group'] ?? ''));
+        if ($group === null) {
+            return $response->withStatus(404);
+        }
+        if (!$this->groups->canAccess($group)) {
+            return $this->forbidden($response);
+        }
+
+        $names = array_column($group['collections'], 'name');
+        $collections = array_values(array_filter(
+            $this->collections->collections(),
+            fn (array $col) => in_array($col['name'], $names, true),
+        ));
+
+        return $this->twig->render($response, '@admin/collections/list.twig', [
+            'collections' => $collections,
+            'group'       => $group,
+            'activeNav'   => 'group-' . $group['id'],
             'csrf'        => $this->csrfFields($request),
         ]);
     }
@@ -42,10 +77,14 @@ final class CollectionController
     public function items(Request $request, Response $response, array $args): Response
     {
         $name   = (string) ($args['name'] ?? '');
+        if (!$this->canAccess($name)) {
+            return $this->forbidden($response);
+        }
         $schema = $this->collections->schema($name);
         $items  = $this->collections->items($name, true);
 
         return $this->twig->render($response, '@admin/collections/items.twig', [
+            ...$this->navContext($name),
             'collectionName'  => $name,
             'collectionLabel' => $schema['label'] ?? $this->labelFromName($name),
             'schema'          => $schema,
@@ -59,9 +98,13 @@ final class CollectionController
     public function createForm(Request $request, Response $response, array $args): Response
     {
         $name   = (string) ($args['name'] ?? '');
+        if (!$this->canAccess($name)) {
+            return $this->forbidden($response);
+        }
         $schema = $this->collections->schema($name);
 
         return $this->twig->render($response, '@admin/collections/form.twig', [
+            ...$this->navContext($name),
             'collectionName'  => $name,
             'collectionLabel' => $schema['label'] ?? $this->labelFromName($name),
             'schema'          => $schema,
@@ -76,6 +119,9 @@ final class CollectionController
     public function store(Request $request, Response $response, array $args): Response
     {
         $name = (string) ($args['name'] ?? '');
+        if (!$this->canAccess($name)) {
+            return $this->forbidden($response);
+        }
         $data = (array) $request->getParsedBody();
 
         $title = trim((string) ($data['title'] ?? ''));
@@ -119,6 +165,9 @@ final class CollectionController
     public function editForm(Request $request, Response $response, array $args): Response
     {
         $name = (string) ($args['name'] ?? '');
+        if (!$this->canAccess($name)) {
+            return $this->forbidden($response);
+        }
         $slug = (string) ($args['slug'] ?? '');
 
         $item = $this->collections->find($name, $slug);
@@ -129,6 +178,7 @@ final class CollectionController
         $schema = $this->collections->schema($name);
 
         return $this->twig->render($response, '@admin/collections/form.twig', [
+            ...$this->navContext($name),
             'collectionName'  => $name,
             'collectionLabel' => $schema['label'] ?? $this->labelFromName($name),
             'schema'          => $schema,
@@ -143,6 +193,9 @@ final class CollectionController
     public function update(Request $request, Response $response, array $args): Response
     {
         $name = (string) ($args['name'] ?? '');
+        if (!$this->canAccess($name)) {
+            return $this->forbidden($response);
+        }
         $slug = (string) ($args['slug'] ?? '');
 
         $item = $this->collections->find($name, $slug);
@@ -181,6 +234,9 @@ final class CollectionController
     public function delete(Request $request, Response $response, array $args): Response
     {
         $name = (string) ($args['name'] ?? '');
+        if (!$this->canAccess($name)) {
+            return $this->forbidden($response);
+        }
         $slug = (string) ($args['slug'] ?? '');
 
         $this->collections->delete($name, $slug);
@@ -200,6 +256,10 @@ final class CollectionController
         if ($collectionName === '' || $itemSlug === '') {
             $response->getBody()->write(json_encode(['error' => 'collectionName and itemSlug are required']));
             return $response->withStatus(422)->withHeader('Content-Type', 'application/json');
+        }
+        if (!$this->canAccess($collectionName)) {
+            $response->getBody()->write(json_encode(['error' => 'Forbidden']));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
         }
 
         $files = $request->getUploadedFiles();
@@ -221,6 +281,40 @@ final class CollectionController
     }
 
     // ─── Helpers ───
+
+    private function canAccess(string $name): bool
+    {
+        return $this->groups === null || $this->groups->canAccessCollection($name);
+    }
+
+    private function forbidden(Response $response): Response
+    {
+        $response->getBody()->write('Forbidden');
+        return $response->withStatus(403);
+    }
+
+    /**
+     * Which nav tab is active and where "back" leads, for a collection's pages.
+     * A single-collection group has no list page of its own — its tab links
+     * straight to the items, so there is nothing to go back to.
+     */
+    private function navContext(string $name): array
+    {
+        $group = $this->groups?->groupOf($name);
+        if ($group === null) {
+            return [
+                'activeNav' => 'collections',
+                'backUrl'   => $this->adminPath . '/collections',
+                'backLabel' => null,
+            ];
+        }
+        $single = count($group['collections']) === 1;
+        return [
+            'activeNav' => 'group-' . $group['id'],
+            'backUrl'   => $single ? null : $this->adminPath . '/collection-groups/' . $group['id'],
+            'backLabel' => $group['label'],
+        ];
+    }
 
     /** Extract schema-defined extra fields from POST data. */
     private function extractExtraFields(array $data, array $schema): array

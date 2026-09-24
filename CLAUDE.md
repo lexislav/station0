@@ -75,6 +75,7 @@ Markdown body (or YAML block list)
 | `CollectionItem` | `src/Service/CollectionItem.php` | Headless content item entity (no URL) |
 | `CollectionRepository` | `src/Service/CollectionRepository.php` | CRUD for Collections + items, reads `_collection.yaml` schemas |
 | `CollectionController` | `src/Controller/Admin/CollectionController.php` | Admin CRUD for collections and items |
+| `CollectionGroups` | `src/Service/CollectionGroups.php` | Groups collections into admin menu tabs (`group:` + `_groups.yaml`), role access |
 
 ## Local development
 
@@ -278,7 +279,8 @@ render_collection_item(item)             {# → HTML string (markdown or blocks,
 
 **Admin routes:**
 ```
-GET  /admin/collections                           → list all collections
+GET  /admin/collections                           → list ungrouped collections
+GET  /admin/collection-groups/{group}             → list collections of a group
 GET  /admin/collections/{name}                    → item list
 GET  /admin/collections/{name}/new                → create form
 POST /admin/collections/{name}/create             → store
@@ -287,6 +289,24 @@ POST /admin/collections/{name}/{slug}/update      → update
 POST /admin/collections/{name}/{slug}/delete      → delete
 POST /admin/upload-collection                     → asset upload
 ```
+
+### Collection groups
+
+`group: Shop` in `_collection.yaml` puts the collection into its own admin
+menu tab instead of the generic "Collections" tab (which only lists ungrouped
+collections and disappears when none are left). Group id =
+`Slug::sanitize(group)`. Optional central `collections/_groups.yaml`, keyed by
+id, adds `label`, `icon` (text/emoji or inline `<svg>`), `roles` (list of role
+names from `config/roles.php`; admin always passes) and tab order (declaration
+order, inline-only groups after, by label). Empty groups get no tab.
+
+- `CollectionGroups` builds the groups; its role checker closure is wired in
+  `Bootstrap` from `Auth` + `$roles` (null = unrestricted, used in tests).
+- `collection_groups()` Twig function feeds `layout.twig`; each group gets a
+  `url` — straight to `/collections/{name}` for single-collection groups.
+- `CollectionController` returns 403 on every `{name}` action (incl. upload)
+  when the collection's group denies the user, and passes
+  `activeNav` (`group-{id}` / `collections`) + `backUrl`/`backLabel` to views.
 
 ## Common gotchas
 
