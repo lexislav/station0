@@ -93,6 +93,7 @@ return [
     'block_file_clear'          => '× Clear',
     'block_list_item_remove'    => '✕ Remove',
     'block_list_item_add'       => '+ Add item',
+    'select_missing_option'     => 'not found',
     'block_gallery_placeholder' => 'Click or drag images here',
     'block_gallery_upload'      => '+ Upload images',
     'block_files_placeholder'   => 'Click or drag files here',

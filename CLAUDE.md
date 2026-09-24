@@ -114,6 +114,25 @@ fields:
 
 Supported field types: `text`, `textarea`, `image`, `number`, `select`, `boolean`, `list`.
 
+### Select options (`FieldOptions`)
+
+`select` options are resolved by `Station0\Service\FieldOptions::resolveFields()`
+(called from `PageController::blockTypeData()` and `CollectionController`'s form
+actions, recursing into list `item_fields`). Each select gets `options`
+(`[{value,label,group}]`) and `option_groups` (`[{label, options}]`); the admin
+renders them through `admin/templates/_select_options.twig` (server) and
+`selectOptionsHtml()` in `pages/edit.twig` (new list items, JS).
+
+- Static: `options: [a, b]` | `{a: A}` | `[{value, label, group}]`.
+- Data source: `options_from: collection:<name>` + optional `group_by`,
+  `sort_by` (`-field` = desc, numeric-aware incl. decimal comma),
+  `option_label` (`{title}`, `{slug}`, `{<extra field>}`), `placeholder`.
+  Value stored = item slug. Data-source selects get an empty `—` choice by default.
+- `FieldOptions::initialValue()` is the select default used by
+  `BlockRegistry::fieldDefault()`: explicit `default`, else `''` for
+  data-source/placeholder selects, else the first static option.
+- A stored value missing from the options is kept as a "(not found)" option.
+
 ## Per-template block restrictions
 
 A template can restrict which block types its pages may use, and pre-seed a new

@@ -78,12 +78,10 @@
                     <div class="field">
                         <label>{{ field.label }}</label>
                         <select data-field="{{ field.name }}">
-                            {% for opt in field.options %}
-                                <option value="{{ opt }}"
-                                    {% if attribute(block, field.name)|default(field.default|default('')) == opt %}
-                                        selected
-                                    {% endif %}>{{ opt }}</option>
-                            {% endfor %}
+                            {% include '@admin/_select_options.twig' with {
+                                field: field,
+                                current: attribute(block, field.name) ?? field.default ?? ''
+                            } %}
                         </select>
                     </div>
 
@@ -144,6 +142,14 @@
                                                         {% if _fname %}📎 {{ _fname }}{% endif %}
                                                     </p>
                                                 </div>
+                                            {% elseif subfield.type == 'select' %}
+                                                <label>{{ subfield.label }}</label>
+                                                <select data-subfield="{{ subfield.name }}">
+                                                    {% include '@admin/_select_options.twig' with {
+                                                        field: subfield,
+                                                        current: attribute(item, subfield.name) ?? ''
+                                                    } %}
+                                                </select>
                                             {% else %}
                                                 <label>{{ subfield.label }}</label>
                                                 <input type="text" data-subfield="{{ subfield.name }}"

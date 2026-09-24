@@ -135,9 +135,7 @@
                 <div class="field">
                     <label for="f-{{ fname }}">{{ flabel }}</label>
                     <select id="f-{{ fname }}" name="{{ fname }}">
-                        {% for opt in field.options ?? [] %}
-                            <option value="{{ opt }}" {{ fvalue == opt ? 'selected' : '' }}>{{ opt }}</option>
-                        {% endfor %}
+                        {% include '@admin/_select_options.twig' with { field: field, current: fvalue } %}
                     </select>
                 </div>
 

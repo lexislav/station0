@@ -10,6 +10,7 @@ use Slim\Csrf\Guard;
 use Slim\Views\Twig;
 use Station0\Service\CollectionItem;
 use Station0\Service\CollectionRepository;
+use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
 use Station0\Support\Slug;
@@ -23,6 +24,7 @@ final class CollectionController
         private readonly FileCache $cache,
         private readonly MediaService $media,
         private readonly string $adminPath,
+        private readonly FieldOptions $fieldOptions = new FieldOptions(),
     ) {}
 
     // ─── Collection list ───
@@ -63,7 +65,7 @@ final class CollectionController
             'collectionName'  => $name,
             'collectionLabel' => $schema['label'] ?? $this->labelFromName($name),
             'schema'          => $schema,
-            'fields'          => $this->normalizeFields($schema['fields'] ?? []),
+            'fields'          => $this->fieldOptions->resolveFields($this->normalizeFields($schema['fields'] ?? [])),
             'item'            => null,
             'csrf'            => $this->csrfFields($request),
         ]);
@@ -130,7 +132,7 @@ final class CollectionController
             'collectionName'  => $name,
             'collectionLabel' => $schema['label'] ?? $this->labelFromName($name),
             'schema'          => $schema,
-            'fields'          => $this->normalizeFields($schema['fields'] ?? []),
+            'fields'          => $this->fieldOptions->resolveFields($this->normalizeFields($schema['fields'] ?? [])),
             'item'            => $item,
             'csrf'            => $this->csrfFields($request),
         ]);

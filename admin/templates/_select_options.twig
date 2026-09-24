@@ -1,0 +1,23 @@
+{#
+  <option> list for a select field resolved by Station0\Service\FieldOptions.
+  Params:
+    field   — normalized field (options, option_groups, placeholder?)
+    current — currently stored value (string)
+#}
+{% set current = current is null ? '' : current ~ '' %}
+{% set groups  = field.option_groups ?? [{ label: '', options: field.options ?? [] }] %}
+{% set values  = (field.options ?? [])|map(o => o.value ~ '') %}
+{% if field.placeholder is defined %}
+    <option value="">{{ field.placeholder }}</option>
+{% endif %}
+{% if current != '' and current not in values %}
+    {# Keep a value whose source item vanished instead of silently dropping it. #}
+    <option value="{{ current }}" selected>{{ current }} ({{ t.select_missing_option }})</option>
+{% endif %}
+{% for group in groups %}
+    {% if group.label != '' %}<optgroup label="{{ group.label }}">{% endif %}
+    {% for opt in group.options %}
+        <option value="{{ opt.value }}" {{ opt.value ~ '' == current ? 'selected' }}>{{ opt.label }}</option>
+    {% endfor %}
+    {% if group.label != '' %}</optgroup>{% endif %}
+{% endfor %}
