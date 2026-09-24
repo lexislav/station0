@@ -294,7 +294,8 @@ final class CollectionController
     }
 
     /**
-     * Which nav tab is active and where "back" leads, for a collection's pages.
+     * Which nav tab is active, its label (for the page title) and where "back"
+     * leads, for a collection's pages.
      * A single-collection group has no list page of its own — its tab links
      * straight to the items, so there is nothing to go back to.
      */
@@ -303,16 +304,18 @@ final class CollectionController
         $group = $this->groups?->groupOf($name);
         if ($group === null) {
             return [
-                'activeNav' => 'collections',
-                'backUrl'   => $this->adminPath . '/collections',
-                'backLabel' => null,
+                'activeNav'    => 'collections',
+                'sectionLabel' => null,
+                'backUrl'      => $this->adminPath . '/collections',
+                'backLabel'    => null,
             ];
         }
         $single = count($group['collections']) === 1;
         return [
-            'activeNav' => 'group-' . $group['id'],
-            'backUrl'   => $single ? null : $this->adminPath . '/collection-groups/' . $group['id'],
-            'backLabel' => $group['label'],
+            'activeNav'    => 'group-' . $group['id'],
+            'sectionLabel' => $group['label'],
+            'backUrl'      => $single ? null : $this->adminPath . '/collection-groups/' . $group['id'],
+            'backLabel'    => $group['label'],
         ];
     }
 
