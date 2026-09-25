@@ -8,10 +8,14 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\UploadedFileInterface;
 use Station0\Service\MediaService;
+use Station0\Service\ThumbService;
 
 final class UploadController
 {
-    public function __construct(private readonly MediaService $media) {}
+    public function __construct(
+        private readonly MediaService $media,
+        private readonly ?ThumbService $thumbs = null,
+    ) {}
 
     public function store(Request $request, Response $response): Response
     {
@@ -44,6 +48,9 @@ final class UploadController
             return $this->json($response->withStatus($status), ['error' => $msg]);
         }
 
+        // `thumb`: small preview for the editor (same as `url` when not resizable).
+        $result['thumb'] = $this->thumbs?->url($result['url'], ThumbService::ADMIN_PREVIEW, ThumbService::ADMIN_PREVIEW, 'cover')
+            ?? $result['url'];
         return $this->json($response, $result);
     }
 

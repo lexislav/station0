@@ -106,7 +106,7 @@
                     </div>
                     {% if fvalue and not ('://' in fvalue) and not fvalue starts with '/' %}
                         <img id="prev-{{ fname }}"
-                             src="/media/_collections/{{ collectionName }}/{{ item.slug }}/{{ fvalue }}"
+                             src="{{ ('/media/_collections/' ~ collectionName ~ '/' ~ item.slug ~ '/' ~ fvalue)|thumb(160, 160, 'cover') }}"
                              class="img-preview"
                              style="display:block;"
                              onerror="this.style.display='none'">
@@ -222,7 +222,7 @@
                 if (data.filename) {
                     activeTarget.value = data.filename;
                     if (activePreview) {
-                        activePreview.src = data.url;
+                        activePreview.src = data.thumb || data.url;
                         activePreview.style.display = 'block';
                     }
                 } else {

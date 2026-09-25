@@ -44,6 +44,7 @@ use Station0\Service\MailerService;
 use Station0\Service\PageFields;
 use Station0\Service\PageRenderer;
 use Station0\Service\TemplateBlocks;
+use Station0\Service\ThumbService;
 use Station0\Service\UserRepository;
 
 final class Bootstrap
@@ -243,6 +244,19 @@ final class Bootstrap
                     }, $c->get(CollectionGroups::class)->visible());
                 }
             ));
+            // ── Thumbnails ────────────────────────────────────────────────────
+            // {{ image.src|thumb(600) }}, |thumb(400, 400, 'cover'), |thumb(600, format='webp'),
+            // srcset="{{ image.src|thumb_srcset([400, 800, 1200]) }}"
+            $twig->getEnvironment()->addFilter(new \Twig\TwigFilter(
+                'thumb',
+                fn (?string $src, int $width, int $height = 0, string $fit = 'contain', ?string $format = null)
+                    => $c->get(ThumbService::class)->url($src, $width, $height, $fit, $format)
+            ));
+            $twig->getEnvironment()->addFilter(new \Twig\TwigFilter(
+                'thumb_srcset',
+                fn (?string $src, array $widths, ?string $format = null)
+                    => $c->get(ThumbService::class)->srcset($src, $widths, $format)
+            ));
             // ── Collections Twig functions ────────────────────────────────────
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'collection',
@@ -334,6 +348,8 @@ final class Bootstrap
             $c->get(BlockRegistry::class),
             $c->get(FileCache::class),
             $c->get(MediaService::class),
+            $c->get(ThumbService::class),
+            (int) ($config['thumbs']['markdown'] ?? PageRenderer::MARKDOWN_THUMB_WIDTH),
         ));
 
         $container->set(UserRepository::class, fn ($c) => new UserRepository(
@@ -429,6 +445,7 @@ final class Bootstrap
 
         $container->set(UploadController::class, fn ($c) => new UploadController(
             $c->get(MediaService::class),
+            $c->get(ThumbService::class),
         ));
 
         $container->set(CollectionController::class, fn ($c) => new CollectionController(
@@ -440,10 +457,14 @@ final class Bootstrap
             $config['adminPath'],
             $c->get(FieldOptions::class),
             $c->get(CollectionGroups::class),
+            $c->get(ThumbService::class),
         ));
+
+        $container->set(ThumbService::class, fn ($c) => self::thumbService($config, $c->get(MediaService::class)));
 
         $container->set(AssetController::class, fn ($c) => new AssetController(
             $c->get(MediaService::class),
+            $c->get(ThumbService::class),
         ));
 
         $container->set(SettingsController::class, fn ($c) => new SettingsController(
@@ -534,9 +555,40 @@ final class Bootstrap
 
         // Page-local assets — must precede the page catch-all below.
         $app->get('/media/{path:.+}', [AssetController::class, 'show'])->setName('media.show');
+        $app->get('/thumb/{spec}/{sig}/{path:.+}', [AssetController::class, 'thumb'])->setName('media.thumb');
 
         // Catch-all for public pages — multi-segment paths like /about/team (registered last)
         $app->get('/{slug:.+}', [PageController::class, 'show'])->setName('page.show');
+    }
+
+    /**
+     * Thumbnail service from the optional `thumbs` config section:
+     *   secret   — signing key (default: generated once into writable/thumbs.key,
+     *              outside cache/ so clearing the cache keeps rendered URLs valid)
+     *   static   — true: write thumbnails under public/thumb/ for the web server
+     *   format   — 'webp': convert thumbnails to WebP by default
+     *   markdown — max width of markdown images in text blocks (0 = off)
+     * Shared with bin/console.
+     */
+    public static function thumbService(array $config, MediaService $media): ThumbService
+    {
+        $thumbs = $config['thumbs'] ?? [];
+        $public = self::publicDir($config);
+        return new ThumbService(
+            $media,
+            $config['paths']['cache'],
+            (string) ($thumbs['secret']
+                ?? ThumbService::loadOrCreateKey(dirname($config['paths']['cache']) . '/thumbs.key')),
+            !empty($thumbs['static']) ? $public : null,
+            isset($thumbs['format']) ? (string) $thumbs['format'] : null,
+        );
+    }
+
+    /** Web root used for static thumbnails (also by `thumbs:clear`). */
+    public static function publicDir(array $config): string
+    {
+        return $config['paths']['public']
+            ?? rtrim($config['paths']['projectRoot'] ?? dirname($config['paths']['cache'], 2), '/') . '/public';
     }
 
     private static function findProjectRoot(string $packageRoot): string

@@ -32,11 +32,16 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class PageRenderer
 {
+    /** Default max CSS width of markdown images (config `thumbs.markdown`, 0 = off). */
+    public const MARKDOWN_THUMB_WIDTH = 1200;
+
     public function __construct(
         private readonly MarkdownConverter $converter,
         private readonly BlockRegistry $blocks,
         private readonly FileCache $cache,
         private readonly MediaService $media,
+        private readonly ?ThumbService $thumbs = null,
+        private readonly int $markdownThumbWidth = self::MARKDOWN_THUMB_WIDTH,
     ) {}
 
     public function render(Page $page, int $sourceMtime): string
@@ -86,7 +91,7 @@ final class PageRenderer
         if ($type === 'text') {
             $body = (string) ($block['body'] ?? '');
             $body = $this->rewriteMarkdownAssets($body, $pageUrlPath);
-            return $this->converter->convert($body)->getContent();
+            return $this->thumbnailImages($this->converter->convert($body)->getContent());
         }
 
         if ($this->blocks->exists($type)) {
@@ -128,5 +133,37 @@ final class PageRenderer
             $resolved = $this->media->resolveRef($m[2], $pageUrlPath);
             return $m[1] . '(' . $resolved . $m[3] . ')';
         }, $markdown);
+    }
+
+    /**
+     * Point `<img>` tags of converted markdown at thumbnails: `src` capped at
+     * the configured width, plus a 2x candidate for high-density screens and
+     * lazy loading. Images the thumbnailer leaves alone (external, SVG, already
+     * small enough) are not touched.
+     */
+    private function thumbnailImages(string $html): string
+    {
+        if ($this->thumbs === null || $this->markdownThumbWidth <= 0 || !str_contains($html, '<img')) {
+            return $html;
+        }
+        $width = $this->markdownThumbWidth;
+        return (string) preg_replace_callback('/<img\s[^>]*>/i', function (array $m) use ($width) {
+            $tag = $m[0];
+            if (!preg_match('/\ssrc="([^"]*)"/i', $tag, $src)) {
+                return $tag;
+            }
+            $original = html_entity_decode($src[1], ENT_QUOTES | ENT_HTML5);
+            $x1 = $this->thumbs->url($original, $width);
+            if ($x1 === $original) {
+                return $tag;
+            }
+            $x2  = $this->thumbs->url($original, $width * 2);
+            $esc = fn (string $v) => htmlspecialchars($v, ENT_QUOTES | ENT_HTML5);
+            $attrs = ' src="' . $esc($x1) . '" srcset="' . $esc($x1) . ' 1x, ' . $esc($x2) . ' 2x"';
+            if (!preg_match('/\sloading=/i', $tag)) {
+                $attrs .= ' loading="lazy"';
+            }
+            return (string) preg_replace_callback('/\ssrc="[^"]*"/i', fn () => $attrs, $tag, 1);
+        }, $html);
     }
 }

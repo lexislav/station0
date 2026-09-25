@@ -102,6 +102,58 @@ php vendor/bin/console assets:relink --dry-run # preview
 Public asset URLs follow the page URL: `/media/{page-path}/{filename}`.
 The root page uses `/media/~/{filename}`.
 
+### Thumbnails
+
+Resize images in templates with the `thumb` filter. It takes the resolved
+`/media/...` URL and returns a URL to a smaller copy; the copy is generated with
+GD on first request and cached in `writable/cache/thumbs/`.
+
+```twig
+<img src="{{ image.src|thumb(600) }}"                         {# max width 600 px #}
+     srcset="{{ image.src|thumb_srcset([400, 800, 1200]) }}"
+     sizes="(min-width: 900px) 33vw, 100vw" loading="lazy" alt="">
+{{ hero|thumb(0, 400) }}                                       {# max height 400 px #}
+{{ photo|thumb(300, 300) }}                                    {# fit inside the box #}
+{{ photo|thumb(300, 300, 'cover') }}                           {# crop to fill the box #}
+{{ photo|thumb(600, format='webp') }}                          {# convert to WebP #}
+```
+
+- Images are never upscaled. External URLs, SVG, GIF, documents, missing files
+  and sizes that are not smaller than the original come back unchanged, so the
+  filter is safe to apply everywhere. Without `ext-gd` it returns the original.
+- JPEG, PNG (with transparency) and WebP keep their format. EXIF rotation of
+  phone photos is applied (needs `ext-exif`); EXIF metadata such as GPS is
+  dropped from the thumbnail.
+- URLs are signed (`/thumb/600x0/{signature}/{page-path}/{file}`) so nobody can
+  request arbitrary sizes. The signing key is created in `writable/thumbs.key`
+  (override with `'thumbs' => ['secret' => ...]` in `site/config.php`).
+  Replacing the source image changes the URL.
+- Markdown images in text blocks are thumbnailed automatically: `src` is capped
+  at 1200 px with a 2x candidate in `srcset`, plus `loading="lazy"`.
+- The admin editor shows 160 px previews instead of the originals.
+
+Optional settings in `site/config.php`:
+
+```php
+'thumbs' => [
+    'format'   => 'webp', // convert all thumbnails to WebP ('original' per call keeps the format)
+    'markdown' => 1200,   // max width of markdown images; 0 = leave them alone
+    'static'   => true,   // write thumbnails to public/thumb/ so the web server serves them
+    'secret'   => '…',    // signing key; default: generated into writable/thumbs.key
+],
+```
+
+With `static`, each thumbnail is written to the path of its own URL under
+`public/thumb/`, so after the first request the web server sends the file
+without starting PHP (the stock `.htaccess`, nginx `try_files $uri …` and
+`php -S … public/index.php` all serve existing files first). A copy stays
+reachable after its source image is deleted until `thumbs:clear`.
+
+```bash
+php vendor/bin/console thumbs:warm   # pre-generate thumbnails of all published pages (server must run)
+php vendor/bin/console thumbs:clear  # delete generated thumbnails
+```
+
 ## Per-template block restrictions
 
 A template can restrict which block types its pages may use, and pre-seed a new

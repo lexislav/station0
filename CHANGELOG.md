@@ -5,6 +5,28 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.8] - 2026-09-25
+
+### Added
+- **Image thumbnails.** New Twig filters `|thumb(width, height = 0, fit)` and
+  `|thumb_srcset([widths])` return signed `/thumb/...` URLs; the resized copy
+  is generated with GD on first request and cached in `writable/cache/thumbs/`.
+  Never upscales; SVG, GIF, external and non-media URLs pass through unchanged.
+  `fit: 'cover'` crops to fill the box. EXIF rotation is applied (`ext-exif`).
+- WebP output: `|thumb(600, format='webp')`, or `thumbs.format: 'webp'` in
+  `site/config.php` for all thumbnails.
+- Static thumbnails: with `thumbs.static: true` they are written to
+  `public/thumb/…` (their own URL path), so the web server serves them without
+  PHP after the first request.
+- Console commands `thumbs:warm [baseUrl]` and `thumbs:clear`.
+- The admin editor shows small previews in image lists and collection forms
+  instead of the full-size originals; upload responses carry a `thumb` URL.
+
+### Changed
+- Markdown images in text blocks are served as thumbnails (max 1200 px wide,
+  2x `srcset`, `loading="lazy"`). Set `thumbs.markdown` to another width, or
+  `0` to keep the originals.
+
 ## [0.7.7] - 2026-09-25
 
 ### Fixed
@@ -155,6 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.7.8]: https://github.com/lexislav/station0/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/lexislav/station0/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/lexislav/station0/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/lexislav/station0/compare/v0.7.4...v0.7.5
