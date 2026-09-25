@@ -117,4 +117,61 @@ final class TemplateBlocksTest extends TestCase
         self::assertSame(['text'], $tb->allowedBlocks('a'));
         self::assertSame(['gallery'], $tb->allowedBlocks('b'));
     }
+
+    // ─── Page fields / builder switch ───
+
+    public function testFieldsAreNormalizedFromManifest(): void
+    {
+        $this->fx->addTemplate('product', <<<YAML
+            fields:
+              subtitle:
+                type: text
+                label: Subtitle
+              features:
+                type: list
+                item:
+                  title:
+                    type: text
+            YAML);
+
+        $fields = $this->make()->fields('product');
+
+        self::assertSame(['subtitle', 'features'], array_column($fields, 'name'));
+        self::assertSame('features', $fields[1]['name']);
+        self::assertSame('title', $fields[1]['item_fields'][0]['name']);
+        self::assertArrayNotHasKey('item', $fields[1]);
+    }
+
+    public function testReservedInvalidAndDuplicateFieldNamesAreDropped(): void
+    {
+        $this->fx->addTemplate('product', <<<YAML
+            fields:
+              Title: { type: text }
+              published: { type: boolean }
+              body: { type: textarea }
+              "9lives": { type: text }
+              "has space": { type: text }
+              price: { type: number }
+              Price: { type: text }
+            YAML);
+
+        self::assertSame(['price'], array_column($this->make()->fields('product'), 'name'));
+    }
+
+    public function testNoManifestMeansNoFieldsAndBuilderOn(): void
+    {
+        $this->fx->addTemplate('page');
+
+        self::assertSame([], $this->make()->fields('page'));
+        self::assertTrue($this->make()->builderEnabled('page'));
+    }
+
+    public function testBlocksFalseTurnsBuilderOff(): void
+    {
+        $this->fx->addTemplate('fields-only', "blocks: false\nfields:\n  price:\n    type: number\n");
+        $this->fx->addTemplate('mixed', "blocks: true\nfields:\n  price:\n    type: number\n");
+
+        self::assertFalse($this->make()->builderEnabled('fields-only'));
+        self::assertTrue($this->make()->builderEnabled('mixed'));
+    }
 }

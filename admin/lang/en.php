@@ -81,6 +81,7 @@ return [
     'page_field_publish_date'     => 'Publish date',
     'page_field_publish_date_hint' => '(future date = scheduled)',
     'page_add_block'              => '+ Add block:',
+    'page_fields'                 => 'Page fields',
     'page_cancel'                 => 'Cancel',
     'page_save'                   => 'Save',
 

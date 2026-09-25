@@ -94,6 +94,7 @@ return [
     'page_field_publish_date'      => 'Datum publikování',
     'page_field_publish_date_hint' => '(budoucí datum = plánováno)',
     'page_add_block'               => '+ Přidat blok:',
+    'page_fields'                  => 'Pole stránky',
     'page_cancel'                  => 'Zrušit',
     'page_save'                    => 'Uložit',
 

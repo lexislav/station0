@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Station0\Service;
 
+use Station0\Support\FieldSchema;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -14,8 +15,13 @@ use Symfony\Component\Yaml\Yaml;
  *   site/templates/<template>.twig         ← the template
  *   site/templates/<template>.blocks.yaml  ← its block manifest (optional)
  *
- * Manifest format (both keys optional):
+ * Manifest format (all keys optional):
  *
+ *   fields:               # page-level fields (same schema format as blocks)
+ *     subtitle:
+ *       type: text
+ *       label: Subtitle
+ *   blocks: false         # hide the page builder (fields-only template)
  *   allowedBlocks:        # restrict the "+ Add block" palette to these types
  *     - text
  *     - gallery
@@ -28,7 +34,16 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class TemplateBlocks
 {
-    /** @var array<string, array{allowed: list<string>, default: list<string>}> */
+    /**
+     * Front-matter keys owned by Page itself (plus `body`). A page field may not
+     * use one of these names — it would clobber the page's own metadata.
+     */
+    public const RESERVED_FIELD_NAMES = [
+        'title', 'metatitle', 'published', 'publishedat', 'author', 'updated',
+        'template', 'sort', 'allowedchildtemplates', 'body', 'slug',
+    ];
+
+    /** @var array<string, array{allowed: list<string>, default: list<string>, fields: list<array<string, mixed>>, builder: bool}> */
     private array $resolved = [];
 
     public function __construct(
@@ -67,7 +82,31 @@ final class TemplateBlocks
         return $this->resolve($template)['default'];
     }
 
-    /** @return array{allowed: list<string>, default: list<string>} */
+    /**
+     * Page-level fields declared by the template's manifest, normalized to
+     * list form (`name` injected, list `item:` → `item_fields:`).
+     *
+     * Dropped silently: names that are not valid front-matter keys, names
+     * reserved for Page metadata ({@see RESERVED_FIELD_NAMES}), and
+     * case-insensitive duplicates (front-matter keys are case-insensitive).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function fields(string $template): array
+    {
+        return $this->resolve($template)['fields'];
+    }
+
+    /**
+     * Whether pages of $template use the block page builder. `blocks: false`
+     * in the manifest turns it off (a fields-only template); default true.
+     */
+    public function builderEnabled(string $template): bool
+    {
+        return $this->resolve($template)['builder'];
+    }
+
+    /** @return array{allowed: list<string>, default: list<string>, fields: list<array<string, mixed>>, builder: bool} */
     private function resolve(string $template): array
     {
         if (isset($this->resolved[$template])) {
@@ -99,7 +138,27 @@ final class TemplateBlocks
             $default[] = $name;
         }
 
-        return $this->resolved[$template] = ['allowed' => $allowed, 'default' => $default];
+        $rawFields = $manifest['fields'] ?? null;
+        $fields    = [];
+        $seen      = [];
+        foreach (FieldSchema::normalize(is_array($rawFields) ? $rawFields : []) as $field) {
+            $name = (string) $field['name'];
+            $key  = strtolower($name);
+            if (!preg_match('/^[A-Za-z][A-Za-z0-9_-]*$/', $name)
+                || in_array($key, self::RESERVED_FIELD_NAMES, true)
+                || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $fields[]   = $field;
+        }
+
+        return $this->resolved[$template] = [
+            'allowed' => $allowed,
+            'default' => $default,
+            'fields'  => $fields,
+            'builder' => ($manifest['blocks'] ?? true) !== false,
+        ];
     }
 
     /** @return array<string, mixed> */

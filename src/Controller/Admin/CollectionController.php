@@ -14,6 +14,7 @@ use Station0\Service\CollectionRepository;
 use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
+use Station0\Support\FieldSchema;
 use Station0\Support\Slug;
 
 final class CollectionController
@@ -108,7 +109,7 @@ final class CollectionController
             'collectionName'  => $name,
             'collectionLabel' => $schema['label'] ?? $this->labelFromName($name),
             'schema'          => $schema,
-            'fields'          => $this->fieldOptions->resolveFields($this->normalizeFields($schema['fields'] ?? [])),
+            'fields'          => $this->fieldOptions->resolveFields(FieldSchema::normalize($schema['fields'] ?? [])),
             'item'            => null,
             'csrf'            => $this->csrfFields($request),
         ]);
@@ -182,7 +183,7 @@ final class CollectionController
             'collectionName'  => $name,
             'collectionLabel' => $schema['label'] ?? $this->labelFromName($name),
             'schema'          => $schema,
-            'fields'          => $this->fieldOptions->resolveFields($this->normalizeFields($schema['fields'] ?? [])),
+            'fields'          => $this->fieldOptions->resolveFields(FieldSchema::normalize($schema['fields'] ?? [])),
             'item'            => $item,
             'csrf'            => $this->csrfFields($request),
         ]);
@@ -323,7 +324,7 @@ final class CollectionController
     private function extractExtraFields(array $data, array $schema): array
     {
         $extra  = [];
-        $fields = $this->normalizeFields($schema['fields'] ?? []);
+        $fields = FieldSchema::normalize($schema['fields'] ?? []);
 
         if (empty($fields)) {
             // Free-form: no schema — nothing extra to extract (body-only mode).
@@ -346,23 +347,6 @@ final class CollectionController
         }
 
         return $extra;
-    }
-
-    /**
-     * Convert dict-form schema fields to list form (mirrors PageController).
-     *
-     * @param array<string, mixed> $raw
-     * @return list<array<string, mixed>>
-     */
-    private function normalizeFields(array $raw): array
-    {
-        $out = [];
-        foreach ($raw as $name => $def) {
-            $field         = is_array($def) ? $def : [];
-            $field['name'] = is_string($name) ? $name : (string) ($field['name'] ?? '');
-            $out[]         = $field;
-        }
-        return $out;
     }
 
     private function labelFromName(string $name): string

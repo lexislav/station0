@@ -41,6 +41,7 @@ use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
 use Station0\Service\MailerService;
+use Station0\Service\PageFields;
 use Station0\Service\PageRenderer;
 use Station0\Service\TemplateBlocks;
 use Station0\Service\UserRepository;
@@ -168,6 +169,12 @@ final class Bootstrap
                         fn (\Station0\Service\Page $p) => $p->depth() === 1
                     ));
                 }
+            ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'page_fields',
+                // Typed, asset-resolved template fields of any page (e.g. a child
+                // in a listing); the current page's are also passed as `fields`.
+                fn (\Station0\Service\Page $page) => $c->get(PageFields::class)->resolved($page)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'child_pages',
@@ -298,6 +305,11 @@ final class Bootstrap
             $c->get(BlockRegistry::class),
         ));
 
+        $container->set(PageFields::class, fn ($c) => new PageFields(
+            $c->get(TemplateBlocks::class),
+            $c->get(MediaService::class),
+        ));
+
         $container->set(PageRenderer::class, fn ($c) => new PageRenderer(
             $c->get(MarkdownConverter::class),
             $c->get(BlockRegistry::class),
@@ -357,6 +369,7 @@ final class Bootstrap
             $c->get(BlockRegistry::class),
             $c->get(PageRenderer::class),
             $c->get(TemplateBlocks::class),
+            $c->get(PageFields::class),
             $config['adminPath'],
             $config['paths']['templates'],
             $c->get(FieldOptions::class),

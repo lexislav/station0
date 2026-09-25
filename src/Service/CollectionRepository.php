@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Station0\Service;
 
+use Station0\Support\FrontMatter;
 use Station0\Support\Slug;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
@@ -327,37 +328,9 @@ final class CollectionRepository
             return $this->parsedCache[$filePath];
         }
         $raw    = @file_get_contents($filePath);
-        $result = $raw !== false ? $this->parseFrontMatter($raw) : [[], ''];
+        $result = $raw !== false ? FrontMatter::parse($raw) : [[], ''];
         $this->parsedCache[$filePath] = $result;
         return $result;
-    }
-
-    private function parseFrontMatter(string $raw): array
-    {
-        $raw   = str_replace("\r\n", "\n", $raw);
-        $lines = explode("\n", $raw);
-        $meta  = [];
-        $sepIdx = null;
-
-        foreach ($lines as $i => $line) {
-            if (rtrim($line) === '---') {
-                $sepIdx = $i;
-                break;
-            }
-        }
-
-        if ($sepIdx !== null) {
-            foreach (array_slice($lines, 0, $sepIdx) as $line) {
-                if (preg_match('/^([A-Za-z][A-Za-z0-9_-]*):\s*(.*)$/', $line, $m)) {
-                    $meta[strtolower($m[1])] = rtrim($m[2]);
-                }
-            }
-            $body = ltrim(implode("\n", array_slice($lines, $sepIdx + 1)), "\n ");
-        } else {
-            $body = $raw;
-        }
-
-        return [$meta, $body];
     }
 
     // ─────────────────── Serialization ───────────────────
@@ -374,14 +347,7 @@ final class CollectionRepository
             $fields[ucfirst($k)] = $v;
         }
 
-        $lines = [];
-        foreach ($fields as $key => $val) {
-            if ($val !== null && $val !== '') {
-                $lines[] = "{$key}: {$val}";
-            }
-        }
-
-        return implode("\n", $lines) . "\n---\n\n" . rtrim($item->body) . "\n";
+        return FrontMatter::serialize($fields, $item->body);
     }
 
     // ─────────────────── Helpers ───────────────────

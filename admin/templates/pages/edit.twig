@@ -53,6 +53,25 @@
 
 .block-fields { padding: .75rem; display: flex; flex-direction: column; gap: .6rem; }
 
+/* ── Page fields (template-level, see <template>.blocks.yaml `fields:`) ── */
+.page-fields {
+    margin: 1.5rem 0 0;
+    padding: 0;
+    border: 1px solid #dde1e7;
+    border-radius: 6px;
+    background: #fff;
+}
+.page-fields > legend {
+    margin-left: .6rem;
+    padding: 0 .35rem;
+    font-size: .8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #5a6478;
+    letter-spacing: .04em;
+}
+.color-field { display: flex; gap: .5rem; align-items: center; }
+
 .block-add-bar {
     display: flex;
     align-items: center;
@@ -323,9 +342,23 @@
         </div>
     </div>
 
+    {# ── Page fields – declared by the template's manifest (`fields:`) ── #}
+    {% if pageFields is not empty %}
+    <fieldset class="page-fields" id="page-fields">
+        <legend>{{ t.page_fields }}</legend>
+        <div class="block-fields">
+            {% include '@admin/pages/_fields.twig' with {fields: pageFields, values: fieldValues} %}
+        </div>
+    </fieldset>
+    {# Serialised field values (JSON) – filled by JS before submit #}
+    <input type="hidden" name="fields" id="fields-field">
+    {% endif %}
+
     {# ════════════════════════════════════════════════════════════════════
        Page builder – ordered list of content blocks
+       (off when the template's manifest says `blocks: false`)
        ════════════════════════════════════════════════════════════════════ #}
+    {% if builder ?? true %}
     <div class="page-builder">
         <div id="block-list">
             {% for i, block in blocks %}
@@ -351,6 +384,8 @@
     </template>
     {% endfor %}
 
+    {% endif %}{# /builder #}
+
     {# Block type schemas for JS (add-list-item, etc.) #}
     <script id="block-schemas" type="application/json">{{ blockTypes|json_encode|raw }}</script>
 
@@ -373,8 +408,11 @@ const i18n = {{ {
 <script>
 (function () {
     const form       = document.getElementById('page-edit-form');
+    // Both are absent when the template turns the page builder off.
     const bodyField  = document.getElementById('body-field');
     const blockList  = document.getElementById('block-list');
+    const pageFieldsEl = document.getElementById('page-fields');
+    const fieldsField  = document.getElementById('fields-field');
     const schemas    = JSON.parse(document.getElementById('block-schemas').textContent);
 
     const csrf = {
@@ -505,12 +543,14 @@ const i18n = {{ {
     }
 
     function saveCollapseState() {
+        if (!blockList) return;
         const states = Array.from(blockList.children).map(el => el.classList.contains('collapsed'));
         try { localStorage.setItem(lsKey, JSON.stringify(states)); }
         catch { /* storage full or private mode — ignore */ }
     }
 
     function initCollapseStates() {
+        if (!blockList) return;
         const items = Array.from(blockList.children);
         if (collapseMode === 'collapsed') {
             items.forEach(el => setCollapsed(el, true));
@@ -884,7 +924,7 @@ const i18n = {{ {
         if (e.dataTransfer.files.length) uploadToFileList(zone, e.dataTransfer.files);
     });
 
-    blockList.addEventListener('dblclick', e => {
+    if (blockList) blockList.addEventListener('dblclick', e => {
         const header = e.target.closest('.block-header');
         if (!header) return;
         if (e.target.closest('.block-actions')) return;
@@ -966,40 +1006,57 @@ const i18n = {{ {
 
     // ── Serialisation → YAML → hidden field ───────────────────────────────
 
-    function collectBlocks() {
-        const blocks = [];
-        document.querySelectorAll('.block-item').forEach(blockEl => {
-            const block = { type: blockEl.dataset.type };
-
-            // Scalar fields (skip anything nested inside a .list-item)
-            blockEl.querySelectorAll('input[data-field], select[data-field], textarea[data-field]')
-                .forEach(el => {
-                    if (el.closest('.list-item')) return;
-                    const name = el.dataset.field;
-                    block[name] = el.type === 'checkbox' ? el.checked : el.value;
-                });
-
-            // List fields
-            blockEl.querySelectorAll('.list-field[data-field]').forEach(listEl => {
-                const name = listEl.dataset.field;
-                block[name] = [];
-                listEl.querySelectorAll('.list-item').forEach(itemEl => {
-                    const item = {};
-                    itemEl.querySelectorAll('[data-subfield]').forEach(sf => {
-                        item[sf.dataset.subfield] = sf.value;
-                    });
-                    block[name].push(item);
-                });
+    /** Read every data-field input inside `container` into a plain object. */
+    function collectFields(container, into = {}) {
+        // Scalar fields (skip anything nested inside a .list-item)
+        container.querySelectorAll('input[data-field], select[data-field], textarea[data-field]')
+            .forEach(el => {
+                if (el.closest('.list-item')) return;
+                const name = el.dataset.field;
+                if (el.type === 'checkbox')    into[name] = el.checked;
+                else if (el.type === 'number') into[name] = el.value === '' ? '' : Number(el.value);
+                else                           into[name] = el.value;
             });
 
-            blocks.push(block);
+        // List fields
+        container.querySelectorAll('.list-field[data-field]').forEach(listEl => {
+            const name = listEl.dataset.field;
+            into[name] = [];
+            listEl.querySelectorAll('.list-item').forEach(itemEl => {
+                const item = {};
+                itemEl.querySelectorAll('[data-subfield]').forEach(sf => {
+                    item[sf.dataset.subfield] = sf.value;
+                });
+                into[name].push(item);
+            });
         });
-        return blocks;
+        return into;
+    }
+
+    function collectBlocks() {
+        return Array.from(document.querySelectorAll('.block-item'))
+            .map(blockEl => collectFields(blockEl, { type: blockEl.dataset.type }));
     }
 
     form.addEventListener('submit', () => {
-        syncTextEditors();
-        bodyField.value = jsyaml.dump(collectBlocks(), { lineWidth: -1 });
+        if (bodyField) {
+            syncTextEditors();
+            bodyField.value = jsyaml.dump(collectBlocks(), { lineWidth: -1 });
+        }
+        if (pageFieldsEl && fieldsField) {
+            fieldsField.value = JSON.stringify(collectFields(pageFieldsEl));
+        }
+    });
+
+    // Color fields: keep the picker and the hex text input in sync.
+    document.addEventListener('input', e => {
+        const wrap = e.target.closest && e.target.closest('.color-field');
+        if (!wrap) return;
+        if (e.target.matches('.color-picker')) {
+            wrap.querySelector('.color-value').value = e.target.value;
+        } else if (e.target.matches('.color-value') && /^#[0-9a-f]{6}$/i.test(e.target.value)) {
+            wrap.querySelector('.color-picker').value = e.target.value;
+        }
     });
 
     // Slug input: auto-sanitize on blur (mirrors PHP Slug::sanitize).

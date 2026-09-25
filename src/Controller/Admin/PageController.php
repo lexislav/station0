@@ -13,8 +13,10 @@ use Station0\Service\ContentRepository;
 use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\Page;
+use Station0\Service\PageFields;
 use Station0\Service\PageRenderer;
 use Station0\Service\TemplateBlocks;
+use Station0\Support\FieldSchema;
 use Station0\Support\Slug;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
@@ -29,6 +31,7 @@ final class PageController
         private readonly BlockRegistry $blocks,
         private readonly PageRenderer $renderer,
         private readonly TemplateBlocks $templateBlocks,
+        private readonly PageFields $pageFields,
         private readonly string $adminPath,
         private readonly string $templatesPath = '',
         private readonly FieldOptions $fieldOptions = new FieldOptions(),
@@ -208,16 +211,15 @@ final class PageController
         $availableTemplates = $this->availablePageTemplates($parentPage);
         $template = $this->initialTemplate($availableTemplates);
 
-        [$blockTypes, $blockTypesMap] = $this->blockTypeData($template);
+        $page = new Page(slug: '', title: '', body: '', template: $template);
 
         return $this->twig->render($response, '@admin/pages/edit.twig', [
             'mode'               => 'new',
-            'page'               => new Page(slug: '', title: '', body: '', template: $template),
+            'page'               => $page,
             'parents'            => $this->parentOptions(),
             'selectedParent'     => $preselectedParent,
             'blocks'             => $this->seedBlocks($template),
-            'blockTypes'         => $blockTypes,
-            'blockTypesMap'      => $blockTypesMap,
+            ...$this->editorData($page),
             'availableTemplates' => $availableTemplates,
             'csrf'               => $this->csrfFields($request),
             'activeNav'          => $this->navForParent($parentPage),
@@ -275,7 +277,6 @@ final class PageController
         try {
             $this->content->assertChildTemplateAllowed($parentUrl, $template);
         } catch (\RuntimeException $e) {
-            [$blockTypes, $blockTypesMap] = $this->blockTypeData($template);
             $draft = new Page(
                 slug: $rawSlug,
                 title: $title,
@@ -286,14 +287,14 @@ final class PageController
                 publishedAt: $this->normalizePublishedAt(trim((string) ($data['published_at'] ?? ''))),
                 allowedChildTemplates: $allowedChildTemplates,
             );
+            $this->pageFields->apply($draft, $this->postedFields($data));
             return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
                 'mode'               => 'new',
                 'page'               => $draft,
                 'parents'            => $this->parentOptions(),
                 'selectedParent'     => $parentUrl,
                 'blocks'             => $this->renderer->parseBlocks($draft->body),
-                'blockTypes'         => $blockTypes,
-                'blockTypesMap'      => $blockTypesMap,
+                ...$this->editorData($draft),
                 'availableTemplates' => $this->availablePageTemplates($parentPage),
                 'error'              => $e->getMessage(),
                 'csrf'               => $this->csrfFields($request),
@@ -330,6 +331,7 @@ final class PageController
             publishedAt: $this->normalizePublishedAt(trim((string) ($data['published_at'] ?? ''))),
             allowedChildTemplates: $allowedChildTemplates,
         );
+        $this->pageFields->apply($page, $this->postedFields($data));
 
         $this->content->save($page, $filePath);
         $this->cache->flush();
@@ -350,7 +352,6 @@ final class PageController
             return $response->withStatus(404);
         }
 
-        [$blockTypes, $blockTypesMap] = $this->blockTypeData($page->template);
         $parentPage = $this->parentPageOf($page->urlPath);
 
         return $this->twig->render($response, '@admin/pages/edit.twig', [
@@ -358,8 +359,7 @@ final class PageController
             'page'               => $page,
             'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
             'blocks'             => $this->renderer->parseBlocks($page->body),
-            'blockTypes'         => $blockTypes,
-            'blockTypesMap'      => $blockTypesMap,
+            ...$this->editorData($page),
             'availableTemplates' => $this->availablePageTemplates($parentPage),
             'csrf'               => $this->csrfFields($request),
             'activeNav'          => $this->navForParent($parentPage),
@@ -417,6 +417,7 @@ final class PageController
         if (array_key_exists('allowed_child_templates', $data)) {
             $page->allowedChildTemplates = $this->parseTemplateList((string) $data['allowed_child_templates']);
         }
+        $this->pageFields->apply($page, $this->postedFields($data));
 
         $rawPublishedAt = trim((string) ($data['published_at'] ?? ''));
         $page->publishedAt = $this->normalizePublishedAt($rawPublishedAt);
@@ -427,14 +428,12 @@ final class PageController
             try {
                 $this->content->assertChildTemplateAllowed($parentUrl, $page->template);
             } catch (\RuntimeException $e) {
-                [$blockTypes, $blockTypesMap] = $this->blockTypeData($page->template);
                 return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
                     'mode'               => 'edit',
                     'page'               => $page,
                     'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
                     'blocks'             => $this->renderer->parseBlocks($page->body),
-                    'blockTypes'         => $blockTypes,
-                    'blockTypesMap'      => $blockTypesMap,
+                    ...$this->editorData($page),
                     'availableTemplates' => $this->availablePageTemplates($parentPage),
                     'error'              => $e->getMessage(),
                     'csrf'               => $this->csrfFields($request),
@@ -505,6 +504,40 @@ final class PageController
     }
 
     /**
+     * Editor view data that follows the page's template: the block palette,
+     * whether the page builder is shown, and the template's page fields with
+     * their current values.
+     *
+     * @return array<string, mixed>
+     */
+    private function editorData(Page $page): array
+    {
+        [$blockTypes, $blockTypesMap] = $this->blockTypeData($page->template);
+        $fields = $this->pageFields->definitions($page->template);
+
+        return [
+            'blockTypes'    => $blockTypes,
+            'blockTypesMap' => $blockTypesMap,
+            'builder'       => $this->templateBlocks->builderEnabled($page->template),
+            'pageFields'    => $this->fieldOptions->resolveFields($fields),
+            'fieldValues'   => $this->pageFields->values($page, $fields),
+        ];
+    }
+
+    /**
+     * Page-field values posted by the editor — a JSON object (field name ⇒
+     * value) serialized by edit.twig into the `fields` input. Absent/invalid ⇒ [].
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function postedFields(array $data): array
+    {
+        $decoded = json_decode((string) ($data['fields'] ?? ''), true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
      * Returns [list, map] of block types available to a page using $template.
      * list  → ordered array for rendering "+ Add block" buttons
      * map   → keyed by type for O(1) lookup in Twig partials
@@ -530,27 +563,11 @@ final class PageController
             $list[] = [
                 'type'   => $type,
                 'label'  => $schema['label'] ?? $type,
-                'fields' => $this->fieldOptions->resolveFields($this->normalizeFields($schema['fields'] ?? [])),
+                'fields' => $this->fieldOptions->resolveFields(FieldSchema::normalize($schema['fields'] ?? [])),
             ];
         }
         $map = array_combine(array_column($list, 'type'), $list);
         return [$list, $map];
-    }
-
-    /** @param array<string, mixed> $raw */
-    private function normalizeFields(array $raw): array
-    {
-        $out = [];
-        foreach ($raw as $name => $def) {
-            $field         = is_array($def) ? $def : [];
-            $field['name'] = (string) $name;
-            if (isset($field['item']) && is_array($field['item'])) {
-                $field['item_fields'] = $this->normalizeFields($field['item']);
-                unset($field['item']);
-            }
-            $out[] = $field;
-        }
-        return $out;
     }
 
     /** @return list<string> */

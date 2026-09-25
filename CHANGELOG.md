@@ -5,6 +5,35 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Page fields.** A template's `<template>.blocks.yaml` manifest can declare
+  `fields:` (same schema format as block schemas: `text`, `textarea`, `image`,
+  `file`, `number`, `select`, `boolean`, `color`, `list` with `item:`). They are
+  edited in a "Page fields" panel above the page builder, stored in the page's
+  front matter and exposed to the public template as typed, asset-resolved
+  `fields` (plus a `page_fields(page)` Twig function for other pages).
+- `blocks: false` in the manifest hides the page builder — a fields-only
+  template. Fields and the builder combine freely.
+- `Station0\Service\PageFields`, `Station0\Support\FrontMatter`,
+  `Station0\Support\FieldSchema`, `MediaService::resolveFieldRefs()`; unit
+  tests included.
+- Block schemas now render `number` and `color` fields in the editor (they
+  were previously skipped, so their values were lost on save).
+
+### Changed
+- Front matter supports YAML block values: a multi-line string is written as
+  a literal block (`Key: |`) and arrays as indented YAML. Single-line values
+  are unchanged and still read verbatim. Shared by pages and collection items.
+- Block field inputs live in the shared `admin/templates/pages/_fields.twig`
+  partial. A block field explicitly saved empty no longer reverts to its
+  schema default in the editor.
+
+### Fixed
+- A collection `textarea` value containing line breaks corrupted the item
+  file (only its first line survived).
+
 ## [0.7.4] - 2026-09-24
 
 ### Fixed
