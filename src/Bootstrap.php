@@ -27,6 +27,7 @@ use Station0\Controller\Admin\DashboardController;
 use Station0\Controller\Admin\PageController as AdminPageController;
 use Station0\Controller\Admin\SettingsController;
 use Station0\Controller\Admin\SetupController;
+use Station0\Controller\Admin\TaskController;
 use Station0\Controller\Admin\UploadController;
 use Station0\Controller\Admin\UserController;
 use Station0\Controller\AssetController;
@@ -43,6 +44,9 @@ use Station0\Service\MediaService;
 use Station0\Service\MailerService;
 use Station0\Service\PageFields;
 use Station0\Service\PageRenderer;
+use Station0\Service\TaskHooks;
+use Station0\Service\TaskLauncher;
+use Station0\Service\TaskRegistry;
 use Station0\Service\TemplateBlocks;
 use Station0\Service\ThumbService;
 use Station0\Service\UserRepository;
@@ -257,6 +261,11 @@ final class Bootstrap
                 fn (?string $src, array $widths, ?string $format = null)
                     => $c->get(ThumbService::class)->srcset($src, $widths, $format)
             ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'has_tasks',
+                // Site tasks (site/tasks/*.php) the current user may run.
+                fn () => $c->get(TaskRegistry::class)->visible() !== []
+            ));
             // ── Collections Twig functions ────────────────────────────────────
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'collection',
@@ -408,6 +417,7 @@ final class Bootstrap
             $config['adminPath'],
             $config['paths']['templates'],
             $c->get(FieldOptions::class),
+            $c->get(TaskHooks::class),
         ));
 
         $container->set(UserController::class, fn ($c) => new UserController(
@@ -458,6 +468,7 @@ final class Bootstrap
             $c->get(FieldOptions::class),
             $c->get(CollectionGroups::class),
             $c->get(ThumbService::class),
+            $c->get(TaskHooks::class),
         ));
 
         $container->set(ThumbService::class, fn ($c) => self::thumbService($config, $c->get(MediaService::class)));
@@ -465,6 +476,48 @@ final class Bootstrap
         $container->set(AssetController::class, fn ($c) => new AssetController(
             $c->get(MediaService::class),
             $c->get(ThumbService::class),
+        ));
+
+        $container->set(TaskRegistry::class, fn ($c) => new TaskRegistry(
+            $config['paths']['tasks'] ?? dirname($config['paths']['templates']) . '/tasks',
+            $config['paths']['logs'] . '/tasks',
+            $config,
+            $c->get(ContentRepository::class),
+            $c->get(CollectionRepository::class),
+            $c->get(FileCache::class),
+            $c->get(FieldOptions::class),
+            function (string $role) use ($c, $roles): bool {
+                $auth = $c->get(Auth::class);
+                return isset($roles[$role]) && $auth->isLoggedIn() && $auth->hasRole($roles[$role]);
+            },
+        ));
+
+        $container->set(TaskLauncher::class, fn ($c) => new TaskLauncher(
+            $c->get(TaskRegistry::class),
+            $station0Root,
+            $config['paths']['projectRoot'],
+            (array) ($config['tasks'] ?? []),
+        ));
+
+        $container->set(TaskHooks::class, fn ($c) => new TaskHooks(
+            $c->get(TaskRegistry::class),
+            $c->get(TaskLauncher::class),
+            function () use ($c): ?string {
+                $auth = $c->get(Auth::class);
+                return $auth->isLoggedIn() ? $auth->getEmail() : null;
+            },
+            $c->get(Logger::class),
+        ));
+
+        $container->set(TaskController::class, fn ($c) => new TaskController(
+            $c->get(TaskRegistry::class),
+            $c->get(TaskLauncher::class),
+            $c->get(Twig::class),
+            $c->get(Guard::class),
+            $c->get(Auth::class),
+            $config['adminPath'],
+            $config['paths']['cache'] . '/task-uploads',
+            $c->get('lang'),
         ));
 
         $container->set(SettingsController::class, fn ($c) => new SettingsController(
@@ -522,6 +575,11 @@ final class Bootstrap
                 $authed->get('/collections/{name}/{slug}/edit', [CollectionController::class, 'editForm'])->setName('admin.collections.edit');
                 $authed->post('/collections/{name}/{slug}/update', [CollectionController::class, 'update'])->setName('admin.collections.update');
                 $authed->post('/collections/{name}/{slug}/delete', [CollectionController::class, 'delete'])->setName('admin.collections.delete');
+
+                $authed->get('/tasks', [TaskController::class, 'index'])->setName('admin.tasks.index');
+                $authed->get('/tasks/{name}', [TaskController::class, 'show'])->setName('admin.tasks.show');
+                $authed->post('/tasks/{name}/run', [TaskController::class, 'run'])->setName('admin.tasks.run');
+                $authed->get('/tasks/{name}/runs/{id}', [TaskController::class, 'runStatus'])->setName('admin.tasks.run-status');
 
                 $authed->group('/users', function ($admin) {
                     $admin->get('', [UserController::class, 'index'])->setName('admin.users.index');

@@ -130,3 +130,17 @@ tr:last-child td { border-bottom: none; }
     .toolbar.sticky { padding: .5rem 0; }
     .cards { flex-wrap: wrap; }
 }
+
+/* Site tasks */
+.tag.failed { background: #fee2e2; color: var(--danger); }
+.task-error { color: var(--danger); font-size: .85rem; }
+.task-result { margin-top: 2rem; }
+.task-result h2 { font-size: 1rem; margin: 0 0 .5rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.task-output {
+    background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: var(--radius);
+    font-size: .82rem; line-height: 1.5; max-height: 60vh; overflow: auto; white-space: pre-wrap; word-break: break-word;
+}
+.task-output .lvl-success { color: #6ee7b7; }
+.task-output .lvl-warn { color: #fcd34d; }
+.task-output .lvl-error { color: #fca5a5; }
+.task-result tr.current td { background: #f8fafc; }

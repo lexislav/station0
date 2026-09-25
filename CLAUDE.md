@@ -89,6 +89,12 @@ YAML. Keys are lower-cased on read. Serializing omits `null` / `''` / `[]`.
 | `CollectionRepository` | `src/Service/CollectionRepository.php` | CRUD for Collections + items, reads `_collection.yaml` schemas |
 | `CollectionController` | `src/Controller/Admin/CollectionController.php` | Admin CRUD for collections and items |
 | `CollectionGroups` | `src/Service/CollectionGroups.php` | Groups collections into admin menu tabs (`group:` + `_groups.yaml`), role access |
+| `TaskRegistry` | `src/Service/TaskRegistry.php` | Site tasks (`site/tasks/*.php`): load, role access, param validation, run in-process (lock, output capture), run status |
+| `TaskRuns` | `src/Service/TaskRuns.php` | Run records in `writable/logs/tasks/runs/` (meta JSON + live JSONL output), pruning |
+| `TaskLauncher` | `src/Service/TaskLauncher.php` | Background start of a run: spawn `console task:worker` / fastcgi_finish_request / inline |
+| `TaskHooks` | `src/Service/TaskHooks.php` | Content events → tasks subscribed via `on` |
+| `TaskContext` | `src/Service/TaskContext.php` | What a task's `run` closure gets: params, event, output, content services |
+| `TaskController` | `src/Controller/Admin/TaskController.php` | Admin list / form / run page with live output / run-status JSON |
 
 ## Local development
 
@@ -445,6 +451,111 @@ order, inline-only groups after, by label). Empty groups get no tab.
 - `CollectionController` returns 403 on every `{name}` action (incl. upload)
   when the collection's group denies the user, and passes
   `activeNav` (`group-{id}` / `collections`) + `backUrl`/`backLabel` to views.
+
+## Site tasks (custom scripts) and hooks
+
+A site's own scripts (imports, syncs, exports…) live in `site/tasks/`, one
+PHP file per task; the file name is the task name. Files starting with `_` are
+ignored (shared helpers). Each file returns a definition:
+
+```php
+<?php // site/tasks/import-products.php
+use Station0\Service\TaskContext;
+
+return [
+    'label'       => 'Import products',
+    'description' => 'Reads a CSV into the products collection.',
+    'roles'       => ['editor'],          // admin always may; omitted = admins only
+    'confirm'     => 'Run the import?',   // optional JS confirm in the admin
+    'params'      => [                    // dict form, like block fields
+        'file'    => ['type' => 'file', 'label' => 'CSV', 'required' => true, 'accept' => '.csv'],
+        'dry_run' => ['type' => 'boolean', 'label' => 'Dry run'],
+    ],
+    'on'          => ['collection.item.saved:suppliers'],  // optional hooks
+    'background'  => true,                // admin / hook runs in the background (default)
+    'run' => function (TaskContext $task): int {
+        foreach (file($task->param('file')) as $line) { /* … */ }
+        $task->success('Done.');           // also info / warn / error; plain echo is captured
+        return 0;                           // int exit code; false = 1; null/true = 0
+    },
+];
+```
+
+- **Console:** `php vendor/bin/console task:list`,
+  `php vendor/bin/console task:run import-products --file=data.csv --dry_run`
+  (`--name=value`, bare `--flag` = true). Always in the foreground, output
+  streams live; exit code = task's. `task:worker <run-id>` is internal.
+- **Admin:** "Tasks" menu tab (shown when the user may run any task) →
+  `/admin/tasks`, `/admin/tasks/{name}` (param form, current/last run, recent
+  runs), `POST /admin/tasks/{name}/run` → 303 to `/admin/tasks/{name}?run={id}`,
+  which polls `GET /admin/tasks/{name}/runs/{id}?offset=N` (JSON: status,
+  new output lines) and reloads when the run finishes. A task that is already
+  running cannot be started again (form error, button disabled).
+- **Param types:** `text`, `textarea`, `number` (`min`/`max`/`step`),
+  `boolean`, `select` (static `options` or `options_from`, via `FieldOptions`),
+  `file` (value = local path). `required`, `default`, `help` optional.
+- **`TaskContext`:** `param()`, `params()`, `event()` / `event('path')`,
+  `info/success/warn/error()`, `pages()` (ContentRepository), `collections()`
+  (CollectionRepository), `cache()`, `config()`, `path('projectRoot')`,
+  `source` (`cli`/`admin`/`hook`), `user`, `runId`.
+  `CollectionRepository::save()` on a new item (no `filePath`) writes
+  `<collection>/<slug>/item.txt`.
+
+### Background runs (`TaskLauncher`)
+
+An admin or hook run gets a queued record and is started by a runner:
+`spawn` (detached `php bin/console task:worker <id>`, cwd = project root;
+needs `exec()` + a PHP CLI binary), `fastcgi` (same PHP-FPM worker after the
+response, `fastcgi_finish_request`), `inline` (synchronously, before the
+response). Configure in `site/config.php`:
+
+```php
+'tasks' => [
+    'runner' => 'auto',          // auto | spawn | fastcgi | inline
+    'php'    => '/usr/bin/php',  // CLI binary for spawn; detected otherwise
+],
+```
+
+`auto` = spawn → fastcgi → inline. `'background' => false` on a task forces
+inline. File params are moved into the run's `-files/` dir and removed after
+the run. A queued run that never starts within 30 s is reported `failed`
+with the worker's stderr (`<id>.err`) — usually a wrong `php` path.
+
+### Run records & semantics
+
+- One run per task at a time (flock on `writable/logs/tasks/<name>.lock`);
+  a second run ends as `skipped`.
+- Statuses: `queued`, `running`, `done`, `failed`, `skipped`, `interrupted`
+  (record says running but the lock is free → the process died).
+- Records: `writable/logs/tasks/runs/<name>--<Ymd-His>-<hex>.{json,out,err}`,
+  newest 30 per task kept; one line per run in `writable/logs/tasks/tasks.log`.
+- `set_time_limit` from `timeout` (default 0 = unlimited); content cache
+  flushed after a successful run unless `'flush_cache' => false`; exceptions
+  become an error line + exit 1.
+- Task files are `require`d whenever tasks are listed (every admin page, for
+  the menu) — keep their top level free of side effects; do the work in `run`.
+- Tasks dir override: `paths.tasks` in `site/config.php`.
+
+### Hooks (`TaskHooks`)
+
+`on` takes `<event>[:<filter>]` patterns; the event part may use wildcards
+(`page.*`, `*`). Filter = page path prefix for page events (`/blog` matches
+`/blog` and below, `previous_path` too), collection name (wildcards) for
+collection events. Fired by the admin controllers after the change is stored:
+
+| Event | Payload (`$task->event()`) |
+|---|---|
+| `page.saved` | `path`, `title`, `template`, `created`, `previous_path` (renamed) |
+| `page.moved` | `path`, `previous_path` (drag & drop to another parent) |
+| `page.deleted` | `path`, `title`, `template` |
+| `collection.item.saved` | `collection`, `slug`, `title`, `created`, `previous_slug` (renamed) |
+| `collection.item.deleted` | `collection`, `slug`, `title` |
+
+Every payload has `event`. Hook runs use param defaults (a task with a
+required param without default is skipped, logged to `app.log`), source
+`hook`, the admin user as `user`. A failing hook never breaks the admin
+action. Changes made by tasks (via repositories) fire no events, so hooks
+cannot loop. Sort-only reorders fire nothing.
 
 ## Common gotchas
 

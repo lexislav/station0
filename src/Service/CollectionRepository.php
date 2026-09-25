@@ -178,13 +178,17 @@ final class CollectionRepository
     }
 
     /**
-     * Save an item. Pass $targetFilePath when creating.
+     * Save an item. A new item (no filePath) goes to <collection>/<slug>/item.txt
+     * unless $targetFilePath says otherwise.
      */
     public function save(CollectionItem $item, ?string $targetFilePath = null): void
     {
         $filePath = $targetFilePath ?? $item->filePath;
         if (!$filePath) {
-            throw new \RuntimeException('No filePath for CollectionItem save.');
+            if ($item->collection === '' || Slug::sanitize($item->slug) === '') {
+                throw new \RuntimeException('No filePath for CollectionItem save.');
+            }
+            $filePath = $this->itemDir($item->collection, $item->slug) . '/item.txt';
         }
 
         $dir = dirname($filePath);
@@ -197,6 +201,7 @@ final class CollectionRepository
         file_put_contents($tmp, $content);
         rename($tmp, $filePath);
 
+        $item->filePath = $filePath;
         unset($this->parsedCache[$filePath]);
     }
 

@@ -14,6 +14,7 @@ use Station0\Service\CollectionRepository;
 use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
+use Station0\Service\TaskHooks;
 use Station0\Service\ThumbService;
 use Station0\Support\FieldSchema;
 use Station0\Support\Slug;
@@ -30,6 +31,7 @@ final class CollectionController
         private readonly FieldOptions $fieldOptions = new FieldOptions(),
         private readonly ?CollectionGroups $groups = null,
         private readonly ?ThumbService $thumbs = null,
+        private readonly ?TaskHooks $hooks = null,
     ) {}
 
     // ─── Collection list ───
@@ -159,6 +161,9 @@ final class CollectionController
         $filePath = rtrim($this->collections->itemDir($name, $slug), '/') . '/item.txt';
         $this->collections->save($item, $filePath);
         $this->cache->flush();
+        $this->hooks?->dispatch('collection.item.saved', [
+            'collection' => $name, 'slug' => $slug, 'title' => $item->title, 'created' => true,
+        ]);
 
         return $this->redirectToItems($response, $name);
     }
@@ -228,6 +233,9 @@ final class CollectionController
 
         $this->collections->save($item);
         $this->cache->flush();
+        $this->hooks?->dispatch('collection.item.saved', [
+            'collection' => $name, 'slug' => $item->slug, 'title' => $item->title, 'created' => false,
+        ] + ($item->slug !== $slug ? ['previous_slug' => $slug] : []));
 
         return $this->redirectToItems($response, $name);
     }
@@ -242,8 +250,14 @@ final class CollectionController
         }
         $slug = (string) ($args['slug'] ?? '');
 
-        $this->collections->delete($name, $slug);
+        $item    = $this->collections->find($name, $slug);
+        $deleted = $this->collections->delete($name, $slug);
         $this->cache->flush();
+        if ($deleted && $item !== null) {
+            $this->hooks?->dispatch('collection.item.deleted', [
+                'collection' => $name, 'slug' => $slug, 'title' => $item->title,
+            ]);
+        }
 
         return $this->redirectToItems($response, $name);
     }

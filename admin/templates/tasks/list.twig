@@ -1,0 +1,43 @@
+{% extends '@admin/layout.twig' %}
+{% block title %}{{ t.tasks_title }} · {{ app.name }}{% endblock %}
+
+{% block body %}
+<div class="toolbar">
+    <h1>{{ t.tasks_title }}</h1>
+</div>
+
+{% if tasks is empty %}
+    <p class="muted">{{ t.tasks_empty|raw }}</p>
+{% else %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>{{ t.tasks_th_task }}</th>
+                <th>{{ t.tasks_th_last_run }}</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in tasks %}
+            <tr>
+                <td>
+                    <a href="{{ app.adminPath }}/tasks/{{ task.name }}"><strong>{{ task.label }}</strong></a>
+                    <code class="muted" style="font-size:.8rem; margin-left:.5rem;">{{ task.name }}</code>
+                    {% if task.error %}
+                        <div class="task-error">{{ task.error }}</div>
+                    {% elseif task.description %}
+                        <div class="muted" style="font-size:.85rem;">{{ task.description }}</div>
+                    {% endif %}
+                </td>
+                <td class="muted">
+                    {% include '@admin/tasks/_status.twig' with { run: task.lastRun, t: t } only %}
+                </td>
+                <td class="text-right">
+                    <a href="{{ app.adminPath }}/tasks/{{ task.name }}">{{ t.tasks_open }} →</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+{% endblock %}

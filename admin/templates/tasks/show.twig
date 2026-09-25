@@ -1,0 +1,140 @@
+{% extends '@admin/layout.twig' %}
+{% block title %}{{ task.label }} · {{ app.name }}{% endblock %}
+
+{% block body %}
+<div class="toolbar">
+    <h1>{{ task.label }} <code class="muted" style="font-size:.9rem; font-weight:normal;">{{ task.name }}</code></h1>
+    <a class="btn" href="{{ app.adminPath }}/tasks">← {{ t.tasks_title }}</a>
+</div>
+
+{% if task.description %}<p class="muted">{{ task.description }}</p>{% endif %}
+{% if task.on %}
+    <p class="muted" style="font-size:.85rem;">{{ t.tasks_hooks }}
+        {% for e in task.on %}<code>{{ e }}</code>{{ not loop.last ? ', ' }}{% endfor %}</p>
+{% endif %}
+
+{% if task.error %}
+    <p class="error">{{ task.error }}</p>
+{% else %}
+{% set busy = running or (run and not run.finished) %}
+{% if errors._task is defined %}<p class="error">{{ errors._task }}</p>{% endif %}
+<form method="post" action="{{ app.adminPath }}/tasks/{{ task.name }}/run" enctype="multipart/form-data"
+      class="form-narrow task-form"{% if task.confirm %} data-confirm="{{ task.confirm }}"{% endif %}>
+    <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+    <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+
+    {% for p in params %}
+        {% set v = values[p.name] is defined ? values[p.name] : (p.default ?? '') %}
+        {% set err = errors[p.name] ?? null %}
+        {% if p.type == 'boolean' %}
+            <div class="field checkbox">
+                <label><input type="checkbox" name="{{ p.name }}" value="1" {{ v and v != '0' ? 'checked' }}> {{ p.label }}</label>
+        {% else %}
+            <div class="field">
+                <label for="task-{{ p.name }}">{{ p.label }}{% if p.required %} *{% endif %}</label>
+                {% if p.type == 'textarea' %}
+                    <textarea id="task-{{ p.name }}" name="{{ p.name }}" rows="4"{{ p.required ? ' required' }}>{{ v }}</textarea>
+                {% elseif p.type == 'number' %}
+                    <input id="task-{{ p.name }}" type="number" name="{{ p.name }}" value="{{ v }}" step="{{ p.step ?? 'any' }}"
+                        {%- if p.min is defined %} min="{{ p.min }}"{% endif %}{% if p.max is defined %} max="{{ p.max }}"{% endif %}{{ p.required ? ' required' }}>
+                {% elseif p.type == 'select' %}
+                    <select id="task-{{ p.name }}" name="{{ p.name }}"{{ p.required ? ' required' }}>
+                        {% include '@admin/_select_options.twig' with { field: p, current: values[p.name] is defined ? v : null } %}
+                    </select>
+                {% elseif p.type == 'file' %}
+                    <input id="task-{{ p.name }}" type="file" name="{{ p.name }}"{% if p.accept is defined %} accept="{{ p.accept }}"{% endif %}{{ p.required ? ' required' }}>
+                {% else %}
+                    <input id="task-{{ p.name }}" type="text" name="{{ p.name }}" value="{{ v }}"{{ p.required ? ' required' }}>
+                {% endif %}
+        {% endif %}
+                {% if p.help is defined %}<small class="muted">{{ p.help }}</small>{% endif %}
+                {% if err %}<small class="task-error">{{ err }}</small>{% endif %}
+            </div>
+    {% endfor %}
+
+    <div class="toolbar" style="justify-content:flex-start;">
+        <button type="submit" class="btn primary"{{ busy ? ' disabled' }}>▶ {{ t.tasks_run }}</button>
+        <span class="muted task-running"{{ busy ? '' : ' hidden' }}>{{ t.tasks_running }}</span>
+    </div>
+</form>
+{% endif %}
+
+{% if run %}
+    <section class="task-result" data-run="{{ run.id }}" data-finished="{{ run.finished ? 1 : 0 }}" data-offset="{{ run.offset }}"
+             data-status-url="{{ app.adminPath }}/tasks/{{ task.name }}/runs/{{ run.id }}">
+        <h2>{{ t.tasks_run_heading }}</h2>
+        <p>{% include '@admin/tasks/_status.twig' with { run: run, t: t } only %}</p>
+        {% if run.params %}
+            <p class="muted" style="font-size:.85rem;">
+                {% for k, v in run.params %}<code>{{ k }}={{ v is same as(true) ? 'true' : (v is same as(false) ? 'false' : v) }}</code> {% endfor %}
+            </p>
+        {% endif %}
+        <pre class="task-output"{{ run.output or not run.finished ? '' : ' hidden' }}>{% for line in run.output %}<span class="lvl-{{ line.level }}">{{ line.text }}</span>
+{% endfor %}</pre>
+        {% if run.finished and not run.output %}<p class="muted">{{ t.tasks_no_output }}</p>{% endif %}
+    </section>
+{% endif %}
+
+{% if history|length > 1 or (history|length == 1 and run and history[0].id != run.id) %}
+    <section class="task-result">
+        <h2>{{ t.tasks_history }}</h2>
+        <table class="data-table">
+            <tbody>
+            {% for h in history %}
+                <tr{% if run and h.id == run.id %} class="current"{% endif %}>
+                    <td>{% include '@admin/tasks/_status.twig' with { run: h, t: t } only %}</td>
+                    <td class="text-right"><a href="{{ app.adminPath }}/tasks/{{ task.name }}?run={{ h.id }}">{{ t.tasks_open }} →</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+{% endif %}
+
+<script>
+    (function () {
+        var form = document.querySelector('.task-form');
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                var msg = form.getAttribute('data-confirm');
+                if (msg && !confirm(msg)) { e.preventDefault(); return; }
+                form.querySelector('button[type=submit]').disabled = true;
+                form.querySelector('.task-running').hidden = false;
+            });
+        }
+
+        // Live view of an unfinished run: poll for new lines, reload when done.
+        var box = document.querySelector('[data-run]');
+        if (!box || box.getAttribute('data-finished') === '1') return;
+        var pre = box.querySelector('.task-output');
+        var badge = box.querySelector('[data-run-status]');
+        var labels = {{ { queued: t.tasks_status_queued, running: t.tasks_status_running }|json_encode|raw }};
+        var offset = parseInt(box.getAttribute('data-offset'), 10) || 0;
+        var url = box.getAttribute('data-status-url');
+        function poll() {
+            fetch(url + '?offset=' + offset, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var stick = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 4;
+                    data.lines.forEach(function (line) {
+                        var span = document.createElement('span');
+                        span.className = 'lvl-' + line.level;
+                        span.textContent = line.text;
+                        pre.appendChild(span);
+                        pre.appendChild(document.createTextNode('\n'));
+                    });
+                    if (stick) pre.scrollTop = pre.scrollHeight;
+                    offset = data.offset;
+                    if (badge && labels[data.status]) badge.textContent = labels[data.status];
+                    if (data.finished) {
+                        location.replace(location.pathname + '?run=' + encodeURIComponent(box.getAttribute('data-run')));
+                    } else {
+                        setTimeout(poll, 1000);
+                    }
+                })
+                .catch(function () { setTimeout(poll, 3000); });
+        }
+        setTimeout(poll, 500);
+    })();
+</script>
+{% endblock %}
