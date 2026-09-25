@@ -5,7 +5,7 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.5] - 2026-09-25
 
 ### Added
 - **Page fields.** A template's `<template>.blocks.yaml` manifest can declare
@@ -122,6 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.7.5]: https://github.com/lexislav/station0/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/lexislav/station0/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/lexislav/station0/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/lexislav/station0/compare/v0.7.1...v0.7.2
