@@ -51,8 +51,9 @@ foreach ([$config['paths']['cache'], $config['paths']['sessions'], $config['path
     }
 }
 
-$pdo = (function () use ($config) {
-    $fresh = !file_exists($config['paths']['db']);
+$pdo = (function () use ($config, $projectRoot) {
+    // An empty file (left by an earlier failed run) still needs the schema.
+    $fresh = !file_exists($config['paths']['db']) || filesize($config['paths']['db']) === 0;
     $pdo = new \PDO('sqlite:' . $config['paths']['db']);
     $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
     if ($fresh) {
