@@ -125,7 +125,7 @@
                 <div class="field">
                     <label for="f-{{ fname }}">{{ flabel }}</label>
                     <input type="number" id="f-{{ fname }}" name="{{ fname }}"
-                           value="{{ fvalue }}"
+                           value="{{ fvalue|replace({',': '.'}) }}" step="{{ field.step ?? 'any' }}"
                            {% if field.min is defined %}min="{{ field.min }}"{% endif %}
                            {% if field.max is defined %}max="{{ field.max }}"{% endif %}
                            style="width:120px;">

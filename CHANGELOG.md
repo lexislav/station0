@@ -5,6 +5,20 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.7] - 2026-09-25
+
+### Fixed
+- **Decimal numbers in collection items.** The `number` input in the
+  collection item form had no `step`, so browsers rejected values like
+  `96.1` on submit. Number inputs now default to `step="any"` everywhere.
+- A `number` field whose stored value uses a decimal comma (`96,1`, e.g.
+  after switching a `text` field to `number`) is shown as `96.1` instead of
+  an empty input.
+
+### Added
+- Optional `step` key on `number` fields (block, page and collection
+  schemas), alongside `min` / `max`.
+
 ## [0.7.6] - 2026-09-25
 
 ### Added
@@ -141,6 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.7.7]: https://github.com/lexislav/station0/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/lexislav/station0/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/lexislav/station0/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/lexislav/station0/compare/v0.7.3...v0.7.4

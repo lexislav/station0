@@ -126,6 +126,8 @@ fields:
 ```
 
 Supported field types: `text`, `textarea`, `image`, `file`, `number`, `select`, `boolean`, `color`, `list`.
+`number` accepts decimals by default (`step="any"`); optional `step`, `min`, `max`
+keys map to the input attributes.
 Inputs are rendered by the shared `admin/templates/pages/_fields.twig` partial
 (used for blocks and page fields); `collectFields()` in `pages/edit.twig`
 serializes them.
