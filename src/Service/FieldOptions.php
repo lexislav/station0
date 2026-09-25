@@ -21,8 +21,21 @@ namespace Station0\Service;
  *   option_label: "{title} (km {km})"          # {title}, {slug}, {<field>}
  *   placeholder: "— choose —"                  # empty first option
  *
- * Collection-backed options store the item **slug** as the value; templates
- * look the item up with `collection_item('<name>', value)`.
+ *   options_from: collections                  # items of all collections,
+ *   options_from: collections:banners,blocks   # or of the listed ones; one
+ *                                              # <optgroup> per collection
+ *
+ *   options_from: pages                        # all published pages
+ *   options_from: pages:/blog                  # only descendants of /blog
+ *   template: article                          # only pages of this template (or a list)
+ *
+ * Stored values: `collection:` → item slug (`collection_item('<name>', value)`),
+ * `collections` → "<collection>/<slug>" (`collection_item(value)`),
+ * `pages` → URL path (`page(value)`).
+ *
+ * Label/sort/group fields: items have {title}, {slug}, {sort}, {collection}
+ * and their own fields; pages have {title}, {slug}, {path}, {template},
+ * {sort}, {date}, {parent}, {parent_title} and their page fields.
  *
  * Every resolved select field gets `options` (flat list of
  * {value, label, group}) and `option_groups` (list of {label, options}, in
@@ -32,6 +45,7 @@ final class FieldOptions
 {
     public function __construct(
         private readonly ?CollectionRepository $collections = null,
+        private readonly ?ContentRepository $pages = null,
     ) {}
 
     /**
@@ -155,40 +169,42 @@ final class FieldOptions
      */
     private function fromSource(string $source, array $field): array
     {
-        [$kind, $name] = array_pad(explode(':', $source, 2), 2, '');
-        $kind = strtolower(trim($kind));
-        $name = trim($name);
-
-        if ($kind !== 'collection' || $name === '' || $this->collections === null) {
+        [$kind, $arg] = array_pad(explode(':', $source, 2), 2, '');
+        $records = match (strtolower(trim($kind))) {
+            'collection'  => $this->collectionRecords(trim($arg)),
+            'collections' => $this->collectionsRecords(trim($arg)),
+            'pages'       => $this->pageRecords(trim($arg), $field['template'] ?? null),
+            default       => [],
+        };
+        if ($records === []) {
             return [];
         }
 
-        $items   = $this->collections->items($name);
-        $groupBy = strtolower(trim((string) ($field['group_by'] ?? '')));
-        $sortBy  = trim((string) ($field['sort_by'] ?? ''));
+        $groupBy  = strtolower(trim((string) ($field['group_by'] ?? '')));
+        $sortBy   = trim((string) ($field['sort_by'] ?? ''));
         $labelTpl = isset($field['option_label']) && is_string($field['option_label'])
             ? $field['option_label']
             : '{title}';
 
         if ($sortBy !== '') {
-            $items = $this->sortItems($items, $sortBy);
+            $records = $this->sortRecords($records, $sortBy);
         }
 
         $out = [];
-        foreach ($items as $item) {
+        foreach ($records as $record) {
             $out[] = [
-                'value' => $item->slug,
-                'label' => $this->label($labelTpl, $item),
-                'group' => $groupBy !== '' ? (string) ($item->extra[$groupBy] ?? '') : '',
+                'value' => $record['value'],
+                'label' => $this->label($labelTpl, $record['fields']),
+                'group' => $groupBy !== '' ? (string) ($record['fields'][$groupBy] ?? '') : $record['group'],
             ];
         }
 
-        if ($groupBy !== '') {
-            // Keep groups together (first-appearance order), items keep their order within.
-            $order = [];
-            foreach ($out as $opt) {
-                $order[$opt['group']] ??= count($order);
-            }
+        // Keep groups together (first-appearance order), options keep their order within.
+        $order = [];
+        foreach ($out as $opt) {
+            $order[$opt['group']] ??= count($order);
+        }
+        if (count($order) > 1) {
             $idx = array_keys($out);
             usort($idx, fn (int $a, int $b) => [$order[$out[$a]['group']], $a] <=> [$order[$out[$b]['group']], $b]);
             $out = array_map(fn (int $i) => $out[$i], $idx);
@@ -198,25 +214,126 @@ final class FieldOptions
     }
 
     /**
-     * Stable sort by an item field; "-field" sorts descending. Numeric values
+     * A source entry: the stored value, the fields usable in `option_label`,
+     * `sort_by` and `group_by` (lower-cased keys), and its default group.
+     *
+     * @return list<array{value: string, fields: array<string, mixed>, group: string}>
+     */
+    private function collectionRecords(string $name, string $group = '', bool $qualified = false): array
+    {
+        if ($name === '' || $this->collections === null) {
+            return [];
+        }
+        $out = [];
+        foreach ($this->collections->items($name) as $item) {
+            $out[] = [
+                'value'  => $qualified ? $item->collection . '/' . $item->slug : $item->slug,
+                'fields' => [
+                    'title'      => $item->title,
+                    'slug'       => $item->slug,
+                    'sort'       => $item->sort,
+                    'collection' => $group !== '' ? $group : $item->collection,
+                ] + $item->extra,
+                'group'  => $group,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Items of several collections (all when $list is empty), grouped by
+     * collection label; the value is "<collection>/<slug>".
+     *
+     * @return list<array{value: string, fields: array<string, mixed>, group: string}>
+     */
+    private function collectionsRecords(string $list): array
+    {
+        if ($this->collections === null) {
+            return [];
+        }
+        $names = $list === ''
+            ? $this->collections->names()
+            : array_values(array_filter(array_map('trim', explode(',', $list)), fn (string $n) => $n !== ''));
+
+        $out = [];
+        foreach ($names as $name) {
+            if (!is_dir($this->collections->directory() . '/' . $name)) {
+                continue;
+            }
+            $label = $this->collections->schema($name)['label'] ?? $name;
+            $out   = [...$out, ...$this->collectionRecords($name, is_scalar($label) ? (string) $label : $name, true)];
+        }
+        return $out;
+    }
+
+    /**
+     * Published pages, optionally only descendants of $parent and/or of the
+     * given template(s); the value is the page's URL path.
+     *
+     * @return list<array{value: string, fields: array<string, mixed>, group: string}>
+     */
+    private function pageRecords(string $parent, mixed $template): array
+    {
+        if ($this->pages === null) {
+            return [];
+        }
+        $parent    = $parent === '' ? '' : '/' . trim($parent, '/');
+        $templates = array_values(array_filter(
+            array_map(fn ($t) => is_scalar($t) ? trim((string) $t) : '', (array) ($template ?? [])),
+            fn (string $t) => $t !== '',
+        ));
+
+        $all    = $this->pages->all(false);
+        $titles = [];
+        foreach ($all as $page) {
+            $titles[$page->urlPath] = $page->title;
+        }
+
+        $out = [];
+        foreach ($all as $page) {
+            if ($parent !== '' && $parent !== '/' && !str_starts_with($page->urlPath, $parent . '/')) {
+                continue;
+            }
+            if ($parent === '/' && $page->urlPath === '/') {
+                continue;
+            }
+            if ($templates !== [] && !in_array($page->template, $templates, true)) {
+                continue;
+            }
+            $parentPath = $page->urlPath === '/' ? '' : (rtrim(dirname($page->urlPath), '/') ?: '/');
+            $out[] = [
+                'value'  => $page->urlPath,
+                'fields' => [
+                    'title'        => $page->title,
+                    'slug'         => $page->slug,
+                    'path'         => $page->urlPath,
+                    'template'     => $page->template,
+                    'sort'         => $page->sort,
+                    'date'         => $page->publishedAt,
+                    'parent'       => $parentPath,
+                    'parent_title' => $parentPath !== '' ? ($titles[$parentPath] ?? $parentPath) : '',
+                ] + $page->extra,
+                'group'  => '',
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Stable sort by a record field; "-field" sorts descending. Numeric values
      * (decimal comma allowed, e.g. "318,5") compare numerically.
      *
-     * @param  list<CollectionItem> $items
-     * @return list<CollectionItem>
+     * @param  list<array{value: string, fields: array<string, mixed>, group: string}> $records
+     * @return list<array{value: string, fields: array<string, mixed>, group: string}>
      */
-    private function sortItems(array $items, string $sortBy): array
+    private function sortRecords(array $records, string $sortBy): array
     {
         $desc = str_starts_with($sortBy, '-');
         $key  = strtolower(ltrim($sortBy, '-+'));
 
-        $value = function (CollectionItem $item) use ($key): mixed {
-            $raw = match ($key) {
-                'title' => $item->title,
-                'slug'  => $item->slug,
-                'sort'  => $item->sort,
-                default => $item->extra[$key] ?? null,
-            };
-            if ($raw === null || $raw === '') {
+        $value = function (array $record) use ($key): mixed {
+            $raw = $record['fields'][$key] ?? null;
+            if ($raw === null || $raw === '' || !is_scalar($raw)) {
                 return null;
             }
             $num = str_replace([' ', ','], ['', '.'], (string) $raw);
@@ -224,11 +341,11 @@ final class FieldOptions
         };
 
         $keyed = [];
-        foreach ($items as $i => $item) {
-            $keyed[] = [$value($item), $i, $item];
+        foreach ($records as $i => $record) {
+            $keyed[] = [$value($record), $i, $record];
         }
         usort($keyed, function (array $a, array $b) use ($desc): int {
-            // Items without a value always go last, in their original order.
+            // Records without a value always go last, in their original order.
             if ($a[0] === null || $b[0] === null) {
                 return [$a[0] === null, $a[1]] <=> [$b[0] === null, $b[1]];
             }
@@ -239,18 +356,15 @@ final class FieldOptions
         return array_column($keyed, 2);
     }
 
-    private function label(string $template, CollectionItem $item): string
+    /** @param array<string, mixed> $fields */
+    private function label(string $template, array $fields): string
     {
-        $label = preg_replace_callback('/\{([a-zA-Z0-9_-]+)\}/', function (array $m) use ($item): string {
-            $key = strtolower($m[1]);
-            return match ($key) {
-                'title' => $item->title,
-                'slug'  => $item->slug,
-                default => (string) ($item->extra[$key] ?? ''),
-            };
+        $label = preg_replace_callback('/\{([a-zA-Z0-9_-]+)\}/', function (array $m) use ($fields): string {
+            $v = $fields[strtolower($m[1])] ?? '';
+            return is_scalar($v) ? (string) $v : '';
         }, $template);
 
         $label = trim((string) $label);
-        return $label !== '' ? $label : $item->title;
+        return $label !== '' ? $label : (string) $fields['title'];
     }
 }
