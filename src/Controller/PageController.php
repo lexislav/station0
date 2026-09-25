@@ -8,6 +8,7 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
 use Station0\Service\ContentRepository;
+use Station0\Service\PageFields;
 use Station0\Service\PageRenderer;
 
 final class PageController
@@ -16,6 +17,7 @@ final class PageController
         private readonly ContentRepository $content,
         private readonly PageRenderer $renderer,
         private readonly Twig $twig,
+        private readonly PageFields $fields,
     ) {}
 
     public function home(Request $request, Response $response): Response
@@ -45,6 +47,7 @@ final class PageController
         return $this->twig->render($response, $template . '.twig', [
             'page'    => $page,
             'content' => $html,
+            'fields'  => $this->fields->resolved($page),
         ]);
     }
 }

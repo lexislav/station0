@@ -205,6 +205,44 @@ final class MediaService
         return $this->urlFor($pageUrlPath, $value);
     }
 
+    /**
+     * Walk schema-described data (a block, or a page's fields) and resolve every
+     * `image` / `file` value — including those nested in list items — from a
+     * bare page-local filename to its public /media/... URL.
+     *
+     * @param array<string, mixed>          $data
+     * @param list<array<string, mixed>>    $fields
+     * @return array<string, mixed>
+     */
+    public function resolveFieldRefs(array $data, array $fields, string $pageUrlPath): array
+    {
+        foreach ($fields as $field) {
+            $name = (string) ($field['name'] ?? '');
+            $type = (string) ($field['type'] ?? 'text');
+            if ($name === '' || !array_key_exists($name, $data)) {
+                continue;
+            }
+
+            if (($type === 'image' || $type === 'file') && is_string($data[$name])) {
+                $data[$name] = $this->resolveRef($data[$name], $pageUrlPath);
+                continue;
+            }
+
+            if ($type === 'list' && is_array($data[$name])) {
+                $itemFields = $field['item_fields'] ?? [];
+                if (!is_array($itemFields)) {
+                    continue;
+                }
+                foreach ($data[$name] as $i => $item) {
+                    if (is_array($item)) {
+                        $data[$name][$i] = $this->resolveFieldRefs($item, $itemFields, $pageUrlPath);
+                    }
+                }
+            }
+        }
+        return $data;
+    }
+
     // ─── Collection uploads ───
 
     /**

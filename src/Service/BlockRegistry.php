@@ -78,7 +78,7 @@ final class BlockRegistry
             if (!is_string($name) || !is_array($def)) {
                 continue;
             }
-            $block[$name] = $this->fieldDefault($def);
+            $block[$name] = self::fieldDefault($def);
         }
         return $block;
     }
@@ -107,9 +107,9 @@ final class BlockRegistry
                     $out .= $pad . "  - \n";
                 }
             } elseif ($type === 'boolean') {
-                $out .= $pad . $name . ': ' . ($this->fieldDefault($field) ? 'true' : 'false') . "\n";
+                $out .= $pad . $name . ': ' . (self::fieldDefault($field) ? 'true' : 'false') . "\n";
             } else {
-                $out .= $pad . $name . ': ' . $this->fieldDefault($field) . "\n";
+                $out .= $pad . $name . ': ' . self::fieldDefault($field) . "\n";
             }
         }
 
@@ -119,12 +119,13 @@ final class BlockRegistry
     /**
      * Resolve a single field's default value from its schema definition.
      * The one source of truth for "what does an empty block field start as",
-     * shared by {@see defaults()} and {@see buildSnippetYaml()}.
+     * shared by {@see defaults()}, {@see buildSnippetYaml()} and page fields
+     * ({@see PageFields}).
      *
      * @param  array<string, mixed> $field
      * @return mixed  string for scalars, bool for booleans, [] for lists.
      */
-    private function fieldDefault(array $field): mixed
+    public static function fieldDefault(array $field): mixed
     {
         return match ((string) ($field['type'] ?? 'text')) {
             'list'    => [],

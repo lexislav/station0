@@ -31,9 +31,18 @@ Flat-file CMS built on **Slim 4**, **Twig 3**, **League/CommonMark**, and **Deli
 ```
 Title: Page title
 Published: true
+Summary: |
+  A multi-line value is a YAML literal block
+Features:
+  - title: Arrays are indented YAML
 ---
 Markdown body (or YAML block list)
 ```
+
+`Station0\Support\FrontMatter` is the one codec for pages and collection
+items. A single-line `Key: value` is read verbatim (no YAML typing, so colons
+and quotes in titles are safe); a key followed by indented lines is parsed as
+YAML. Keys are lower-cased on read. Serializing omits `null` / `''` / `[]`.
 
 **Block system:** Each block type lives in `site/templates/blocks/{type}/` (skeleton) with `schema.yaml` and `template.twig`.
 
@@ -66,7 +75,10 @@ Markdown body (or YAML block list)
 | `Page` | `src/Service/Page.php` | Page entity |
 | `PageRenderer` | `src/Service/PageRenderer.php` | Markdown + block rendering, cache |
 | `BlockRegistry` | `src/Service/BlockRegistry.php` | Block schema/template loading; `defaults()` builds a seeded block from schema defaults |
-| `TemplateBlocks` | `src/Service/TemplateBlocks.php` | Resolves per-template `allowedBlocks` / `defaultBlocks` from `<template>.blocks.yaml` |
+| `TemplateBlocks` | `src/Service/TemplateBlocks.php` | Resolves per-template `allowedBlocks` / `defaultBlocks` / `fields` / `blocks` from `<template>.blocks.yaml` |
+| `PageFields` | `src/Service/PageFields.php` | Page-level fields: typed read, sanitized write into `Page::$extra`, asset-resolved values for templates |
+| `FrontMatter` | `src/Support/FrontMatter.php` | Front-matter codec (pages + collection items); single-line values verbatim, YAML blocks for multi-line / arrays |
+| `FieldSchema` | `src/Support/FieldSchema.php` | `normalize()` dict-form schema fields → list form (`name`, `item` → `item_fields`) |
 | `UserRepository` | `src/Service/UserRepository.php` | Wrapper around Delight\Auth |
 | `FileCache` | `src/Service/FileCache.php` | File-based cache (get/set/flush) |
 | `MediaService` | `src/Service/MediaService.php` | Page-local asset storage + ref resolution; also serves collection assets via `_collections/` prefix |
@@ -113,7 +125,10 @@ fields:
         label: Alt text
 ```
 
-Supported field types: `text`, `textarea`, `image`, `number`, `select`, `boolean`, `list`.
+Supported field types: `text`, `textarea`, `image`, `file`, `number`, `select`, `boolean`, `color`, `list`.
+Inputs are rendered by the shared `admin/templates/pages/_fields.twig` partial
+(used for blocks and page fields); `collectFields()` in `pages/edit.twig`
+serializes them.
 
 ### Select options (`FieldOptions`)
 
@@ -185,6 +200,64 @@ their schema defaults), and the palette offers only "text" and "gallery".
 
 Note: the palette is server-rendered for the template the form opens with;
 changing the template `<select>` on a new page does not re-fetch the palette.
+
+## Page fields
+
+A template can give its pages **single fields** (subtitle, price, hero image,
+a list of features…) instead of, or alongside, the block page builder. They
+are declared in the same `<template>.blocks.yaml` manifest:
+
+```yaml
+# site/templates/product.blocks.yaml
+fields:
+  subtitle:
+    type: text
+    label: Subtitle
+  price:
+    type: number
+    label: Price
+  hero:
+    type: image
+    label: Hero image
+  features:
+    type: list
+    label: Features
+    item:
+      title:
+        type: text
+        label: Title
+blocks: false        # optional: hide the page builder (fields-only template)
+allowedBlocks:       # optional, as before, when the builder stays on
+  - text
+```
+
+- **Combinations:** `fields` only + `blocks: false` ⇒ fields-only page;
+  `fields` + builder (default) ⇒ both; no `fields` ⇒ historic behavior.
+- **Schema:** same format and types as block schemas, including select
+  `options_from`. Names must be valid front-matter keys; names reserved for
+  page metadata (`TemplateBlocks::RESERVED_FIELD_NAMES`: title, template,
+  published, body, …) and case-insensitive duplicates are dropped. Prefer
+  snake_case names — keys are case-insensitive on disk.
+- **Storage:** page front matter (`Page::$extra`, lower-cased keys), via
+  `FrontMatter` (multi-line strings / lists as YAML blocks). Only declared
+  fields are written; other extra keys are left untouched. Booleans are stored
+  as `true`/`false`, numbers as numeric strings.
+- **Admin:** a "Page fields" panel above the builder; JS posts the values as a
+  JSON object in the `fields` input, `PageFields::apply()` sanitizes them per
+  type. A new page starts from schema defaults; a saved page shows what it
+  stores. With `blocks: false` the body is not posted, so an existing body is
+  kept as-is.
+- **Templates:** the public page gets `fields` — typed values (bool, int/float)
+  with `image`/`file` refs (also in list items) resolved to `/media/...` URLs.
+  For other pages (e.g. children in a listing) use `page_fields(page)`.
+  Raw stored strings remain available as `page.extra.<lowercased name>`.
+
+```twig
+<h2>{{ fields.subtitle }}</h2>
+{% if fields.hero %}<img src="{{ fields.hero }}" alt="">{% endif %}
+{% for f in fields.features %}<li>{{ f.title }}</li>{% endfor %}
+{% for child in child_pages(page.urlPath) %}{{ page_fields(child).price }}{% endfor %}
+```
 
 ## File uploads & media
 

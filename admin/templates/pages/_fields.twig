@@ -1,0 +1,188 @@
+{#
+  Schema-driven field inputs, shared by content blocks (_block_item.twig) and
+  page-level fields (edit.twig). Each input carries data-field / data-subfield;
+  edit.twig's collectFields() serializes a container of them.
+
+  Params: fields — normalized field defs ({name, type, label, …, item_fields})
+          values — current values keyed by field name (missing ⇒ field default)
+#}
+{% for field in fields %}
+    {% set _value = values[field.name] is defined ? values[field.name] : (field.default ?? '') %}
+
+    {% if field.type == 'text' %}
+        <div class="field">
+            <label>{{ field.label }}</label>
+            <input type="text" data-field="{{ field.name }}"
+                   value="{{ _value }}">
+        </div>
+
+    {% elseif field.type == 'image' %}
+        <div class="field">
+            <label>{{ field.label }}</label>
+            <div class="input-with-btn">
+                <input type="text" data-field="{{ field.name }}"
+                       value="{{ _value ?? '' }}"
+                       placeholder="filename.jpg">
+                <button type="button" class="btn btn-sm upload-trigger">{{ t.block_upload }}</button>
+                <input type="file" class="upload-file-input" hidden accept="image/*,.svg">
+            </div>
+        </div>
+
+    {% elseif field.type == 'file' %}
+        <div class="field">
+            <label>{{ field.label }}</label>
+            <div class="file-upload-widget" data-field="{{ field.name }}">
+                <div class="input-with-btn">
+                    <input type="text" data-field="{{ field.name }}"
+                           value="{{ _value ?? '' }}"
+                           placeholder="document.pdf" readonly>
+                    <button type="button" class="btn btn-sm file-upload-trigger">{{ t.block_upload }}</button>
+                    <button type="button" class="btn btn-sm file-upload-clear"
+                        style="display:{{ _value ?? '' ? 'inline-block' : 'none' }}">{{ t.block_file_clear }}</button>
+                </div>
+                <input type="file" class="file-upload-input" hidden
+                       accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">
+                {% set _fname = _value ?? '' %}
+                {% if _fname %}
+                    <p class="file-upload-name" style="margin:.35rem 0 0; font-size:.82rem; color:#5a6478;">
+                        📎 {{ _fname }}
+                    </p>
+                {% else %}
+                    <p class="file-upload-name" style="margin:.35rem 0 0; font-size:.82rem; color:#5a6478; display:none;"></p>
+                {% endif %}
+            </div>
+        </div>
+
+    {% elseif field.type == 'textarea' %}
+        <div class="field">
+            <label>{{ field.label }}</label>
+            <textarea data-field="{{ field.name }}"
+                      rows="4">{{ _value ?? '' }}</textarea>
+        </div>
+
+    {% elseif field.type == 'select' %}
+        <div class="field">
+            <label>{{ field.label }}</label>
+            <select data-field="{{ field.name }}">
+                {% include '@admin/_select_options.twig' with {
+                    field: field,
+                    current: _value ?? ''
+                } %}
+            </select>
+        </div>
+
+    {% elseif field.type == 'boolean' %}
+        <div class="field checkbox">
+            <label>
+                <input type="checkbox" data-field="{{ field.name }}"
+                    {% if _value %}checked{% endif %}>
+                {{ field.label }}
+            </label>
+        </div>
+
+    {% elseif field.type == 'number' %}
+        <div class="field">
+            <label>{{ field.label }}</label>
+            <input type="number" step="any" data-field="{{ field.name }}" value="{{ _value ?? '' }}"
+                   {% if field.min is defined %}min="{{ field.min }}"{% endif %}
+                   {% if field.max is defined %}max="{{ field.max }}"{% endif %}
+                   style="width:140px;">
+        </div>
+
+    {% elseif field.type == 'color' %}
+        <div class="field">
+            <label>{{ field.label }}</label>
+            <div class="color-field">
+                <input type="color" class="color-picker" value="{{ _value ?: '#ffffff' }}">
+                <input type="text" class="color-value" data-field="{{ field.name }}" value="{{ _value ?? '' }}"
+                       placeholder="#rrggbb" style="width:120px; font-family:monospace;">
+            </div>
+        </div>
+
+    {% elseif field.type == 'list' %}
+        {% set hasImage = (field.item_fields|default([]))|filter(sf => sf.type == 'image')|length > 0 %}
+        {% set hasFile  = (field.item_fields|default([]))|filter(sf => sf.type == 'file')|length > 0 %}
+        <div class="field">
+            <label>{{ field.label }}</label>
+            <div class="list-field{% if hasImage %} list-field--images{% elseif hasFile %} list-field--files{% endif %}"
+                 data-field="{{ field.name }}"
+                 data-item-fields="{{ field.item_fields|json_encode|e('html_attr') }}">
+                {% for item in _value is iterable ? _value : [] %}
+                    <div class="list-item">
+                        {% for subfield in field.item_fields %}
+                            <div class="field{% if subfield.type == 'image' %} field--img{% endif %}">
+                                {% if subfield.type == 'image' %}
+                                    {% set _fname = attribute(item, subfield.name)|default('') %}
+                                    {% set _isUrl = _fname starts with 'http' or _fname starts with '/' %}
+                                    {% set _mediaBase = (not _isUrl and mode == 'edit')
+                                        ? '/media/' ~ (page.urlPath == '/' ? '~' : page.urlPath|trim('/'))
+                                        : '' %}
+                                    {% set _thumbSrc = _fname ? (_isUrl ? _fname : _mediaBase ~ '/' ~ _fname) : '' %}
+                                    <div class="img-thumb-upload">
+                                        <input type="hidden" data-subfield="{{ subfield.name }}" value="{{ _fname }}">
+                                        <label class="img-thumb-wrap" title="{{ t.block_upload_image_ph|replace({'\n': ' '}) }}">
+                                            {% if _fname %}
+                                                <img src="{{ _thumbSrc }}" alt="{{ _fname }}">
+                                            {% else %}
+                                                <span class="img-thumb-placeholder">{{ t.block_upload_image_ph|nl2br }}</span>
+                                            {% endif %}
+                                        </label>
+                                        <input type="file" class="upload-file-input" hidden accept="image/*,.svg">
+                                    </div>
+                                {% elseif subfield.type == 'file' %}
+                                    {% set _fname = attribute(item, subfield.name)|default('') %}
+                                    <label>{{ subfield.label }}</label>
+                                    <div class="file-upload-widget">
+                                        <div class="input-with-btn">
+                                            <input type="text" data-subfield="{{ subfield.name }}"
+                                                   value="{{ _fname }}" placeholder="document.pdf" readonly>
+                                            <button type="button" class="btn btn-sm file-upload-trigger">{{ t.block_upload }}</button>
+                                            <button type="button" class="btn btn-sm file-upload-clear"
+                                                style="display:{{ _fname ? 'inline-block' : 'none' }}">{{ t.block_file_clear }}</button>
+                                        </div>
+                                        <input type="file" class="file-upload-input" hidden
+                                               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">
+                                        <p class="file-upload-name"
+                                           style="margin:.35rem 0 0;font-size:.82rem;color:#5a6478;{% if not _fname %}display:none;{% endif %}">
+                                            {% if _fname %}📎 {{ _fname }}{% endif %}
+                                        </p>
+                                    </div>
+                                {% elseif subfield.type == 'select' %}
+                                    <label>{{ subfield.label }}</label>
+                                    <select data-subfield="{{ subfield.name }}">
+                                        {% include '@admin/_select_options.twig' with {
+                                            field: subfield,
+                                            current: attribute(item, subfield.name) ?? ''
+                                        } %}
+                                    </select>
+                                {% else %}
+                                    <label>{{ subfield.label }}</label>
+                                    <input type="text" data-subfield="{{ subfield.name }}"
+                                           value="{{ attribute(item, subfield.name)|default('') }}">
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                        <div class="list-item-btns">
+                            <button type="button" class="btn btn-sm list-item-remove">{{ t.block_list_item_remove }}</button>
+                        </div>
+                    </div>
+                {% endfor %}
+                {% if hasImage %}
+                    <label class="gallery-uploader" title="{{ t.block_gallery_placeholder }}">
+                        <input type="file" class="gallery-upload-input" hidden multiple accept="image/*,.svg">
+                        <span>{{ t.block_gallery_upload }}</span>
+                    </label>
+                {% elseif hasFile %}
+                    <label class="files-uploader" title="{{ t.block_files_placeholder }}">
+                        <input type="file" class="files-upload-input" hidden multiple
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.csv,.txt,.rtf,.zip,.gz,.tar,.7z,.rar,.mp3,.wav,.ogg,.mp4,.webm,.json,.xml,.md">
+                        <span>{{ t.block_files_upload }}</span>
+                    </label>
+                {% else %}
+                    <button type="button" class="btn btn-sm list-item-add">{{ t.block_list_item_add }}</button>
+                {% endif %}
+            </div>
+        </div>
+
+    {% endif %}
+{% endfor %}
