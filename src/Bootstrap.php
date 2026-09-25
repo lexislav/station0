@@ -177,6 +177,18 @@ final class Bootstrap
                 fn (\Station0\Service\Page $page) => $c->get(PageFields::class)->resolved($page)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'page',
+                // A published page by URL path, e.g. the value of an
+                // `options_from: pages` select; null when missing or not live.
+                function (?string $urlPath) use ($c) {
+                    if ($urlPath === null || trim($urlPath) === '') {
+                        return null;
+                    }
+                    $page = $c->get(ContentRepository::class)->find('/' . trim($urlPath, '/'));
+                    return $page !== null && $page->isLive() ? $page : null;
+                }
+            ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'child_pages',
                 function (string $parentUrl) use ($c) {
                     $repo      = $c->get(ContentRepository::class);
@@ -240,7 +252,14 @@ final class Bootstrap
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'collection_item',
-                function (string $name, string $slug) use ($c) {
+                function (?string $name, ?string $slug = null) use ($c) {
+                    // One argument: "<collection>/<slug>" (an `options_from: collections` value).
+                    if ($slug === null) {
+                        [$name, $slug] = array_pad(explode('/', trim((string) $name, '/'), 2), 2, '');
+                    }
+                    if ((string) $name === '' || (string) $slug === '') {
+                        return null;
+                    }
                     return $c->get(CollectionRepository::class)->find($name, $slug);
                 }
             ));
@@ -399,6 +418,7 @@ final class Bootstrap
 
         $container->set(FieldOptions::class, fn ($c) => new FieldOptions(
             $c->get(CollectionRepository::class),
+            $c->get(ContentRepository::class),
         ));
 
         $container->set(MediaService::class, fn ($c) => new MediaService(

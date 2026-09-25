@@ -6,6 +6,7 @@ namespace Station0\Tests\Service;
 
 use PHPUnit\Framework\TestCase;
 use Station0\Service\CollectionRepository;
+use Station0\Service\ContentRepository;
 use Station0\Service\FieldOptions;
 
 final class FieldOptionsTest extends TestCase
@@ -42,9 +43,24 @@ final class FieldOptionsTest extends TestCase
         file_put_contents($path . '/item.txt', $txt . "---\n");
     }
 
+    /** @param array<string, string> $meta */
+    private function addPage(string $path, string $template, array $meta): void
+    {
+        $dir = $this->dir . '/_pages' . ($path === '/' ? '' : $path);
+        @mkdir($dir, 0775, true);
+        $txt = 'Template: ' . $template . "\n";
+        foreach ($meta as $k => $v) {
+            $txt .= $k . ': ' . $v . "\n";
+        }
+        file_put_contents($dir . '/' . $template . '.txt', $txt . "---\n");
+    }
+
     private function options(): FieldOptions
     {
-        return new FieldOptions(new CollectionRepository($this->dir));
+        return new FieldOptions(
+            new CollectionRepository($this->dir),
+            new ContentRepository($this->dir . '/_pages'),
+        );
     }
 
     /** @return list<string> */
@@ -149,8 +165,88 @@ final class FieldOptionsTest extends TestCase
     public function testUnknownSourceOrMissingCollectionYieldsNoOptions(): void
     {
         self::assertSame([], $this->options()->resolve(['options_from' => 'collection:nope']));
-        self::assertSame([], $this->options()->resolve(['options_from' => 'pages:/blog']));
+        self::assertSame([], $this->options()->resolve(['options_from' => 'bogus:x']));
+        self::assertSame([], (new FieldOptions())->resolve(['options_from' => 'pages']));
         self::assertSame([], (new FieldOptions())->resolve(['options_from' => 'collection:points']));
+    }
+
+    // ─── Collections source (editor picks the collection) ───
+
+    public function testCollectionsSourceGroupsByCollectionLabelWithQualifiedValue(): void
+    {
+        $this->addItem('banners', 'summer', ['Title' => 'Summer']);
+        $this->addItem('blocks', 'cta', ['Title' => 'CTA']);
+        $this->addItem('blocks', 'draft', ['Title' => 'Draft', 'Published' => 'false']);
+        file_put_contents($this->dir . '/banners/_collection.yaml', "label: Bannery\n");
+
+        $field = $this->options()->resolveFields([[
+            'name' => 'ref', 'type' => 'select', 'options_from' => 'collections',
+        ]])[0];
+
+        self::assertSame(['banners/summer', 'blocks/cta'], self::values($field['options']));
+        self::assertSame(['Bannery', 'blocks'], array_column($field['option_groups'], 'label'));
+        self::assertSame('—', $field['placeholder']);
+    }
+
+    public function testCollectionsSourceRespectsListedOrderAndSkipsUnknown(): void
+    {
+        $this->addItem('banners', 'summer', ['Title' => 'Summer']);
+        $this->addItem('blocks', 'cta', ['Title' => 'CTA']);
+
+        $opts = $this->options()->resolve([
+            'options_from' => 'collections: blocks, nope, banners',
+            'option_label' => '{collection}: {title}',
+        ]);
+
+        self::assertSame(['blocks/cta', 'banners/summer'], self::values($opts));
+        self::assertSame('blocks: CTA', $opts[0]['label']);
+    }
+
+    // ─── Pages source ───
+
+    public function testPagesSourceListsPublishedPagesByUrlPath(): void
+    {
+        $this->addPage('/', 'home', ['Title' => 'Home']);
+        $this->addPage('/about', 'page', ['Title' => 'About']);
+        $this->addPage('/blog', 'blog', ['Title' => 'Blog']);
+        $this->addPage('/blog/first', 'article', ['Title' => 'First']);
+        $this->addPage('/blog/secret', 'article', ['Title' => 'Secret', 'Published' => 'false']);
+
+        $opts = $this->options()->resolve(['options_from' => 'pages']);
+
+        self::assertSame(['/', '/about', '/blog', '/blog/first'], self::values($opts));
+        self::assertSame('First', $opts[3]['label']);
+    }
+
+    public function testPagesSourceFiltersByParentAndTemplate(): void
+    {
+        $this->addPage('/blog', 'blog', ['Title' => 'Blog']);
+        $this->addPage('/blog/first', 'article', ['Title' => 'First', 'Price' => '5']);
+        $this->addPage('/blog/news', 'page', ['Title' => 'News']);
+        $this->addPage('/blog/news/deep', 'article', ['Title' => 'Deep', 'Price' => '10']);
+        $this->addPage('/blogger', 'article', ['Title' => 'Not a child']);
+
+        $field = $this->options()->resolveFields([[
+            'name'         => 'related',
+            'type'         => 'select',
+            'options_from' => 'pages:/blog/',
+            'template'     => ['article'],
+            'sort_by'      => '-price',
+            'group_by'     => 'parent_title',
+            'option_label' => '{title} ({path})',
+        ]])[0];
+
+        self::assertSame(['/blog/news/deep', '/blog/first'], self::values($field['options']));
+        self::assertSame('Deep (/blog/news/deep)', $field['options'][0]['label']);
+        self::assertSame(['News', 'Blog'], array_column($field['option_groups'], 'label'));
+    }
+
+    public function testPagesSourceUnderRootExcludesRootItself(): void
+    {
+        $this->addPage('/', 'home', ['Title' => 'Home']);
+        $this->addPage('/about', 'page', ['Title' => 'About']);
+
+        self::assertSame(['/about'], self::values($this->options()->resolve(['options_from' => 'pages:/'])));
     }
 
     // ─── Initial value ───

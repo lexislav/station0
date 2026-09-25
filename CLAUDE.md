@@ -144,6 +144,19 @@ renders them through `admin/templates/_select_options.twig` (server) and
   `sort_by` (`-field` = desc, numeric-aware incl. decimal comma),
   `option_label` (`{title}`, `{slug}`, `{<extra field>}`), `placeholder`.
   Value stored = item slug. Data-source selects get an empty `—` choice by default.
+- `options_from: collections` (all) | `collections:a,b` (listed, in order) —
+  the editor picks the collection too: one `<optgroup>` per collection
+  (schema `label`), value `<collection>/<slug>`, looked up with the one-arg
+  `collection_item('a/slug')`. Extra label/sort field: `{collection}`.
+- `options_from: pages` | `pages:/blog` (descendants of /blog, never /blog
+  itself) + optional `template: article` (string or list). Published (live)
+  pages only; value = URL path, looked up with `page(value)` (null when
+  missing / not live). Label/sort/group fields: `title`, `slug`, `path`,
+  `template`, `sort`, `date`, `parent`, `parent_title` + page fields
+  (`page.extra`). Stored paths are not rewritten on page rename/move — the
+  admin then shows the value as "(not found)".
+- Multiple relations ("related articles") = a `list` field whose item has
+  one `select` subfield.
 - `FieldOptions::initialValue()` is the select default used by
   `BlockRegistry::fieldDefault()`: explicit `default`, else `''` for
   data-source/placeholder selects, else the first static option.
@@ -343,6 +356,7 @@ Supported field types: `text`, `textarea`, `image`, `number`, `select`, `boolean
 ```twig
 collection('banners')                    {# → CollectionItem[]  (published only) #}
 collection_item('banners', 'summer-sale') {# → ?CollectionItem #}
+collection_item('banners/summer-sale')    {# same, one-arg form (options_from: collections value) #}
 render_collection_item(item)             {# → HTML string (markdown or blocks, is_safe html) #}
 ```
 

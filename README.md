@@ -158,6 +158,52 @@ The stored value is the item **slug**; resolve it in the block template with
 comma (`318,5`); items without the field sort last. If a stored slug no longer
 exists, the editor keeps it as a "(not found)" option instead of dropping it.
 
+### Letting the editor pick the collection
+
+`options_from: collections` offers the items of **every** collection (or
+`collections:banners,shared-blocks` for just those, in that order), one
+`<optgroup>` per collection. The stored value is `<collection>/<slug>`:
+
+```twig
+{% set item = collection_item(block.ref) %}   {# one-arg form: "banners/summer-sale" #}
+{% if item %}{{ render_collection_item(item) }}{% endif %}
+```
+
+`{collection}` is available in `option_label` / `sort_by` next to the item fields.
+
+## Select options from pages
+
+Relations between pages ("article → related article") use `options_from: pages`:
+
+```yaml
+related:
+  type: list
+  label: Related articles
+  item:
+    page:
+      type: select
+      label: Article
+      options_from: pages:/blog         # descendants of /blog; plain "pages" = all
+      template: article                 # optional: string or list of templates
+      sort_by: -date
+      option_label: "{title} ({path})"
+```
+
+Only published pages are offered. The stored value is the page's URL path;
+`page(value)` returns the page (or `null` if it is missing or not published):
+
+```twig
+{% for rel in fields.related %}
+  {% set p = page(rel.page) %}
+  {% if p %}<a href="{{ p.urlPath }}">{{ p.title }}</a> {{ page_fields(p).subtitle }}{% endif %}
+{% endfor %}
+```
+
+Label/sort/group fields: `title`, `slug`, `path`, `template`, `sort`, `date`,
+`parent`, `parent_title`, plus the page's own fields. Renaming or moving a page
+does not rewrite references to it — the editor then shows the old path as
+"(not found)".
+
 Static `options` also accept richer forms now — `{value: label}` maps and
 `[{value, label, group}]` entries — next to the plain string list.
 

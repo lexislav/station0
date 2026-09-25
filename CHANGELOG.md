@@ -5,6 +5,25 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.6] - 2026-09-25
+
+### Added
+- **Page references in selects.** `options_from: pages` offers published
+  pages (`pages:/blog` = descendants of `/blog`, optional `template:` filter,
+  string or list). The stored value is the page's URL path; the new `page()`
+  Twig function returns the live page or `null`. Label/sort/group fields:
+  `title`, `slug`, `path`, `template`, `sort`, `date`, `parent`,
+  `parent_title` and the page's own fields.
+- **Editor-chosen collection.** `options_from: collections` (or
+  `collections:a,b`) offers the items of several collections, one
+  `<optgroup>` per collection; the stored value is `<collection>/<slug>`.
+- `collection_item()` accepts a single `"<collection>/<slug>"` argument.
+- Unit tests for both sources.
+
+### Changed
+- `FieldOptions` resolves every data source into one record shape, so
+  `sort_by`, `group_by` and `option_label` behave the same for all of them.
+
 ## [0.7.5] - 2026-09-25
 
 ### Added
@@ -122,6 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.7.6]: https://github.com/lexislav/station0/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/lexislav/station0/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/lexislav/station0/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/lexislav/station0/compare/v0.7.2...v0.7.3
