@@ -5,7 +5,7 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.8] - 2026-09-25
 
 ### Added
 - **Image thumbnails.** New Twig filters `|thumb(width, height = 0, fit)` and
@@ -177,6 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.7.8]: https://github.com/lexislav/station0/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/lexislav/station0/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/lexislav/station0/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/lexislav/station0/compare/v0.7.4...v0.7.5
