@@ -122,7 +122,7 @@
                                         <input type="hidden" data-subfield="{{ subfield.name }}" value="{{ _fname }}">
                                         <label class="img-thumb-wrap" title="{{ t.block_upload_image_ph|replace({'\n': ' '}) }}">
                                             {% if _fname %}
-                                                <img src="{{ _thumbSrc }}" alt="{{ _fname }}">
+                                                <img src="{{ _thumbSrc|thumb(160, 160, 'cover') }}" alt="{{ _fname }}" loading="lazy">
                                             {% else %}
                                                 <span class="img-thumb-placeholder">{{ t.block_upload_image_ph|nl2br }}</span>
                                             {% endif %}

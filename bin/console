@@ -31,6 +31,8 @@ $dotenv->safeLoad();
 use Delight\Auth\Auth;
 use Station0\Service\ContentRepository;
 use Station0\Service\FileCache;
+use Station0\Service\MediaService;
+use Station0\Service\ThumbService;
 use Station0\Service\UserRepository;
 use Symfony\Component\Yaml\Yaml;
 
@@ -118,6 +120,52 @@ switch ($command) {
         echo "Smazáno {$n} položek cache.\n";
         break;
 
+    case 'thumbs:clear':
+        // public/thumb/ is only touched in static mode — never delete a web-root
+        // directory the site might own for something else.
+        $n = ThumbService::purge(
+            $config['paths']['cache'],
+            !empty($config['thumbs']['static']) ? \Station0\Bootstrap::publicDir($config) : null,
+        );
+        echo "Smazáno {$n} náhledů.\n";
+        break;
+
+    case 'thumbs:warm':
+        // Renders every published page over HTTP (the server must be running)
+        // and pre-generates each /thumb/... URL found in it, so the first
+        // visitor does not wait for them.
+        $baseUrl = rtrim($args[0] ?? $config['baseUrl'], '/');
+        $repo    = new ContentRepository($config['paths']['content'] . '/pages');
+        $thumbs  = \Station0\Bootstrap::thumbService(
+            $config,
+            new MediaService($repo, $config['paths']['content'] . '/pages', $config['paths']['content'] . '/collections'),
+        );
+        $done = 0;
+        $failed = 0;
+        foreach ($repo->all(false) as $page) {
+            $url  = $baseUrl . implode('/', array_map('rawurlencode', explode('/', $page->urlPath)));
+            $html = @file_get_contents($url);
+            if ($html === false) {
+                fwrite(STDERR, "  {$page->urlPath}: stránku nelze načíst ({$url})\n");
+                continue;
+            }
+            preg_match_all('#/thumb/(\d+x\d+(?:-c)?)/([a-f0-9]{12})/([^"\'\s<>,]+)#u', $html, $m, PREG_SET_ORDER);
+            $seen = [];
+            foreach ($m as [$all, $spec, $sig, $path]) {
+                if (isset($seen[$all])) {
+                    continue;
+                }
+                $seen[$all] = true;
+                $res = $thumbs->resolve($spec, $sig, rawurldecode(html_entity_decode($path)));
+                ($res === null || $res['fallback']) ? $failed++ : $done++;
+            }
+            if ($seen) {
+                echo "  {$page->urlPath}: " . count($seen) . " náhled(ů)\n";
+            }
+        }
+        echo "Hotovo: {$done} náhledů připraveno" . ($failed ? ", {$failed} selhalo" : '') . ".\n";
+        break;
+
     case 'assets:relink':
         $dryRun = in_array('--dry-run', $args, true);
         $repo   = new ContentRepository($config['paths']['content'] . '/pages');
@@ -173,6 +221,8 @@ switch ($command) {
         echo "  user:create <username> <email> [role]    Vytvoří uživatele (role: admin|editor)\n";
         echo "  user:reset-password <email>   Resetuje heslo\n";
         echo "  cache:clear                   Vyčistí cache obsahu\n";
+        echo "  thumbs:clear                  Smaže vygenerované náhledy obrázků\n";
+        echo "  thumbs:warm [baseUrl]         Předgeneruje náhledy všech publikovaných stránek (běžící server)\n";
         echo "  assets:relink [--dry-run]     Převede absolutní /media/... odkazy na page-local názvy\n";
         break;
 }

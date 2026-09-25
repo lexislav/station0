@@ -644,9 +644,9 @@ const i18n = {{ {
     // ── Upload ─────────────────────────────────────────────────────────────
 
     /**
-     * Upload a file. Returns { filename, url } on success, null on failure.
+     * Upload a file. Returns { filename, url, thumb } on success, null on failure.
      * `filename` is what we store in content (page-local reference); `url`
-     * is only useful for previews / ToastUI inline display.
+     * is for ToastUI inline display, `thumb` a small preview for image widgets.
      * `onProgress` (optional) receives a 0–1 fraction during the upload.
      */
     function uploadFile(file, onProgress) {
@@ -675,7 +675,7 @@ const i18n = {{ {
                 let json = {};
                 try { json = JSON.parse(xhr.responseText); } catch { /* non-JSON body */ }
                 if (xhr.status >= 200 && xhr.status < 300 && json.filename) {
-                    resolve({ filename: json.filename, url: json.url });
+                    resolve({ filename: json.filename, url: json.url, thumb: json.thumb || json.url });
                 } else {
                     alert(i18n.uploadFailed + (json.error || xhr.status));
                     resolve(null);
@@ -726,7 +726,7 @@ const i18n = {{ {
         const img = imgWrap.querySelector('.img-thumb-wrap img');
         if (img) {
             const oldSrc = img.src;
-            img.src = result.url;
+            img.src = result.thumb;
             img.alt = result.filename;
             if (oldSrc.startsWith('blob:')) URL.revokeObjectURL(oldSrc);
         }
@@ -988,7 +988,7 @@ const i18n = {{ {
                     img.alt = result.filename;
                     thumbWrap.replaceChild(img, placeholder);
                 }
-                img.src = result.url;
+                img.src = result.thumb;
                 img.alt = result.filename;
                 // Auto-fill caption from filename if field exists and is empty
                 const captionInput = e.target.closest('.list-item')?.querySelector('[data-subfield="caption"]');

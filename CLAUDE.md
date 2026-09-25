@@ -82,7 +82,8 @@ YAML. Keys are lower-cased on read. Serializing omits `null` / `''` / `[]`.
 | `UserRepository` | `src/Service/UserRepository.php` | Wrapper around Delight\Auth |
 | `FileCache` | `src/Service/FileCache.php` | File-based cache (get/set/flush) |
 | `MediaService` | `src/Service/MediaService.php` | Page-local asset storage + ref resolution; also serves collection assets via `_collections/` prefix |
-| `AssetController` | `src/Controller/AssetController.php` | Serves `/media/{path:.+}` |
+| `AssetController` | `src/Controller/AssetController.php` | Serves `/media/{path:.+}` and `/thumb/{spec}/{sig}/{path:.+}` |
+| `ThumbService` | `src/Service/ThumbService.php` | `\|thumb` / `\|thumb_srcset` Twig filters: signed thumbnail URLs, lazy GD generation into `cache/thumbs/` |
 | `Slug` | `src/Support/Slug.php` | URL slug + filename slugification |
 | `CollectionItem` | `src/Service/CollectionItem.php` | Headless content item entity (no URL) |
 | `CollectionRepository` | `src/Service/CollectionRepository.php` | CRUD for Collections + items, reads `_collection.yaml` schemas |
@@ -318,6 +319,54 @@ Cross-page references (`/media/other-page/...`) are left intact.
 
 When deleting a page, `ContentRepository::delete()` removes sibling asset
 files but never sub-directories (those belong to child pages).
+
+### Thumbnails (`ThumbService`)
+
+`{{ src|thumb(w, h = 0, fit = 'contain') }}` and `{{ src|thumb_srcset([400, 800]) }}`
+(Twig filters registered in `Bootstrap`). The filter only builds a URL —
+nothing is resized during page render:
+
+```
+/media/album/foto.jpg|thumb(600)  →  /thumb/600x0/{sig}/album/foto.jpg
+```
+
+- `spec` = `{w}x{h}` (0 = unconstrained), `-c` suffix = `cover` crop, `-webp`
+  suffix = convert (the URL path then ends in `.webp`, which `resolve()`
+  requires and strips); max 3000. Format: filter arg `format` (`webp` /
+  `original`), default from `config['thumbs']['format']`.
+  `sig` = first 12 hex of HMAC-SHA256(`spec|path|source mtime`), so replacing
+  the source changes the URL and responses stay `immutable`.
+- Key: `config['thumbs']['secret']`, else `writable/thumbs.key` (generated
+  once, outside `cache/` so `cache:clear` never invalidates rendered URLs).
+- Config lives in `Bootstrap::thumbService()` (shared with bin/console):
+  `thumbs.secret`, `thumbs.static`, `thumbs.format`, `thumbs.markdown`.
+- `AssetController::thumb()` → `ThumbService::resolve()` validates spec + sig,
+  finds the source through `MediaService::resolveAsset()` (same traversal /
+  source-file guards as `/media`), then generates under `flock` into
+  `cache/thumbs/{aa}/{sha1}.{ext}` (tmp file + rename). If generation fails
+  (e.g. source too large to decode within the 512 MB ceiling) it 302s to the
+  original with `no-store`.
+- Passthrough (returns `src` unchanged): not a `/media/` URL, query string,
+  SVG/GIF/documents, missing file, no GD, or a size that would neither shrink
+  nor crop (never upscales). `ThumbService::plan()` holds the geometry.
+- JPEG q82 progressive, PNG with alpha, WebP q80; EXIF orientation applied
+  (`ext-exif`, JPEG only), dimensions for the no-upscale check use the rotated size.
+- **Static mode** (`thumbs.static`): the file is written to
+  `{public}/thumb/{spec}/{sig}/{path}` (= its URL; `paths.public`, default
+  `{projectRoot}/public`), so the web server serves it from then on. `php -S`
+  needs the router arg (`public/index.php`) — without it, a missing file inside
+  the existing `public/thumb/` dir is a 404 instead of reaching the app.
+- **Markdown**: `PageRenderer::thumbnailImages()` post-processes `<img>` in
+  converted text blocks → `src` = `thumb(thumbs.markdown)` (default
+  `PageRenderer::MARKDOWN_THUMB_WIDTH` = 1200, 0 = off), `srcset` 1x/2x,
+  `loading="lazy"`. Untouched when `thumb()` returns the source unchanged.
+- **Admin**: list image previews (`pages/_fields.twig`) and collection image
+  previews use `|thumb(160, 160, 'cover')` (`ThumbService::ADMIN_PREVIEW`);
+  both upload endpoints add `thumb` to their JSON, which the JS shows.
+- Console: `thumbs:clear` (`ThumbService::purge()`, not part of `cache:clear`;
+  clears `public/thumb/` only in static mode),
+  `thumbs:warm [baseUrl]` fetches each published page over HTTP and resolves
+  every `/thumb/...` URL in the HTML.
 
 ## Collections (headless content stores)
 

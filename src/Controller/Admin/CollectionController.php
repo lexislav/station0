@@ -14,6 +14,7 @@ use Station0\Service\CollectionRepository;
 use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
+use Station0\Service\ThumbService;
 use Station0\Support\FieldSchema;
 use Station0\Support\Slug;
 
@@ -28,6 +29,7 @@ final class CollectionController
         private readonly string $adminPath,
         private readonly FieldOptions $fieldOptions = new FieldOptions(),
         private readonly ?CollectionGroups $groups = null,
+        private readonly ?ThumbService $thumbs = null,
     ) {}
 
     // ─── Collection list ───
@@ -273,6 +275,8 @@ final class CollectionController
 
         try {
             $result = $this->media->storeForCollection($collectionName, $itemSlug, $file);
+            $result['thumb'] = $this->thumbs?->url($result['url'], ThumbService::ADMIN_PREVIEW, ThumbService::ADMIN_PREVIEW, 'cover')
+                ?? $result['url'];
             $response->getBody()->write(json_encode($result));
             return $response->withHeader('Content-Type', 'application/json');
         } catch (\RuntimeException $e) {
