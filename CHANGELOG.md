@@ -5,6 +5,27 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-25
+
+### Added
+- **Site tasks.** The site's own scripts (imports, syncs, exports…) as PHP
+  files in `site/tasks/`, runnable from the console (`task:list`,
+  `task:run <name> --param=value`) and from the admin (new "Tasks" tab:
+  parameter form incl. file upload, live output, run history). Per-task
+  `roles`, typed `params` (`text`, `textarea`, `number`, `boolean`, `select`,
+  `file`), `confirm`, `timeout`; one run at a time; cache flush after
+  success; run records and log in `writable/logs/tasks/`.
+- **Background runs.** Admin and hook runs start in the background — a
+  detached `console task:worker` process, else `fastcgi_finish_request`, else
+  inline (`tasks.runner` / `tasks.php` in `site/config.php`). The run page
+  streams the output while it runs.
+- **Hooks.** A task with `on: ['page.saved:/blog', 'collection.item.*:products', …]`
+  runs on content events (`page.saved`, `page.moved`, `page.deleted`,
+  `collection.item.saved`, `collection.item.deleted`) and gets the event
+  payload via `$task->event()`.
+- `CollectionRepository::save()` stores a new item without `filePath` at
+  `<collection>/<slug>/item.txt`.
+
 ## [0.7.8] - 2026-09-25
 
 ### Added
@@ -177,6 +198,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.8.0]: https://github.com/lexislav/station0/compare/v0.7.8...v0.8.0
 [0.7.8]: https://github.com/lexislav/station0/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/lexislav/station0/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/lexislav/station0/compare/v0.7.5...v0.7.6

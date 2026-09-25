@@ -1,0 +1,14 @@
+{# Run badge. Params: run — run record (TaskRegistry::info / TaskRuns) or null. #}
+{% if run %}
+    {% set cls = { done: 'ok', failed: 'failed', interrupted: 'failed', running: 'planned', queued: 'planned' }[run.status] ?? '' %}
+    <span class="tag {{ cls }}" data-run-status>{{ attribute(t, 'tasks_status_' ~ run.status) ?? run.status }}{% if run.status in ['failed', 'interrupted'] and run.exit %} ({{ run.exit }}){% endif %}</span>
+    <span style="font-size:.85rem;">
+        {{ (run.startedAt ?? run.createdAt)|date('j. n. Y H:i') }}
+        {%- if run.duration is not null %} · {{ run.duration }} s{% endif %}
+        {%- if run.source == 'hook' %} · {{ t.tasks_source_hook }} <code>{{ run.event.event ?? '' }}</code>
+        {%- elseif run.source == 'cli' %} · CLI{% endif %}
+        {%- if run.user %} · {{ run.user }}{% endif %}
+    </span>
+{% else %}
+    <span style="font-size:.85rem;">{{ t.tasks_never_run }}</span>
+{% endif %}

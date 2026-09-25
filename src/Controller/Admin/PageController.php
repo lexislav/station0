@@ -15,6 +15,7 @@ use Station0\Service\FileCache;
 use Station0\Service\Page;
 use Station0\Service\PageFields;
 use Station0\Service\PageRenderer;
+use Station0\Service\TaskHooks;
 use Station0\Service\TemplateBlocks;
 use Station0\Support\FieldSchema;
 use Station0\Support\Slug;
@@ -35,6 +36,7 @@ final class PageController
         private readonly string $adminPath,
         private readonly string $templatesPath = '',
         private readonly FieldOptions $fieldOptions = new FieldOptions(),
+        private readonly ?TaskHooks $hooks = null,
     ) {}
 
     // ─── List ───
@@ -94,7 +96,11 @@ final class PageController
                 if ($movedPage === null) {
                     return $this->jsonResponse($response, ['ok' => false, 'error' => 'Source page not found.'], 404);
                 }
+                $previousPath = $movedPage->urlPath;
                 $this->content->move($movedPage, $parentUrl);
+                if ($movedPage->urlPath !== $previousPath) {
+                    $movedEvent = ['path' => $movedPage->urlPath, 'previous_path' => $previousPath];
+                }
             }
 
             $childrenDir = rtrim($this->content->childrenDirForUrl($parentUrl), '/');
@@ -114,6 +120,9 @@ final class PageController
             }
 
             $this->cache->flush();
+            if (isset($movedEvent)) {
+                $this->hooks?->dispatch('page.moved', $movedEvent);
+            }
             return $this->jsonResponse($response, ['ok' => true]);
         } catch (\Throwable $e) {
             return $this->jsonResponse($response, ['ok' => false, 'error' => $e->getMessage()], 422);
@@ -337,6 +346,7 @@ final class PageController
         $this->cache->flush();
 
         $newUrl  = rtrim($parentUrl === '/' ? '' : $parentUrl, '/') . '/' . $slug;
+        $this->hooks?->dispatch('page.saved', $this->pagePayload($page, $newUrl) + ['created' => true]);
         $editKey = ltrim($newUrl, '/');
         return $response->withStatus(302)->withHeader('Location', $this->adminPath . '/pages/' . $editKey . '/edit');
     }
@@ -446,12 +456,15 @@ final class PageController
         if ($newSlug === '' && $page->title !== '') {
             $newSlug = Slug::fromTitle($page->title);
         }
+        $previousPath = $page->urlPath;
         if ($newSlug !== '' && $page->slug !== '' && $newSlug !== $page->slug) {
             $this->content->rename($page, $newSlug);
         }
 
         $this->content->save($page);
         $this->cache->flush();
+        $this->hooks?->dispatch('page.saved', $this->pagePayload($page, $page->urlPath) + ['created' => false]
+            + ($page->urlPath !== $previousPath ? ['previous_path' => $previousPath] : []));
 
         $editKey = $page->urlPath === '/' ? '~' : ltrim($page->urlPath, '/');
         return $response->withStatus(302)->withHeader('Location', $this->adminPath . '/pages/' . $editKey . '/edit');
@@ -462,12 +475,22 @@ final class PageController
     public function delete(Request $request, Response $response, array $args): Response
     {
         $urlPath = $this->argsToUrlPath($args);
-        $this->content->delete($urlPath);
+        $page    = $this->content->find($urlPath);
+        $deleted = $this->content->delete($urlPath);
         $this->cache->flush();
+        if ($deleted && $page !== null) {
+            $this->hooks?->dispatch('page.deleted', $this->pagePayload($page, $urlPath));
+        }
         return $response->withStatus(302)->withHeader('Location', $this->adminPath . '/pages');
     }
 
     // ─── Helpers ───
+
+    /** Hook payload for a page event (see TaskHooks). */
+    private function pagePayload(Page $page, string $urlPath): array
+    {
+        return ['path' => $urlPath, 'title' => $page->title, 'template' => $page->template];
+    }
 
     /** Convert Slim route {path:.+} arg to a leading-slash URL path. '~' is the homepage sentinel. */
     private function argsToUrlPath(array $args): string

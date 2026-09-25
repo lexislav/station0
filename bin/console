@@ -29,9 +29,13 @@ $dotenv = Dotenv\Dotenv::createImmutable($projectRoot);
 $dotenv->safeLoad();
 
 use Delight\Auth\Auth;
+use Station0\Service\CollectionRepository;
 use Station0\Service\ContentRepository;
+use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
+use Station0\Service\TaskLauncher;
+use Station0\Service\TaskRegistry;
 use Station0\Service\ThumbService;
 use Station0\Service\UserRepository;
 use Symfony\Component\Yaml\Yaml;
@@ -215,6 +219,79 @@ switch ($command) {
         }
         break;
 
+    case 'task:list':
+    case 'task:run':
+    case 'task:worker':
+        $pages       = new ContentRepository($config['paths']['content'] . '/pages');
+        $collections = new CollectionRepository($config['paths']['content'] . '/collections');
+        $tasks = new TaskRegistry(
+            $config['paths']['tasks'] ?? $siteRoot . '/tasks',
+            $config['paths']['logs'] . '/tasks',
+            $config,
+            $pages,
+            $collections,
+            new FileCache($config['paths']['cache']),
+            new FieldOptions($collections, $pages),
+        );
+
+        if ($command === 'task:worker') {
+            // Internal: executes a queued background run (see TaskLauncher).
+            $launcher = new TaskLauncher($tasks, $station0Root, $projectRoot, (array) ($config['tasks'] ?? []));
+            $result   = $launcher->work((string) ($args[0] ?? ''));
+            exit($result !== null && ($result['exit'] ?? 1) === 0 ? 0 : 1);
+        }
+
+        if ($command === 'task:list') {
+            if ($tasks->all() === []) {
+                echo "Žádné úlohy (site/tasks/*.php).\n";
+                break;
+            }
+            foreach ($tasks->all() as $t) {
+                printf("  %-24s %s%s%s\n", $t['name'], $t['label'],
+                    $t['on'] !== [] ? '  [on: ' . implode(', ', $t['on']) . ']' : '',
+                    $t['error'] !== null ? '  [CHYBA: ' . $t['error'] . ']' : '');
+                foreach ($t['params'] as $p) {
+                    printf("  %-24s   --%s%s  %s\n", '', $p['name'], $p['type'] === 'boolean' ? '' : '=<' . $p['type'] . '>', $p['label'] . (!empty($p['required']) ? ' (povinné)' : ''));
+                }
+            }
+            break;
+        }
+
+        // task:run <name> [--param=value] [--flag]
+        $name  = null;
+        $input = [];
+        foreach ($args as $arg) {
+            if (preg_match('/^--([A-Za-z0-9_-]+)(?:=(.*))?$/s', $arg, $m)) {
+                $input[$m[1]] = array_key_exists(2, $m) ? $m[2] : true;
+            } elseif ($name === null) {
+                $name = $arg;
+            }
+        }
+        $task = $name !== null ? $tasks->find($name) : null;
+        if ($task === null) {
+            fwrite(STDERR, $name === null
+                ? "Usage: bin/console task:run <name> [--param=value] [--flag]\n"
+                : "Úloha '{$name}' neexistuje. Viz task:list.\n");
+            exit(1);
+        }
+        ['values' => $values, 'errors' => $errors] = $tasks->resolveParams($task, $input);
+        if ($errors !== []) {
+            foreach ($errors as $param => $code) {
+                fwrite(STDERR, "--{$param}: " . match ($code) {
+                    'required' => 'povinný parametr',
+                    'option'   => 'neplatná volba',
+                    'file'     => 'soubor neexistuje',
+                    default    => 'neplatná hodnota',
+                } . "\n");
+            }
+            exit(1);
+        }
+        // Live output; STDOUT bypasses the output buffer the runner captures echo with.
+        $result = $tasks->run($task, $values, 'cli', null, function (string $level, string $text) {
+            fwrite($level === 'error' ? STDERR : STDOUT, ($level === 'warn' ? '[!] ' : '') . $text . "\n");
+        });
+        exit($result['exit'] === 0 ? 0 : max(1, min(255, (int) $result['exit'])));
+
     case 'help':
     default:
         echo "Station0 console\n";
@@ -224,5 +301,7 @@ switch ($command) {
         echo "  thumbs:clear                  Smaže vygenerované náhledy obrázků\n";
         echo "  thumbs:warm [baseUrl]         Předgeneruje náhledy všech publikovaných stránek (běžící server)\n";
         echo "  assets:relink [--dry-run]     Převede absolutní /media/... odkazy na page-local názvy\n";
+        echo "  task:list                     Vypíše úlohy webu (site/tasks/*.php)\n";
+        echo "  task:run <name> [--param=value]  Spustí úlohu webu\n";
         break;
 }

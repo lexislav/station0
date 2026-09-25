@@ -26,6 +26,9 @@
                     {%- elseif g.icon %}<span class="nav-icon">{{ g.icon }}</span>{% endif -%}
                     {{ g.label }}</a>
             {% endfor %}
+            {% if has_tasks() %}
+                <a data-nav="tasks" href="{{ app.adminPath }}/tasks">{{ t.nav_tasks }}</a>
+            {% endif %}
             {% if user is defined and user.isAdmin %}
                 <a data-nav="settings" href="{{ app.adminPath }}/settings">{{ t.nav_site_settings }}</a>
             {% endif %}
