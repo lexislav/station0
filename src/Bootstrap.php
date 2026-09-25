@@ -135,7 +135,8 @@ final class Bootstrap
 
         $container->set(PDO::class, function () use ($config) {
             $dbPath = $config['paths']['db'];
-            $fresh = !file_exists($dbPath);
+            // An empty file (left by an earlier failed run) still needs the schema.
+            $fresh = !file_exists($dbPath) || filesize($dbPath) === 0;
             $pdo = new PDO('sqlite:' . $dbPath);
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             if ($fresh) {

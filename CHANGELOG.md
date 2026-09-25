@@ -5,6 +5,17 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-09-25
+
+### Fixed
+- `bin/console` crashed on a fresh project without `writable/db.sqlite`
+  ("Undefined variable $projectRoot", then a `PDO::exec()` TypeError), so
+  every console command failed before the first admin setup. It now creates
+  the database.
+- An empty `writable/db.sqlite` (left behind by that crash) is treated as a
+  new database by both the console and the web app, so the schema gets
+  loaded instead of failing with a missing `users` table.
+
 ## [0.8.0] - 2026-09-25
 
 ### Added
@@ -198,6 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.8.1]: https://github.com/lexislav/station0/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/lexislav/station0/compare/v0.7.8...v0.8.0
 [0.7.8]: https://github.com/lexislav/station0/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/lexislav/station0/compare/v0.7.6...v0.7.7
