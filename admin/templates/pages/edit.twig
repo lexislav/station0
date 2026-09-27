@@ -390,7 +390,7 @@
     <script id="block-schemas" type="application/json">{{ blockTypes|json_encode|raw }}</script>
 
     <div class="toolbar sticky">
-        <a class="btn" href="{{ app.adminPath }}/pages">{{ t.page_cancel }}</a>
+        <a class="btn" href="{{ cancelUrl|default(app.adminPath ~ '/pages') }}">{{ t.page_cancel }}</a>
         <button type="submit" class="btn primary" id="save-btn" disabled>{{ t.page_save }}</button>
     </div>
 </form>

@@ -88,7 +88,7 @@ YAML. Keys are lower-cased on read. Serializing omits `null` / `''` / `[]`.
 | `CollectionItem` | `src/Service/CollectionItem.php` | Headless content item entity (no URL) |
 | `CollectionRepository` | `src/Service/CollectionRepository.php` | CRUD for Collections + items, reads `_collection.yaml` schemas |
 | `CollectionController` | `src/Controller/Admin/CollectionController.php` | Admin CRUD for collections and items |
-| `CollectionGroups` | `src/Service/CollectionGroups.php` | Groups collections into admin menu tabs (`group:` + `_groups.yaml`), role access |
+| `NavGroups` | `src/Service/NavGroups.php` | Admin menu groups: collections (`group:`) + page subtrees (`Group:` front matter), `_groups.yaml`, role access |
 | `TaskRegistry` | `src/Service/TaskRegistry.php` | Site tasks (`site/tasks/*.php`): load, role access, param validation, run in-process (lock, output capture), run status |
 | `TaskRuns` | `src/Service/TaskRuns.php` | Run records in `writable/logs/tasks/runs/` (meta JSON + live JSONL output), pruning |
 | `TaskLauncher` | `src/Service/TaskLauncher.php` | Background start of a run: spawn `console task:worker` / fastcgi_finish_request / inline |
@@ -424,7 +424,8 @@ render_collection_item(item)             {# → HTML string (markdown or blocks,
 **Admin routes:**
 ```
 GET  /admin/collections                           → list ungrouped collections
-GET  /admin/collection-groups/{group}             → list collections of a group
+GET  /admin/groups/{group}                        → menu group (page subtrees + collections)
+GET  /admin/collection-groups/{group}             → 301 → /admin/groups/{group}
 GET  /admin/collections/{name}                    → item list
 GET  /admin/collections/{name}/new                → create form
 POST /admin/collections/{name}/create             → store
@@ -434,23 +435,45 @@ POST /admin/collections/{name}/{slug}/delete      → delete
 POST /admin/upload-collection                     → asset upload
 ```
 
-### Collection groups
+### Menu groups (collections + pages)
 
-`group: Shop` in `_collection.yaml` puts the collection into its own admin
-menu tab instead of the generic "Collections" tab (which only lists ungrouped
-collections and disappears when none are left). Group id =
-`Slug::sanitize(group)`. Optional central `collections/_groups.yaml`, keyed by
-id, adds `label`, `icon` (text/emoji or inline `<svg>`), `roles` (list of role
-names from `config/roles.php`; admin always passes) and tab order (declaration
-order, inline-only groups after, by label). Empty groups get no tab.
+A group is an own admin menu tab. Members:
 
-- `CollectionGroups` builds the groups; its role checker closure is wired in
+- **Collections:** `group: Shop` in `_collection.yaml`. Grouped collections
+  leave the generic "Collections" tab (which disappears when none are left).
+- **Pages:** `Group: Downloads` in a page's front matter (`Page::$group`,
+  front matter only — no admin field, like `AllowedChildTemplates`). The page
+  **and its subtree** join; a page belongs to its nearest grouped
+  ancestor-or-self (`NavGroups::groupOfPage()`). Grouped pages stay in the
+  Structure tree (with a group badge); the tab is a shortcut. A member inside
+  its own group's subtree is not listed as another root. Grouped streams leave
+  the "Streams" tab (fallback for ungrouped streams only). `group` is a
+  reserved page-field name.
+
+Group id = `Slug::sanitize(group)`, shared by both kinds, so one "Shop" tab can
+hold `/shop` and the `products` collection. Optional central
+`site/content/_groups.yaml` (legacy `collections/_groups.yaml` still read; the
+site-wide file wins per id), keyed by id, adds `label`, `icon` (text/emoji or
+inline `<svg>`), `roles` (list of role names from `config/roles.php`; admin
+always passes) and tab order (declaration order, inline-only groups after, by
+label). Empty groups get no tab.
+
+- `NavGroups` builds the groups; its role checker closure is wired in
   `Bootstrap` from `Auth` + `$roles` (null = unrestricted, used in tests).
-- `collection_groups()` Twig function feeds `layout.twig`; each group gets a
-  `url` — straight to `/collections/{name}` for single-collection groups.
-- `CollectionController` returns 403 on every `{name}` action (incl. upload)
-  when the collection's group denies the user, and passes
-  `activeNav` (`group-{id}` / `collections`) + `backUrl`/`backLabel` to views.
+- `nav_groups()` Twig function feeds `layout.twig`; each group gets a `url`
+  (`NavGroups::path()`) — straight to `/collections/{name}` for a group of a
+  single collection and no pages, else `/groups/{id}`.
+- `/admin/groups/{id}` = `PageController::group()` rendering `pages/list.twig`
+  in `group` mode: subtrees of non-stream roots (drag & drop as in Structure,
+  roots fixed), full records panel for stream roots, then the collections
+  table (`collections/_table.twig`).
+- **Roles:** enforced for collections — `CollectionController` returns 403 on
+  every `{name}` action (incl. upload) when the collection's group denies the
+  user. For pages `roles` only hides the tab / group view (nav only; the pages
+  stay editable through Structure).
+- Page forms get `activeNav` = `group-{id}` and `cancelUrl` = the group view
+  (`PageController::navContext()`); deleting a page inside a group returns
+  there. `CollectionController` passes `activeNav` + `backUrl`/`backLabel`.
 
 ## Site tasks (custom scripts) and hooks
 

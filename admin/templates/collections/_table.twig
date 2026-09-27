@@ -1,0 +1,26 @@
+{# Collection rows: name, item count, manage link. Expects `collections`. #}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>{{ t.collections_th_name }}</th>
+            <th>{{ t.collections_th_items }}</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for col in collections %}
+        <tr>
+            <td>
+                <a href="{{ app.adminPath }}/collections/{{ col.name }}">
+                    <strong>{{ col.label }}</strong>
+                </a>
+                <code class="muted" style="font-size:.8rem; margin-left:.5rem;">{{ col.name }}</code>
+            </td>
+            <td class="muted">{{ col.count }}</td>
+            <td class="text-right">
+                <a href="{{ app.adminPath }}/collections/{{ col.name }}">{{ t.collections_manage }} →</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

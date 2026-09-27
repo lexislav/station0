@@ -8,7 +8,7 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Csrf\Guard;
 use Slim\Views\Twig;
-use Station0\Service\CollectionGroups;
+use Station0\Service\NavGroups;
 use Station0\Service\CollectionItem;
 use Station0\Service\CollectionRepository;
 use Station0\Service\FieldOptions;
@@ -29,7 +29,7 @@ final class CollectionController
         private readonly MediaService $media,
         private readonly string $adminPath,
         private readonly FieldOptions $fieldOptions = new FieldOptions(),
-        private readonly ?CollectionGroups $groups = null,
+        private readonly ?NavGroups $groups = null,
         private readonly ?ThumbService $thumbs = null,
         private readonly ?TaskHooks $hooks = null,
     ) {}
@@ -41,7 +41,7 @@ final class CollectionController
     {
         $collections = array_values(array_filter(
             $this->collections->collections(),
-            fn (array $col) => $this->groups?->groupOf($col['name']) === null,
+            fn (array $col) => $this->groups?->groupOfCollection($col['name']) === null,
         ));
 
         return $this->twig->render($response, '@admin/collections/list.twig', [
@@ -53,28 +53,13 @@ final class CollectionController
 
     // ─── Group tab ───
 
+    /** Old group URL; groups now have one view for collections and pages. */
     public function group(Request $request, Response $response, array $args): Response
     {
-        $group = $this->groups?->find((string) ($args['group'] ?? ''));
-        if ($group === null) {
-            return $response->withStatus(404);
-        }
-        if (!$this->groups->canAccess($group)) {
-            return $this->forbidden($response);
-        }
-
-        $names = array_column($group['collections'], 'name');
-        $collections = array_values(array_filter(
-            $this->collections->collections(),
-            fn (array $col) => in_array($col['name'], $names, true),
-        ));
-
-        return $this->twig->render($response, '@admin/collections/list.twig', [
-            'collections' => $collections,
-            'group'       => $group,
-            'activeNav'   => 'group-' . $group['id'],
-            'csrf'        => $this->csrfFields($request),
-        ]);
+        return $response->withStatus(301)->withHeader(
+            'Location',
+            $this->adminPath . '/groups/' . rawurlencode((string) ($args['group'] ?? '')),
+        );
     }
 
     // ─── Item list ───
@@ -320,7 +305,7 @@ final class CollectionController
      */
     private function navContext(string $name): array
     {
-        $group = $this->groups?->groupOf($name);
+        $group = $this->groups?->groupOfCollection($name);
         if ($group === null) {
             return [
                 'activeNav'    => 'collections',
@@ -329,11 +314,11 @@ final class CollectionController
                 'backLabel'    => null,
             ];
         }
-        $single = count($group['collections']) === 1;
+        $single = $this->groups->path($group) !== '/groups/' . $group['id'];
         return [
             'activeNav'    => 'group-' . $group['id'],
             'sectionLabel' => $group['label'],
-            'backUrl'      => $single ? null : $this->adminPath . '/collection-groups/' . $group['id'],
+            'backUrl'      => $single ? null : $this->adminPath . '/groups/' . $group['id'],
             'backLabel'    => $group['label'],
         ];
     }

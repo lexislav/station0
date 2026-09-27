@@ -5,6 +5,32 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Page groups.** `Group: Downloads` in a page's front matter gives that page
+  and its subtree an own admin menu tab, like `group:` does for collections.
+  The tab shows the subtree (drag & drop as in Structure; streams with all
+  their records); the pages also stay in the Structure tree, marked with a
+  group badge. A page belongs to its nearest grouped ancestor-or-self. Page
+  forms keep the group's tab highlighted and "Cancel" / delete return to it.
+- Pages and collections share group ids, so one tab can hold both (e.g. the
+  `/shop` subtree and the `products` collection).
+
+### Changed
+- Central group settings moved to `site/content/_groups.yaml`; the old
+  `site/content/collections/_groups.yaml` is still read (the new file wins
+  per group id).
+- Group tabs live at `/admin/groups/{id}`; `/admin/collection-groups/{id}`
+  redirects there.
+- The Streams tab lists only ungrouped streams (grouped ones live in their
+  group's tab) and disappears when none are left.
+- `CollectionGroups` is now `NavGroups` (`groupOf()` → `groupOfCollection()`,
+  new `groupOfPage()`); the `collection_groups()` Twig function is now
+  `nav_groups()`.
+- `group` is a reserved page-field name (it is the page's menu group). A page
+  field named `group` in a template manifest is now dropped.
+
 ## [0.8.1] - 2026-09-25
 
 ### Fixed

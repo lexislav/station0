@@ -35,12 +35,12 @@ use Station0\Controller\PageController;
 use Station0\Middleware\AuthMiddleware;
 use Station0\Middleware\RoleMiddleware;
 use Station0\Service\BlockRegistry;
-use Station0\Service\CollectionGroups;
 use Station0\Service\CollectionRepository;
 use Station0\Service\ContentRepository;
 use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
+use Station0\Service\NavGroups;
 use Station0\Service\MailerService;
 use Station0\Service\PageFields;
 use Station0\Service\PageRenderer;
@@ -214,8 +214,10 @@ final class Bootstrap
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'has_streams',
                 function () use ($c) {
+                    // Grouped streams live under their group's tab.
+                    $groups = $c->get(NavGroups::class);
                     foreach ($c->get(ContentRepository::class)->all(false) as $page) {
-                        if (!empty($page->allowedChildTemplates)) {
+                        if (!empty($page->allowedChildTemplates) && $groups->groupOfPage($page->urlPath) === null) {
                             return true;
                         }
                     }
@@ -227,9 +229,9 @@ final class Bootstrap
                 function () use ($c) {
                     // True only when some collection is left for the generic tab;
                     // grouped collections live under their own group tabs.
-                    $groups = $c->get(CollectionGroups::class);
+                    $groups = $c->get(NavGroups::class);
                     foreach ($c->get(CollectionRepository::class)->names() as $name) {
-                        if ($groups->groupOf($name) === null) {
+                        if ($groups->groupOfCollection($name) === null) {
                             return true;
                         }
                     }
@@ -237,16 +239,14 @@ final class Bootstrap
                 }
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
-                'collection_groups',
+                'nav_groups',
                 function () use ($c, $config) {
-                    // Menu tabs the current user may see. A single-collection
-                    // group links straight to that collection's items.
-                    return array_map(function (array $g) use ($config) {
-                        $g['url'] = $config['adminPath'] . (count($g['collections']) === 1
-                            ? '/collections/' . $g['collections'][0]['name']
-                            : '/collection-groups/' . $g['id']);
+                    // Menu tabs the current user may see (collections + page subtrees).
+                    $groups = $c->get(NavGroups::class);
+                    return array_map(function (array $g) use ($config, $groups) {
+                        $g['url'] = $config['adminPath'] . $groups->path($g);
                         return $g;
-                    }, $c->get(CollectionGroups::class)->visible());
+                    }, $groups->visible());
                 }
             ));
             // ── Thumbnails ────────────────────────────────────────────────────
@@ -419,6 +419,7 @@ final class Bootstrap
             $config['paths']['templates'],
             $c->get(FieldOptions::class),
             $c->get(TaskHooks::class),
+            $c->get(NavGroups::class),
         ));
 
         $container->set(UserController::class, fn ($c) => new UserController(
@@ -435,12 +436,14 @@ final class Bootstrap
             $config['paths']['content'] . '/collections'
         ));
 
-        $container->set(CollectionGroups::class, fn ($c) => new CollectionGroups(
+        $container->set(NavGroups::class, fn ($c) => new NavGroups(
             $c->get(CollectionRepository::class),
             function (string $role) use ($c, $roles): bool {
                 $auth = $c->get(Auth::class);
                 return isset($roles[$role]) && $auth->isLoggedIn() && $auth->hasRole($roles[$role]);
             },
+            $c->get(ContentRepository::class),
+            $config['paths']['content'] . '/' . NavGroups::FILE,
         ));
 
         $container->set(FieldOptions::class, fn ($c) => new FieldOptions(
@@ -467,7 +470,7 @@ final class Bootstrap
             $c->get(MediaService::class),
             $config['adminPath'],
             $c->get(FieldOptions::class),
-            $c->get(CollectionGroups::class),
+            $c->get(NavGroups::class),
             $c->get(ThumbService::class),
             $c->get(TaskHooks::class),
         ));
@@ -569,6 +572,7 @@ final class Bootstrap
                 $authed->post('/upload-collection', [CollectionController::class, 'upload'])->setName('admin.upload-collection');
 
                 $authed->get('/collections', [CollectionController::class, 'index'])->setName('admin.collections.index');
+                $authed->get('/groups/{group}', [AdminPageController::class, 'group'])->setName('admin.groups.show');
                 $authed->get('/collection-groups/{group}', [CollectionController::class, 'group'])->setName('admin.collections.group');
                 $authed->get('/collections/{name}', [CollectionController::class, 'items'])->setName('admin.collections.items');
                 $authed->get('/collections/{name}/new', [CollectionController::class, 'createForm'])->setName('admin.collections.new');

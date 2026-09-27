@@ -12,6 +12,7 @@ use Station0\Service\BlockRegistry;
 use Station0\Service\ContentRepository;
 use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
+use Station0\Service\NavGroups;
 use Station0\Service\Page;
 use Station0\Service\PageFields;
 use Station0\Service\PageRenderer;
@@ -37,6 +38,7 @@ final class PageController
         private readonly string $templatesPath = '',
         private readonly FieldOptions $fieldOptions = new FieldOptions(),
         private readonly ?TaskHooks $hooks = null,
+        private readonly ?NavGroups $groups = null,
     ) {}
 
     // ─── List ───
@@ -46,36 +48,141 @@ final class PageController
         $pages = $this->content->all();
         $tree  = $this->buildTree($pages);
 
-        // Flat list of stream nodes (pages with AllowedChildTemplates) in tree
-        // order, used by the Streams tab in the list view.
-        $streams = [];
-        $this->collectStreamNodes($tree, $streams);
-
         $params      = $request->getQueryParams();
         $view        = $params['view'] ?? 'structure';
         $streamParam = $params['stream'] ?? null;
+
+        // Flat list of stream nodes (pages with AllowedChildTemplates) in tree
+        // order, used by the Streams tab in the list view. Grouped streams
+        // belong to their group's tab — except the one a link asked for.
+        $streams = [];
+        $this->collectStreamNodes($tree, $streams);
+        $streams = array_values(array_filter(
+            $streams,
+            fn (array $node) => $node['page']->urlPath === $streamParam
+                || $this->groups?->groupOfPage($node['page']->urlPath) === null,
+        ));
+
+        $activeNav = $view === 'streams' ? 'streams' : 'pages';
+        if ($view === 'streams' && is_string($streamParam)
+            && ($group = $this->groups?->groupOfPage($streamParam)) !== null) {
+            $activeNav = 'group-' . $group['id'];
+        }
 
         return $this->twig->render($response, '@admin/pages/list.twig', [
             'pages'         => $pages,
             'tree'          => $tree,
             'streams'       => $streams,
+            'pageGroups'    => $this->pageGroupBadges(),
             'csrf'          => $this->csrfFields($request),
             'currentView'   => in_array($view, ['structure', 'streams']) ? $view : 'structure',
             'activeStream'  => $streamParam,
-            'activeNav'     => $view === 'streams' ? 'streams' : 'pages',
+            'activeNav'     => $activeNav,
         ]);
     }
 
+    // ─── Group tab ───
+
     /**
-     * Which sidebar section (Pages vs Streams) owns the form for a page whose
-     * parent is $parentPage. Stream records live under a stream node, so the
-     * Streams nav item should stay highlighted while editing them.
+     * A menu group: the subtrees of its pages (drag & drop works as in the
+     * Structure tree), its streams' records, then its collections.
      */
-    private function navForParent(?Page $parentPage): string
+    public function group(Request $request, Response $response, array $args): Response
     {
-        return ($parentPage !== null && !empty($parentPage->allowedChildTemplates))
-            ? 'streams'
-            : 'pages';
+        $group = $this->groups?->find((string) ($args['group'] ?? ''));
+        if ($group === null) {
+            return $response->withStatus(404);
+        }
+        if (!$this->groups->canAccess($group)) {
+            $response->getBody()->write('Forbidden');
+            return $response->withStatus(403);
+        }
+
+        // Stream roots get the full records panel, other roots their subtree.
+        $roots   = [];
+        $streams = [];
+        $tree    = $this->buildTree($this->content->all());
+        foreach ($group['pages'] as $member) {
+            $node = $this->findNode($tree, $member['path']);
+            if ($node !== null && $node['isStream']) {
+                $streams[] = $node;
+            } elseif ($node !== null) {
+                $roots[] = $node;
+            }
+        }
+
+        return $this->twig->render($response, '@admin/pages/list.twig', [
+            'tree'             => $roots,
+            'streams'          => $streams,
+            'pageGroups'       => [],
+            'group'            => $group,
+            'groupCollections' => $this->groups->memberCollections($group),
+            'csrf'             => $this->csrfFields($request),
+            'currentView'      => 'group',
+            'activeStream'     => null,
+            'activeNav'        => 'group-' . $group['id'],
+        ]);
+    }
+
+    /** @param list<array> $nodes */
+    private function findNode(array $nodes, string $urlPath): ?array
+    {
+        foreach ($nodes as $node) {
+            if ($node['page']->urlPath === $urlPath) {
+                return $node;
+            }
+            $found = $this->findNode($node['children'], $urlPath);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Group badges for the Structure tree, keyed by the URL path of each
+     * page that roots a group's subtree.
+     *
+     * @return array<string, array{label: string, url: ?string}>
+     */
+    private function pageGroupBadges(): array
+    {
+        $badges = [];
+        foreach ($this->groups?->all() ?? [] as $group) {
+            foreach ($group['pages'] as $member) {
+                $badges[$member['path']] = [
+                    'label' => $group['label'],
+                    'url'   => $this->groups->canAccess($group) ? $this->adminPath . '/groups/' . $group['id'] : null,
+                ];
+            }
+        }
+        return $badges;
+    }
+
+    /**
+     * Sidebar tab + "cancel" target for a page form. $pagePath is the page
+     * itself (edit) or its parent (new page). A page in a group keeps its
+     * group's tab highlighted; stream records keep Streams highlighted.
+     *
+     * @return array{activeNav: string, cancelUrl: string}
+     */
+    private function navContext(?Page $parentPage, ?string $pagePath = null): array
+    {
+        $pagePath ??= $parentPage?->urlPath;
+        $group = $pagePath !== null ? $this->groups?->groupOfPage($pagePath) : null;
+        if ($group !== null && $this->groups->canAccess($group)) {
+            return [
+                'activeNav' => 'group-' . $group['id'],
+                'cancelUrl' => $this->adminPath . '/groups/' . $group['id'],
+            ];
+        }
+        if ($parentPage !== null && !empty($parentPage->allowedChildTemplates)) {
+            return [
+                'activeNav' => 'streams',
+                'cancelUrl' => $this->adminPath . '/pages?view=streams&stream=' . rawurlencode($parentPage->urlPath),
+            ];
+        }
+        return ['activeNav' => 'pages', 'cancelUrl' => $this->adminPath . '/pages'];
     }
 
     // ─── Reorder (drag & drop) ───
@@ -231,7 +338,7 @@ final class PageController
             ...$this->editorData($page),
             'availableTemplates' => $availableTemplates,
             'csrf'               => $this->csrfFields($request),
-            'activeNav'          => $this->navForParent($parentPage),
+            ...$this->navContext($parentPage),
         ]);
     }
 
@@ -307,7 +414,7 @@ final class PageController
                 'availableTemplates' => $this->availablePageTemplates($parentPage),
                 'error'              => $e->getMessage(),
                 'csrf'               => $this->csrfFields($request),
-                'activeNav'          => $this->navForParent($parentPage),
+                ...$this->navContext($parentPage),
             ]);
         }
 
@@ -372,7 +479,7 @@ final class PageController
             ...$this->editorData($page),
             'availableTemplates' => $this->availablePageTemplates($parentPage),
             'csrf'               => $this->csrfFields($request),
-            'activeNav'          => $this->navForParent($parentPage),
+            ...$this->navContext($parentPage, $page->urlPath),
         ]);
     }
 
@@ -447,7 +554,7 @@ final class PageController
                     'availableTemplates' => $this->availablePageTemplates($parentPage),
                     'error'              => $e->getMessage(),
                     'csrf'               => $this->csrfFields($request),
-                    'activeNav'          => $this->navForParent($parentPage),
+                    ...$this->navContext($parentPage, $urlPath),
                 ]);
             }
         }
@@ -476,12 +583,18 @@ final class PageController
     {
         $urlPath = $this->argsToUrlPath($args);
         $page    = $this->content->find($urlPath);
+        // Deleting inside a group returns to the group's tab (a deleted group
+        // root may have been the group's only member, so its parent decides).
+        $parent  = $this->parentPageOf($urlPath);
+        $back    = $parent !== null && $this->groups?->groupOfPage($parent->urlPath) !== null
+            ? $this->navContext($parent)['cancelUrl']
+            : $this->adminPath . '/pages';
         $deleted = $this->content->delete($urlPath);
         $this->cache->flush();
         if ($deleted && $page !== null) {
             $this->hooks?->dispatch('page.deleted', $this->pagePayload($page, $urlPath));
         }
-        return $response->withStatus(302)->withHeader('Location', $this->adminPath . '/pages');
+        return $response->withStatus(302)->withHeader('Location', $back);
     }
 
     // ─── Helpers ───
