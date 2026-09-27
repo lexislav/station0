@@ -32,6 +32,8 @@ final class Page
         /** Child templates this page accepts. Empty = unrestricted. */
         public array $allowedChildTemplates = [],
         public array $extra = [],
+        /** Admin menu group this page (and its subtree) belongs to; see NavGroups */
+        public ?string $group = null,
     ) {}
 
     public function depth(): int

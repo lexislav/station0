@@ -499,7 +499,8 @@ final class ContentRepository
             publishedAt: isset($meta['publishedat']) && $meta['publishedat'] !== '' ? $meta['publishedat'] : null,
             sort:      isset($meta['sort']) && $meta['sort'] !== '' ? (int) $meta['sort'] : null,
             allowedChildTemplates: $this->parseTemplateList($meta['allowedchildtemplates'] ?? ''),
-            extra:     array_diff_key($meta, array_flip(['title', 'metatitle', 'published', 'publishedat', 'author', 'updated', 'template', 'sort', 'allowedchildtemplates'])),
+            extra:     array_diff_key($meta, array_flip(['title', 'metatitle', 'published', 'publishedat', 'author', 'updated', 'template', 'sort', 'allowedchildtemplates', 'group'])),
+            group:     isset($meta['group']) && is_string($meta['group']) && trim($meta['group']) !== '' ? trim($meta['group']) : null,
         );
 
         $page->urlPath    = $urlPath ?: '/';
@@ -539,6 +540,7 @@ final class ContentRepository
             'Updated'     => $page->updated,
             'Sort'        => $page->sort !== null ? (string) $page->sort : null,
             'AllowedChildTemplates' => $page->allowedChildTemplates ? implode(', ', $page->allowedChildTemplates) : null,
+            'Group'       => $page->group,
         ];
 
         foreach ($page->extra as $k => $v) {

@@ -237,20 +237,49 @@
 .stream-pagination button:disabled { opacity: .4; cursor: default; }
 .stream-pagination button:not(:disabled):hover { background: #f0f2f5; }
 .stream-pagination .page-info { flex: 1; text-align: center; }
+
+/* ── Menu groups ───────────────────────────────────────────────────────── */
+.badge-group {
+    display: inline-flex; align-items: center;
+    padding: .1rem .45rem;
+    border-radius: 99px;
+    border: 1px solid #c8cdd6;
+    color: #5a6478;
+    font-size: .68rem;
+    font-weight: 600;
+    text-decoration: none;
+    flex-shrink: 0;
+}
+a.badge-group:hover { background: #f0f2f5; }
+/* Group roots are fixed in the group view — move them in Structure. */
+.view-group .page-tree > li > .page-row .drag-handle { visibility: hidden; }
+.group-section-title { font-size: 1rem; margin: 1.75rem 0 .75rem; }
 </style>
 {% endblock %}
 
+{% block title %}{{ currentView == 'group' ? group.label : (currentView == 'streams' ? t.nav_streams : t.pages_title) }} · {{ app.name }}{% endblock %}
+
 {% block body %}
+{% set isGroup = currentView == 'group' %}
+{# Section headings only when a group mixes pages (tree/streams) with collections #}
+{% set groupHeadings = isGroup and (tree is not empty or streams is not empty) and groupCollections is not empty %}
 <div class="toolbar">
-    <h1 id="view-title">{{ t.pages_title }}</h1>
-    {% if currentView != 'streams' %}<a class="btn primary" href="{{ app.adminPath }}/pages/new">{{ t.pages_new }}</a>{% endif %}
+    {% if currentView == 'group' %}
+        <h1 id="view-title">{{ group.label }}</h1>
+        {% if tree|length == 1 and streams is empty %}
+            <a class="btn primary" href="{{ app.adminPath }}/pages/new?parent={{ tree[0].page.urlPath|url_encode }}">{{ t.pages_new }}</a>
+        {% endif %}
+    {% else %}
+        <h1 id="view-title">{{ t.pages_title }}</h1>
+        {% if currentView != 'streams' %}<a class="btn primary" href="{{ app.adminPath }}/pages/new">{{ t.pages_new }}</a>{% endif %}
+    {% endif %}
 </div>
 
 {# ── Tree node macro ─────────────────────────────────────────────────────────
    Renders one page row. Stream pages show inline child previews instead of
    a recursive .page-children list so they don't bloat the tree.
 ────────────────────────────────────────────────────────────────────────────── #}
-{% macro node(item, csrf, adminPath) %}
+{% macro node(item, csrf, adminPath, badges) %}
     {% set p        = item.page %}
     {% set isRoot   = p.urlPath == '/' %}
     {% set isStream = item.isStream ?? false %}
@@ -269,6 +298,11 @@
 
             <span class="title">
                 <a href="{{ adminPath }}/pages/{{ editPath }}/edit">{{ p.title }}</a>
+                {% set badge = badges[p.urlPath] ?? null %}
+                {% if badge %}
+                    {% if badge.url %}<a class="badge-group" href="{{ badge.url }}">{{ badge.label }}</a>
+                    {% else %}<span class="badge-group">{{ badge.label }}</span>{% endif %}
+                {% endif %}
                 {% if isStream %}
                     <span class="badge-stream">STREAM</span>
                     <span class="badge-count">{{ item.children|length }}</span>
@@ -346,7 +380,7 @@
             {# Regular pages: recursive children tree #}
             <ul class="page-children" data-parent="{{ p.urlPath }}">
                 {% for child in item.children %}
-                    {{ _self.node(child, csrf, adminPath) }}
+                    {{ _self.node(child, csrf, adminPath, badges) }}
                 {% endfor %}
             </ul>
         {% endif %}
@@ -357,13 +391,17 @@
 {# ════════════════════════════════════════════════════════════════════════════
    Web structure view
 ════════════════════════════════════════════════════════════════════════════ #}
-<div id="view-structure"{% if currentView == 'streams' %} hidden{% endif %}>
-    {% if tree is empty %}
+<div id="view-structure" class="{{ isGroup ? 'view-group' : '' }}"{% if currentView == 'streams' or (isGroup and tree is empty) %} hidden{% endif %}>
+    {% if groupHeadings %}
+        <h2 class="group-section-title">{{ t.pages_title }}</h2>
+    {% endif %}
+    {% if not isGroup and tree is empty %}
         <p class="empty">{{ t.pages_empty }} <a href="{{ app.adminPath }}/pages/new">{{ t.pages_empty_create }}</a></p>
-    {% else %}
+    {% endif %}
+    {% if tree is not empty %}
     <ul class="page-tree" data-parent="/">
         {% for item in tree %}
-            {{ _self.node(item, csrf, app.adminPath) }}
+            {{ _self.node(item, csrf, app.adminPath, pageGroups) }}
         {% endfor %}
     </ul>
     {% endif %}
@@ -372,7 +410,10 @@
 {# ════════════════════════════════════════════════════════════════════════════
    Streams tab view
 ════════════════════════════════════════════════════════════════════════════ #}
-<div id="view-streams"{% if currentView != 'streams' %} hidden{% endif %}>
+<div id="view-streams"{% if currentView != 'streams' and not (isGroup and streams is not empty) %} hidden{% endif %}>
+    {% if groupHeadings and tree is empty %}
+        <h2 class="group-section-title">{{ t.pages_title }}</h2>
+    {% endif %}
     {% if streams is empty %}
         <p class="empty">{{ t.streams_empty|raw }}</p>
     {% else %}
@@ -463,6 +504,15 @@
 
     {% endif %}
 </div>
+
+{% if isGroup and groupCollections is not empty %}
+<div id="view-group-collections">
+    {% if groupHeadings %}
+        <h2 class="group-section-title">{{ t.collections_title }}</h2>
+    {% endif %}
+    {% include '@admin/collections/_table.twig' with {collections: groupCollections} %}
+</div>
+{% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 <script>

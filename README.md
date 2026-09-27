@@ -259,10 +259,10 @@ does not rewrite references to it — the editor then shows the old path as
 Static `options` also accept richer forms now — `{value: label}` maps and
 `[{value, label, group}]` entries — next to the plain string list.
 
-## Collection groups (admin menu tabs)
+## Menu groups (admin menu tabs)
 
-Collections can be grouped into their own tab in the admin menu. The simple way
-is one key in the collection's `_collection.yaml`:
+Collections and page subtrees can be grouped into their own tab in the admin
+menu. For a collection, it is one key in its `_collection.yaml`:
 
 ```yaml
 # site/content/collections/products/_collection.yaml
@@ -271,13 +271,28 @@ group: Shop
 ```
 
 Every collection with `group: Shop` moves out of the generic **Collections** tab
-into a **Shop** tab. A group with several collections opens a list of them; a
-group with a single collection links straight to its items.
+into a **Shop** tab. For pages, put `Group:` into the front matter of the page
+that roots a section — the page and everything below it join the group:
+
+```
+# site/content/pages/downloads/page.txt
+Title: Downloads
+Group: Downloads
+---
+```
+
+The **Downloads** tab then shows that subtree (drag & drop works as in the
+Structure tree; a stream shows all its records). The pages stay in the
+Structure tree too, marked with a group badge; grouped streams leave the
+Streams tab. A nested page with its own `Group:` starts a separate group.
+Pages and collections can share a group — `Group: Shop` on `/shop` and
+`group: Shop` on the products collection make one tab with both. A group of a
+single collection links straight to its items.
 
 When a group needs more settings, declare it centrally (optional):
 
 ```yaml
-# site/content/collections/_groups.yaml
+# site/content/_groups.yaml   (site/content/collections/_groups.yaml still works)
 shop:                 # id — `group: shop` and `group: Shop` both match
   label: E-shop       # overrides the inline label
   icon: "🛒"          # text/emoji, or inline <svg …> markup
@@ -285,9 +300,10 @@ shop:                 # id — `group: shop` and `group: Shop` both match
 ```
 
 Tabs follow the order of `_groups.yaml`, then inline-only groups alphabetically.
-A central group without any collection produces no tab. `roles` is enforced
-server-side too: the collection's list, forms, saves and uploads return 403
-for users without the role.
+A central group without any member produces no tab. For collections, `roles`
+is enforced server-side too: the collection's list, forms, saves and uploads
+return 403 for users without the role. For pages, `roles` only hides the tab;
+the pages remain editable through the Structure tree.
 
 ## CLI (via skeleton)
 
