@@ -50,6 +50,7 @@ use Station0\Service\TaskRegistry;
 use Station0\Service\TemplateBlocks;
 use Station0\Service\ThumbService;
 use Station0\Service\UserRepository;
+use Station0\Service\VisibilityHorizon;
 
 final class Bootstrap
 {
@@ -352,6 +353,13 @@ final class Bootstrap
             $c->get(MediaService::class),
             $c->get(ThumbService::class),
             (int) ($config['thumbs']['markdown'] ?? PageRenderer::MARKDOWN_THUMB_WIDTH),
+            $c->get(VisibilityHorizon::class),
+        ));
+
+        $container->set(VisibilityHorizon::class, fn ($c) => new VisibilityHorizon(
+            $c->get(FileCache::class),
+            $c->get(ContentRepository::class),
+            $c->get(CollectionRepository::class),
         ));
 
         $container->set(UserRepository::class, fn ($c) => new UserRepository(

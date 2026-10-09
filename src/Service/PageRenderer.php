@@ -42,10 +42,13 @@ final class PageRenderer
         private readonly MediaService $media,
         private readonly ?ThumbService $thumbs = null,
         private readonly int $markdownThumbWidth = self::MARKDOWN_THUMB_WIDTH,
+        private readonly ?VisibilityHorizon $horizon = null,
     ) {}
 
     public function render(Page $page, int $sourceMtime): string
     {
+        // Drop cached HTML once a scheduled PublishAt / ExpireAt has passed.
+        $this->horizon?->check();
         $key = 'page:' . sha1($page->filePath) . ':' . $sourceMtime;
         $hit = $this->cache->get($key);
         if ($hit !== null) {
