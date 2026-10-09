@@ -18,6 +18,7 @@ use Station0\Service\TaskHooks;
 use Station0\Service\ThumbService;
 use Station0\Support\FieldSchema;
 use Station0\Support\Slug;
+use Station0\Support\Visibility;
 
 final class CollectionController
 {
@@ -138,10 +139,13 @@ final class CollectionController
             slug:       $slug,
             title:      $title,
             body:       trim((string) ($data['body'] ?? '')),
-            published:  isset($data['published']),
             sort:       ($data['sort'] ?? '') !== '' ? (int) $data['sort'] : null,
             extra:      $extra,
         );
+        $errorKey = $this->applyVisibility($item, $data);
+        if ($errorKey !== null) {
+            return $this->invalidForm($request, $response, $item, true, $errorKey);
+        }
 
         $filePath = rtrim($this->collections->itemDir($name, $slug), '/') . '/item.txt';
         $this->collections->save($item, $filePath);
@@ -200,11 +204,15 @@ final class CollectionController
 
         $item->title     = trim((string) ($data['title'] ?? $item->title));
         $item->body      = trim((string) ($data['body'] ?? ''));
-        $item->published = isset($data['published']);
         $item->sort      = ($data['sort'] ?? '') !== '' ? (int) $data['sort'] : null;
 
         $schema     = $this->collections->schema($name);
         $item->extra = $this->extractExtraFields($data, $schema);
+
+        $errorKey = $this->applyVisibility($item, $data);
+        if ($errorKey !== null) {
+            return $this->invalidForm($request, $response, $item, false, $errorKey);
+        }
 
         // Handle optional slug rename.
         $newSlug = Slug::sanitize((string) ($data['slug'] ?? ''));
@@ -324,6 +332,41 @@ final class CollectionController
     }
 
     /** Extract schema-defined extra fields from POST data. */
+    /**
+     * Status / PublishAt / ExpireAt from the form (see Visibility::fromForm());
+     * returns a translation key when the schedule is invalid.
+     */
+    private function applyVisibility(CollectionItem $item, array $data): ?string
+    {
+        $v = Visibility::fromForm($data, $item->status);
+        $item->status = $v['status'] ?? $item->status;
+        if (array_key_exists('publishAt', $v)) {
+            $item->publishAt = $v['publishAt'];
+        }
+        if (array_key_exists('expireAt', $v)) {
+            $item->expireAt = $v['expireAt'];
+        }
+        return Visibility::validate($item->publishAt, $item->expireAt);
+    }
+
+    /** Re-render the item form with the posted values and an error (422). */
+    private function invalidForm(Request $request, Response $response, CollectionItem $item, bool $isNew, string $errorKey): Response
+    {
+        $name   = $item->collection;
+        $schema = $this->collections->schema($name);
+        return $this->twig->render($response->withStatus(422), '@admin/collections/form.twig', [
+            ...$this->navContext($name),
+            'collectionName'  => $name,
+            'collectionLabel' => $schema['label'] ?? $this->labelFromName($name),
+            'schema'          => $schema,
+            'fields'          => $this->fieldOptions->resolveFields(FieldSchema::normalize($schema['fields'] ?? [])),
+            'item'            => $item,
+            'isNew'           => $isNew,
+            'errorKey'        => $errorKey,
+            'csrf'            => $this->csrfFields($request),
+        ]);
+    }
+
     private function extractExtraFields(array $data, array $schema): array
     {
         $extra  = [];

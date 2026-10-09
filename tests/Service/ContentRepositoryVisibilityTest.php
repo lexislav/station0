@@ -242,6 +242,45 @@ final class ContentRepositoryVisibilityTest extends TestCase
         self::assertSame([], $again->extra);
     }
 
+    public function testAdminFormRoundTrip(): void
+    {
+        $this->addPage('/rt', 'RT', "PublishedAt: " . self::FUTURE . "\n");   // legacy schedule
+        $repo = $this->repo();
+        $page = $repo->find('/rt');
+
+        // What edit.twig posts (cascade checkbox unchecked → only the hidden "0").
+        $form = [
+            'visibility_status'     => 'published',
+            'visibility_publish_at' => '2098-05-01T08:30',
+            'visibility_expire_at'  => '2099-06-01T00:00',
+            'visibility_listing'    => 'unlisted',
+            'visibility_cascade'    => ['0'],
+            'published_at'          => '2026-05-01T08:00',
+        ];
+        $v = V::fromForm($form, $page->status);
+        self::assertNull(V::validate($v['publishAt'], $v['expireAt']));
+        $page->status      = $v['status'];
+        $page->publishAt   = $v['publishAt'];
+        $page->expireAt    = $v['expireAt'];
+        $page->listing     = $v['listing'];
+        $page->cascade     = $v['cascade'];
+        $page->publishedAt = V::normalizeInput($form['published_at']);
+        $repo->save($page);
+
+        $again = $this->repo()->find('/rt');
+        self::assertSame(V::PUBLISHED, $again->status);
+        self::assertSame('2098-05-01 08:30', $again->publishAt);
+        self::assertSame('2099-06-01 00:00', $again->expireAt);
+        self::assertSame('2026-05-01 08:00', $again->publishedAt);
+        self::assertSame(V::UNLISTED, $again->listing);
+        self::assertFalse($again->cascade);
+        self::assertSame(V::SCHEDULED, $again->state());
+
+        self::assertTrue(V::fromForm(['visibility_cascade' => ['0', '1']])['cascade']);
+        self::assertSame([], V::fromForm([]), 'missing inputs leave values alone');
+        self::assertSame(V::ARCHIVED, V::fromForm(['visibility_status' => 'bogus'], V::ARCHIVED)['status']);
+    }
+
     public function testDefaultsAreNotWritten(): void
     {
         $this->addPage('/rt', 'RT');

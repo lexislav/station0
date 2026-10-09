@@ -314,13 +314,7 @@ a.badge-group:hover { background: #f0f2f5; }
 
             <span class="right-meta">
                 <span class="status">
-                    {% if not p.published %}
-                        <span class="tag">{{ t.pages_status_draft }}</span>
-                    {% elseif p.publishedAt and date(p.publishedAt) > date() %}
-                        <span class="tag planned">{{ t.pages_status_scheduled }}</span>
-                    {% else %}
-                        <span class="tag ok">{{ t.pages_status_published }}</span>
-                    {% endif %}
+                    {% include '@admin/_visibility_status.twig' with {entry: p} only %}
                 </span>
                 <span class="updated">{{ p.updated ? p.updated|slice(0, 10) : '' }}</span>
                 <span class="actions">
@@ -357,13 +351,7 @@ a.badge-group:hover { background: #f0f2f5; }
                         </span>
                         <span class="right-meta">
                             <span class="status">
-                                {% if not cp.published %}
-                                    <span class="tag">{{ t.pages_status_draft }}</span>
-                                {% elseif cp.publishedAt and date(cp.publishedAt) > date() %}
-                                    <span class="tag planned">{{ t.pages_status_scheduled }}</span>
-                                {% else %}
-                                    <span class="tag ok">{{ t.pages_status_published }}</span>
-                                {% endif %}
+                                {% include '@admin/_visibility_status.twig' with {entry: cp} only %}
                             </span>
                             <span class="updated">{{ cp.updated ? cp.updated|slice(0, 10) : '' }}</span>
                             <span></span>{# keeps right-meta grid aligned #}
@@ -463,13 +451,7 @@ a.badge-group:hover { background: #f0f2f5; }
                                 </span>
                                 <span class="right-meta">
                                     <span class="status">
-                                        {% if not cp.published %}
-                                            <span class="tag">{{ t.pages_status_draft }}</span>
-                                        {% elseif cp.publishedAt and date(cp.publishedAt) > date() %}
-                                            <span class="tag planned">{{ t.pages_status_scheduled }}</span>
-                                        {% else %}
-                                            <span class="tag ok">{{ t.pages_status_published }}</span>
-                                        {% endif %}
+                                        {% include '@admin/_visibility_status.twig' with {entry: cp} only %}
                                     </span>
                                     <span class="updated">{{ cp.updated ? cp.updated|slice(0, 10) : '' }}</span>
                                     <span class="actions">

@@ -181,8 +181,38 @@ final class Visibility
         return null;
     }
 
-    /** PublishAt when set, else (legacy) PublishedAt. */
-    private static function publishTimestamp(?string $publishAt, ?string $legacyPublishedAt): ?int
+    /**
+     * Admin form input → visibility values, only for the inputs present:
+     * visibility_status, visibility_publish_at, visibility_expire_at,
+     * visibility_listing, visibility_cascade (checkbox, paired with a
+     * hidden "0"). Missing inputs leave the current value alone.
+     *
+     * @return array{status?: string, publishAt?: ?string, expireAt?: ?string, listing?: string, cascade?: bool}
+     */
+    public static function fromForm(array $data, string $currentStatus = self::PUBLISHED): array
+    {
+        $out = [];
+        if (array_key_exists('visibility_status', $data)) {
+            $out['status'] = self::normalizeStatus((string) $data['visibility_status'], $currentStatus);
+        }
+        if (array_key_exists('visibility_publish_at', $data)) {
+            $out['publishAt'] = self::normalizeInput((string) $data['visibility_publish_at']);
+        }
+        if (array_key_exists('visibility_expire_at', $data)) {
+            $out['expireAt'] = self::normalizeInput((string) $data['visibility_expire_at']);
+        }
+        if (array_key_exists('visibility_listing', $data)) {
+            $out['listing'] = self::normalizeListing((string) $data['visibility_listing']);
+        }
+        if (array_key_exists('visibility_cascade', $data)) {
+            $values = (array) $data['visibility_cascade'];
+            $out['cascade'] = in_array('1', array_map('strval', $values), true);
+        }
+        return $out;
+    }
+
+    /** When a published entry goes live: PublishAt when set, else (legacy) PublishedAt. */
+    public static function publishTimestamp(?string $publishAt, ?string $legacyPublishedAt): ?int
     {
         return self::timestamp($publishAt) ?? self::timestamp($legacyPublishedAt);
     }

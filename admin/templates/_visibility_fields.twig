@@ -1,0 +1,70 @@
+{# Visibility inputs for a page or collection item (see Station0\Support\Visibility::fromForm()).
+   Usage: {% include '@admin/_visibility_fields.twig' with {entry: page, isPage: true, isNew: false} only %} #}
+{% set dt = 'Y-m-d\\TH:i' %}
+{# Legacy pages schedule via a future PublishedAt; show it as "Publish at" so the next save makes it explicit. #}
+{% set publishAt = entry.publishAt %}
+{% if not publishAt and isPage and entry.publishedAt and entry.ownState == 'scheduled' %}
+    {% set publishAt = entry.publishedAt %}
+{% endif %}
+<fieldset class="visibility" id="visibility">
+    <legend>
+        {{ t.visibility_legend }}
+        {% if not isNew %}<small class="muted">{{ t.visibility_current }}</small> {% include '@admin/_visibility_status.twig' with {entry: entry} only %}{% endif %}
+    </legend>
+    <div class="row">
+        <div class="field">
+            <label for="visibility-status">{{ t.visibility_status }}</label>
+            <select name="visibility_status" id="visibility-status">
+                {% for s in ['draft', 'published', 'archived'] %}
+                    <option value="{{ s }}" {% if entry.status == s %}selected{% endif %}>{{ attribute(t, 'visibility_status_' ~ s) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="visibility-publish-at">{{ t.visibility_publish_at }} <small>{{ t.visibility_publish_at_hint }}</small></label>
+            <input type="datetime-local" name="visibility_publish_at" id="visibility-publish-at"
+                   value="{{ publishAt ? publishAt|date(dt) : '' }}">
+        </div>
+        <div class="field">
+            <label for="visibility-expire-at">{{ t.visibility_expire_at }} <small>{{ t.visibility_expire_at_hint }}</small></label>
+            <input type="datetime-local" name="visibility_expire_at" id="visibility-expire-at"
+                   value="{{ entry.expireAt ? entry.expireAt|date(dt) : '' }}">
+        </div>
+    </div>
+    <p class="hint" id="visibility-draft-hint" hidden>{{ t.visibility_hint_draft_schedule }}</p>
+    {% if isPage %}
+    <div class="row">
+        <div class="field">
+            <label for="visibility-listing">{{ t.visibility_listing }}</label>
+            <select name="visibility_listing" id="visibility-listing">
+                {% for l in ['listed', 'nav-hidden', 'unlisted'] %}
+                    <option value="{{ l }}" {% if entry.listing == l %}selected{% endif %}>{{ attribute(t, 'visibility_listing_' ~ l|replace({'-': '_'})) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="field">
+            <label for="published-at">{{ t.page_field_publish_date }} <small>{{ t.page_field_publish_date_hint }}</small></label>
+            <input type="datetime-local" name="published_at" id="published-at"
+                   value="{{ entry.publishedAt ? entry.publishedAt|date(dt) : '' }}">
+        </div>
+        <div class="field checkbox">
+            <input type="hidden" name="visibility_cascade[]" value="0">
+            <label>
+                <input type="checkbox" name="visibility_cascade[]" value="1" {% if entry.cascade %}checked{% endif %}>
+                {{ t.visibility_cascade }}
+            </label>
+        </div>
+    </div>
+    {% endif %}
+</fieldset>
+<script>
+(() => {
+    const status = document.getElementById('visibility-status');
+    const at     = document.getElementById('visibility-publish-at');
+    const hint   = document.getElementById('visibility-draft-hint');
+    const sync   = () => { hint.hidden = !(status.value === 'draft' && at.value !== ''); };
+    status.addEventListener('change', sync);
+    at.addEventListener('input', sync);
+    sync();
+})();
+</script>

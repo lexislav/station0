@@ -20,6 +20,7 @@ use Station0\Service\TaskHooks;
 use Station0\Service\TemplateBlocks;
 use Station0\Support\FieldSchema;
 use Station0\Support\Slug;
+use Station0\Support\Visibility;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -281,7 +282,7 @@ final class PageController
         foreach ($byUrl as &$node) {
             $node['draftCount'] = count(array_filter(
                 $node['children'],
-                static fn (array $c): bool => !$c['page']->published,
+                static fn (array $c): bool => !$c['page']->isLive(),
             ));
         }
         return $roots;
@@ -390,19 +391,26 @@ final class PageController
 
         $parentPage = $this->content->find($parentUrl);
 
+        $error = null;
         try {
             $this->content->assertChildTemplateAllowed($parentUrl, $template);
         } catch (\RuntimeException $e) {
+            $error = $e->getMessage();
+        }
+        $visibility = Visibility::fromForm($data);
+        $errorKey   = Visibility::validate($visibility['publishAt'] ?? null, $visibility['expireAt'] ?? null);
+
+        if ($error !== null || $errorKey !== null) {
             $draft = new Page(
                 slug: $rawSlug,
                 title: $title,
                 body: (string) ($data['body'] ?? ''),
                 metatitle: trim((string) ($data['metatitle'] ?? '')) ?: null,
-                published: isset($data['published']),
                 template: $template,
-                publishedAt: $this->normalizePublishedAt(trim((string) ($data['published_at'] ?? ''))),
+                publishedAt: Visibility::normalizeInput((string) ($data['published_at'] ?? '')),
                 allowedChildTemplates: $allowedChildTemplates,
             );
+            $this->applyVisibility($draft, $visibility);
             $this->pageFields->apply($draft, $this->postedFields($data));
             return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
                 'mode'               => 'new',
@@ -412,7 +420,8 @@ final class PageController
                 'blocks'             => $this->renderer->parseBlocks($draft->body),
                 ...$this->editorData($draft),
                 'availableTemplates' => $this->availablePageTemplates($parentPage),
-                'error'              => $e->getMessage(),
+                'error'              => $error,
+                'errorKey'           => $errorKey,
                 'csrf'               => $this->csrfFields($request),
                 ...$this->navContext($parentPage),
             ]);
@@ -442,11 +451,11 @@ final class PageController
             title:       $title,
             body:        (string) ($data['body'] ?? ''),
             metatitle:   trim((string) ($data['metatitle'] ?? '')) ?: null,
-            published:   isset($data['published']),
             template:    $template,
-            publishedAt: $this->normalizePublishedAt(trim((string) ($data['published_at'] ?? ''))),
+            publishedAt: Visibility::normalizeInput((string) ($data['published_at'] ?? '')),
             allowedChildTemplates: $allowedChildTemplates,
         );
+        $this->applyVisibility($page, $visibility);
         $this->pageFields->apply($page, $this->postedFields($data));
 
         $this->content->save($page, $filePath);
@@ -484,19 +493,6 @@ final class PageController
     }
 
     /**
-     * Convert an HTML datetime-local value ("2026-05-12T14:30") to the
-     * stored format ("2026-05-12 14:30"). Empty input → null.
-     */
-    private function normalizePublishedAt(string $raw): ?string
-    {
-        if ($raw === '') {
-            return null;
-        }
-        $ts = strtotime($raw);
-        return $ts === false ? null : date('Y-m-d H:i', $ts);
-    }
-
-    /**
      * Ordered ancestor + self titles for the breadcrumb.
      * @return list<array{title: string, urlPath: string}>
      */
@@ -529,34 +525,41 @@ final class PageController
         $page->title     = trim((string) ($data['title'] ?? $page->title));
         $page->body      = (string) ($data['body'] ?? $page->body);
         $page->metatitle = trim((string) ($data['metatitle'] ?? '')) ?: null;
-        $page->published = isset($data['published']);
         $page->template  = $this->safeTemplate((string) ($data['template'] ?? $page->template), $page->template);
         if (array_key_exists('allowed_child_templates', $data)) {
             $page->allowedChildTemplates = $this->parseTemplateList((string) $data['allowed_child_templates']);
         }
         $this->pageFields->apply($page, $this->postedFields($data));
 
-        $rawPublishedAt = trim((string) ($data['published_at'] ?? ''));
-        $page->publishedAt = $this->normalizePublishedAt($rawPublishedAt);
+        // PublishedAt is the display date; PublishAt / ExpireAt schedule.
+        $page->publishedAt = Visibility::normalizeInput((string) ($data['published_at'] ?? ''));
+        $this->applyVisibility($page, Visibility::fromForm($data, $page->status));
+        $errorKey = Visibility::validate($page->publishAt, $page->expireAt);
 
+        $error      = null;
+        $parentPage = null;
         if ($page->urlPath !== '/') {
             $parentUrl  = rtrim(dirname($page->urlPath), '/') ?: '/';
             $parentPage = $this->content->find($parentUrl);
             try {
                 $this->content->assertChildTemplateAllowed($parentUrl, $page->template);
             } catch (\RuntimeException $e) {
-                return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
-                    'mode'               => 'edit',
-                    'page'               => $page,
-                    'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
-                    'blocks'             => $this->renderer->parseBlocks($page->body),
-                    ...$this->editorData($page),
-                    'availableTemplates' => $this->availablePageTemplates($parentPage),
-                    'error'              => $e->getMessage(),
-                    'csrf'               => $this->csrfFields($request),
-                    ...$this->navContext($parentPage, $urlPath),
-                ]);
+                $error = $e->getMessage();
             }
+        }
+        if ($error !== null || $errorKey !== null) {
+            return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
+                'mode'               => 'edit',
+                'page'               => $page,
+                'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
+                'blocks'             => $this->renderer->parseBlocks($page->body),
+                ...$this->editorData($page),
+                'availableTemplates' => $this->availablePageTemplates($parentPage),
+                'error'              => $error,
+                'errorKey'           => $errorKey,
+                'csrf'               => $this->csrfFields($request),
+                ...$this->navContext($parentPage, $urlPath),
+            ]);
         }
 
         $newSlug = trim((string) ($data['slug'] ?? ''));
@@ -602,7 +605,21 @@ final class PageController
     /** Hook payload for a page event (see TaskHooks). */
     private function pagePayload(Page $page, string $urlPath): array
     {
-        return ['path' => $urlPath, 'title' => $page->title, 'template' => $page->template];
+        return ['path' => $urlPath, 'title' => $page->title, 'template' => $page->template, 'status' => $page->status];
+    }
+
+    /** Apply the visibility values from Visibility::fromForm() to a page. */
+    private function applyVisibility(Page $page, array $visibility): void
+    {
+        $page->status    = $visibility['status'] ?? $page->status;
+        $page->listing   = $visibility['listing'] ?? $page->listing;
+        $page->cascade   = $visibility['cascade'] ?? $page->cascade;
+        if (array_key_exists('publishAt', $visibility)) {
+            $page->publishAt = $visibility['publishAt'];
+        }
+        if (array_key_exists('expireAt', $visibility)) {
+            $page->expireAt = $visibility['expireAt'];
+        }
     }
 
     /** Convert Slim route {path:.+} arg to a leading-slash URL path. '~' is the homepage sentinel. */

@@ -268,6 +268,7 @@
     <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
 
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    {% if errorKey is defined and errorKey %}<p class="error">{{ attribute(t, errorKey) }}</p>{% endif %}
 
     {% if mode == 'edit' %}
         <p class="breadcrumb">
@@ -328,19 +329,7 @@
         <input type="text" name="metatitle" value="{{ page.metatitle }}" placeholder="{{ page.title }}">
     </div>
 
-    <div class="row">
-        <div class="field checkbox">
-            <label>
-                <input type="checkbox" name="published" value="1" {% if page.published %}checked{% endif %}>
-                {{ t.page_field_published }}
-            </label>
-        </div>
-        <div class="field">
-            <label>{{ t.page_field_publish_date }} <small>{{ t.page_field_publish_date_hint }}</small></label>
-            <input type="datetime-local" name="published_at"
-                   value="{{ page.publishedAt ? page.publishedAt|date('Y-m-d\\TH:i') : '' }}">
-        </div>
-    </div>
+    {% include '@admin/_visibility_fields.twig' with {entry: page, isPage: true, isNew: mode == 'new'} only %}
 
     {# ── Page fields – declared by the template's manifest (`fields:`) ── #}
     {% if pageFields is not empty %}

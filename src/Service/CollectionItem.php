@@ -66,6 +66,16 @@ final class CollectionItem
         return $this->state($now) === Visibility::LIVE;
     }
 
+    public function publishTime(): ?int
+    {
+        return Visibility::timestamp($this->publishAt);
+    }
+
+    public function expireTime(): ?int
+    {
+        return Visibility::timestamp($this->expireAt);
+    }
+
     // ── Legacy `$item->published` (pre-0.9 property) ──
 
     public function __get(string $name): mixed

@@ -126,6 +126,17 @@ final class Page
         return $blocker !== null ? Visibility::httpStatus($blocker->ownState($now)) : 200;
     }
 
+    /** Timestamp the page goes (went) live — PublishAt, else legacy PublishedAt; null = no schedule. */
+    public function publishTime(): ?int
+    {
+        return Visibility::publishTimestamp($this->publishAt, $this->publishedAt);
+    }
+
+    public function expireTime(): ?int
+    {
+        return Visibility::timestamp($this->expireAt);
+    }
+
     /** Shown by navigation helpers (`nav_pages()`, `top_level_pages()`). */
     public function inNav(): bool
     {
