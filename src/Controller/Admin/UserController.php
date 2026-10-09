@@ -30,8 +30,17 @@ final class UserController
 
     private function renderList(Request $request, Response $response, ?string $error = null): Response
     {
+        // ?role=member etc. — member accounts can outnumber the editors by far.
+        $role  = (string) ($request->getQueryParams()['role'] ?? '');
+        $users = $this->users->all();
+        if ($role !== '' && isset($this->rolesMap[$role])) {
+            $users = array_values(array_filter($users, fn (array $u) => in_array($role, $u['roles'], true)));
+        } else {
+            $role = '';
+        }
         return $this->twig->render($response, '@admin/users/list.twig', [
-            'users' => $this->users->all(),
+            'users' => $users,
+            'role' => $role,
             'csrf' => $this->csrfFields($request),
             'roles' => array_keys($this->rolesMap),
             'error' => $error,

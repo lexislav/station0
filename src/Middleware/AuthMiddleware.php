@@ -21,6 +21,8 @@ final class AuthMiddleware implements MiddlewareInterface
         private readonly string $adminPath,
         private readonly Twig $twig,
         private readonly array $rolesMap,
+        /** Role names allowed into the admin (config `admin.roles`). */
+        private readonly array $adminRoles = ['admin', 'editor'],
     ) {}
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
@@ -30,10 +32,26 @@ final class AuthMiddleware implements MiddlewareInterface
             $target = $this->users->hasAny() ? '/login' : '/setup';
             return $response->withHeader('Location', $this->adminPath . $target);
         }
+        if (!$this->mayEnter()) {
+            // Signed in, but with a role that has no admin access (e.g. `member`).
+            $response = (new ResponseFactory())->createResponse(403);
+            $response->getBody()->write('Forbidden');
+            return $response;
+        }
         $this->twig->getEnvironment()->addGlobal('user', [
             'email'   => $this->auth->getEmail(),
             'isAdmin' => $this->auth->hasRole($this->rolesMap['admin']),
         ]);
         return $handler->handle($request);
+    }
+
+    private function mayEnter(): bool
+    {
+        foreach ($this->adminRoles as $name) {
+            if (isset($this->rolesMap[$name]) && $this->auth->hasRole($this->rolesMap[$name])) {
+                return true;
+            }
+        }
+        return false;
     }
 }

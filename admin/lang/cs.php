@@ -213,4 +213,38 @@ return [
     'task_err_option'     => 'Vyberte jednu z možností.',
     'task_err_file'       => 'Soubor se nepodařilo nahrát.',
     'task_err_running'    => 'Úloha už běží — počkejte na její dokončení.',
+
+    // Přístup jen pro členy — admin
+    'err_no_admin_access' => 'Tento účet nemá přístup do administrace.',
+    'users_filter_all'    => 'Všichni',
+
+    // Přístup jen pro členy — přihlášení na webu (záložní šablona; web si může vlastní znění dát do login.twig)
+    'member_login_title'        => 'Přihlášení',
+    'member_login_email'        => 'E-mail',
+    'member_login_password'     => 'Heslo',
+    'member_login_remember'     => 'Zůstat přihlášen',
+    'member_login_submit'       => 'Přihlásit',
+    'member_link_heading'       => 'Přihlášení bez hesla',
+    'member_link_help'          => 'Pošleme ti e-mailem jednorázový přihlašovací odkaz.',
+    'member_link_submit'        => 'Poslat odkaz',
+    'member_password_heading'   => 'Nastavit nové heslo',
+    'member_password_new'       => 'Nové heslo',
+    'member_password_confirm'   => 'Nové heslo znovu',
+    'member_password_submit'    => 'Uložit heslo',
+    'member_signed_in_as'       => 'Přihlášen jako',
+    'member_logout'             => 'Odhlásit',
+    'member_err_invalid'        => 'Špatný e-mail nebo heslo.',
+    'member_err_throttled'      => 'Příliš mnoho pokusů. Zkus to znovu za pár minut.',
+    'member_err_link_invalid'   => 'Přihlašovací odkaz je neplatný, prošlý nebo už použitý.',
+    'member_err_password_short' => 'Heslo musí mít alespoň 8 znaků.',
+    'member_err_password_mismatch' => 'Hesla se neshodují.',
+    'member_err_not_signed_in'  => 'Nejdřív se přihlas.',
+    'member_notice_link_sent'   => 'Pokud k adrese existuje účet, přihlašovací odkaz je na cestě.',
+    'member_notice_password_set' => 'Heslo uloženo.',
+    'member_notice_signed_out'  => 'Jsi odhlášen.',
+
+    // E-mail s přihlašovacím odkazem (%s = název webu, %d = minuty)
+    'member_link_subject' => 'Přihlašovací odkaz – %s',
+    'member_link_intro'   => 'Kliknutím na odkaz níže se přihlásíš na %s. Funguje jednou a platí %d minut.',
+    'member_link_ignore'  => 'Pokud jsi o něj nežádal, e-mail ignoruj.',
 ];

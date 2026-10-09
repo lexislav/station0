@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Station0\Controller\Admin;
 
 use Delight\Auth\AmbiguousUsernameException;
+use Delight\Auth\AttemptCancelledException;
 use Delight\Auth\Auth;
 use Delight\Auth\EmailNotVerifiedException;
 use Delight\Auth\InvalidEmailException;
@@ -30,7 +31,36 @@ final class AuthController
         private readonly string $baseUrl,
         private readonly string $adminPath,
         private readonly array $lang = [],
+        /** Role bitmasks allowed into the admin (config `admin.roles`); [] = any account. */
+        private readonly array $adminRoles = [],
     ) {}
+
+    private function userMayEnterAdmin(int $userId): bool
+    {
+        if ($this->adminRoles === []) {
+            return true;
+        }
+        foreach ($this->adminRoles as $role) {
+            if ($this->auth->admin()->doesUserHaveRole($userId, $role)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether the signed-in account may use the admin (members may not). */
+    private function canEnterAdmin(): bool
+    {
+        if ($this->adminRoles === []) {
+            return true;
+        }
+        foreach ($this->adminRoles as $role) {
+            if ($this->auth->hasRole($role)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     private function t(string $key): string
     {
@@ -39,7 +69,7 @@ final class AuthController
 
     public function showLogin(Request $request, Response $response): Response
     {
-        if ($this->auth->isLoggedIn()) {
+        if ($this->auth->isLoggedIn() && $this->canEnterAdmin()) {
             return $response->withStatus(302)->withHeader('Location', $this->adminPath);
         }
         $params = $request->getQueryParams();
@@ -57,22 +87,32 @@ final class AuthController
         $password = (string) ($data['password'] ?? '');
         $error = null;
 
+        // Refuse accounts without an admin role (members) before the sign-in
+        // completes — no session and no remember cookie for them.
+        $gate = fn ($userId) => $this->userMayEnterAdmin((int) $userId);
+
         try {
-            $this->auth->loginWithUsername($username, $password, 60 * 60 * 24 * 14);
-            return $response->withStatus(302)->withHeader('Location', $this->adminPath);
+            $this->auth->loginWithUsername($username, $password, 60 * 60 * 24 * 14, $gate);
         } catch (UnknownUsernameException) {
             try {
-                $this->auth->login($username, $password, 60 * 60 * 24 * 14);
-                return $response->withStatus(302)->withHeader('Location', $this->adminPath);
+                $this->auth->login($username, $password, 60 * 60 * 24 * 14, $gate);
+            } catch (AttemptCancelledException) {
+                $error = $this->t('err_no_admin_access');
             } catch (\Throwable) {
                 $error = $this->t('err_invalid_credentials');
             }
+        } catch (AttemptCancelledException) {
+            $error = $this->t('err_no_admin_access');
         } catch (AmbiguousUsernameException | InvalidPasswordException | InvalidEmailException) {
             $error = $this->t('err_invalid_credentials');
         } catch (TooManyRequestsException) {
             $error = $this->t('err_too_many_attempts');
         } catch (\Throwable) {
             $error = $this->t('err_login_failed');
+        }
+
+        if ($error === null) {
+            return $response->withStatus(302)->withHeader('Location', $this->adminPath);
         }
 
         return $this->twig->render($response->withStatus(401), '@admin/login.twig', [

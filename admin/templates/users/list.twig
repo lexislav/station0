@@ -5,6 +5,14 @@
     <a class="btn primary" href="{{ app.adminPath }}/users/new">{{ t.users_new }}</a>
 </div>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% if roles|length > 2 %}
+<p class="filters">
+    <a href="{{ app.adminPath }}/users" {{ role == '' ? 'aria-current="true" class="active"' }}>{{ t.users_filter_all }}</a>
+    {% for r in roles %}
+        · <a href="{{ app.adminPath }}/users?role={{ r }}" {{ role == r ? 'aria-current="true" class="active"' }}>{{ r }}</a>
+    {% endfor %}
+</p>
+{% endif %}
 <table class="users">
     <thead><tr>
         <th>{{ t.users_th_username }}</th>

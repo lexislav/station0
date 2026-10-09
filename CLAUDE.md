@@ -56,14 +56,22 @@ YAML. Keys are lower-cased on read. Serializing omits `null` / `''` / `[]`.
 - Composer package: `lexislav/station0` (type: library)
 - PHP ≥ 8.2 required
 
-## Middleware stack (admin routes)
+## Middleware stack
 
-1. `RoutingMiddleware`
-2. `TwigMiddleware`
-3. `Guard` (CSRF)
-4. `ErrorMiddleware`
-5. `AuthMiddleware` — redirects to `/admin/setup` (no users) or `/admin/login` (not logged in)
-6. `RoleMiddleware` — role check (`admin` / `editor`)
+Global, outermost first (Slim runs the last-added first):
+
+1. `ErrorMiddleware`
+2. `Guard` (CSRF — every POST/PUT/PATCH/DELETE, public routes included)
+3. `VisitorMiddleware` — loads the public-site visitor (pass cookie), `visitor` Twig global, writes pass cookies
+4. `CsrfTwigGlobalMiddleware` — `csrf` Twig global
+5. `TwigMiddleware`
+6. `RoutingMiddleware`
+
+Route middleware:
+
+- `AccessMiddleware` — page routes and `/media` + `/thumb`: members-only access (`access` config)
+- `AuthMiddleware` — admin group: redirects to `/admin/setup` (no users) or `/admin/login` (not logged in); 403 for accounts without an `admin.roles` role (members)
+- `RoleMiddleware` — role check (`admin` / `editor`)
 
 ## Key classes
 
@@ -97,6 +105,15 @@ YAML. Keys are lower-cased on read. Serializing omits `null` / `''` / `[]`.
 | `TaskHooks` | `src/Service/TaskHooks.php` | Content events → tasks subscribed via `on` |
 | `TaskContext` | `src/Service/TaskContext.php` | What a task's `run` closure gets: params, event, output, content services |
 | `TaskController` | `src/Controller/Admin/TaskController.php` | Admin list / form / run page with live output / run-status JSON |
+| `AccessPolicy` | `src/Service/AccessPolicy.php` | `access` config: which pages / media need a signed-in visitor, front-matter `Access:` inheritance |
+| `Visitor` | `src/Service/Visitor.php` | Public-site identity: guest passes, member sign-ins, staff; queues the pass cookie |
+| `PassStore` | `src/Service/PassStore.php` | `station0_passes` table (hashed tokens, expiry, sliding renewals) |
+| `Members` | `src/Service/Members.php` | Accounts for the public site: find, verify password, create (`member` role), set password |
+| `LoginLinks` | `src/Service/LoginLinks.php` | One-time sign-in links (`station0_login_links`) |
+| `RateLimiter` | `src/Service/RateLimiter.php` | Fixed-window limiter with lockout (`station0_throttle`) |
+| `MemberAuthController` | `src/Controller/MemberAuthController.php` | Public sign-in routes under `access.loginPath` |
+| `ActionRegistry` | `src/Service/ActionRegistry.php` | Site actions (`site/actions/*.php`): load + validate definitions |
+| `ActionContext` / `ActionState` | `src/Service/Action*.php` | What an action handler gets; session-backed per-action state + flash |
 
 ## Local development
 
@@ -617,6 +634,54 @@ required param without default is skipped, logged to `app.log`), source
 `hook`, the admin user as `user`. A failing hook never breaks the admin
 action. Changes made by tasks (via repositories) fire no events, so hooks
 cannot loop. Sort-only reorders fire nothing.
+
+## Members-only access (`access`)
+
+Off by default. In `site/config.php`:
+
+```php
+'access' => [
+    'mode'         => 'members',          // 'public' (default) | 'members'
+    'public'       => ['/', '/info/*'],   // always public; `*` = prefix
+    'redirect'     => '/',                // anonymous visitors of gated pages go here (always public)
+    'media'        => true,               // members mode: also gate /media + /thumb (403)
+    'loginPath'    => '/login',           // enables the member sign-in routes (always public)
+    'rememberDays' => 365,                // "remember me" sign-ins (sliding)
+    'sessionHours' => 12,                 // sign-ins without "remember me"
+],
+'admin' => ['roles' => ['admin', 'editor']],  // who may enter the admin
+```
+
+- **Per page:** `Access: public|members` in front matter overrides the mode for the page and its sub-pages (the homepage's own setting is not inherited). Media are gated as a whole, not per page.
+- **Who counts as signed in** (`Visitor`): a guest with a pass from a site action (`$ctx->visitor()->grantPass($identity, $ttl, $label, $meta)`), a member signed in at `loginPath`, or an admin/editor signed into the admin. Cookie `station0_pass` (HttpOnly, `Secure` from `session.secure`), token hashed in `station0_passes`; deleting or deactivating a user ends their passes on the next request.
+- **Templates:** `visitor` global (`authenticated`, `guest`, `member`, `staff`, `label`, `email`, `expiresAt`, `meta`), `access` global (`loginPath`, `linkPath`, `passwordPath`, `logoutPath`). Sign-out is a POST (with `csrf` fields) to `access.logoutPath`.
+- **Sign-in routes** (`MemberAuthController`): `GET/POST {loginPath}`, `POST/GET {loginPath}/link` (one-time e-mail link, 20 min), `POST {loginPath}/password`, `POST {loginPath}/logout`. The page is the site's `login.twig` (else `@admin/member-login.twig`) with a `login` variable: `error` (`invalid`, `throttled`, `link_invalid`, `password_short`, `password_mismatch`, `not_signed_in`), `notice` (`link_sent`, `password_set`, `signed_out`), `email`, `retryAfter`, `next`, `paths`. Optional e-mail template `emails/login-link.twig` with blocks `subject` and `body` (vars `url`, `minutes`, `member`, `site`). Requires a valid `mail.from`.
+- **Accounts:** role `member` (`Role::SUBSCRIBER`); create in the admin, with `console user:create <user> <email> member`, or from an action (`$ctx->members()->create()`). Public sign-ins never touch the delight-im session; members are refused at the admin login (`admin.roles`).
+- Static thumbnails (`thumbs.static`) bypass PHP and so the media gate — Bootstrap logs a warning when both are on.
+
+## Site actions (`site/actions/*.php`)
+
+The site's own request handlers — one file per action, `_*.php` files are helpers. Same loading model as site tasks (`ActionRegistry`, isolated `require`, broken definitions logged and skipped):
+
+```php
+return [
+    'path'    => '/contact/send',   // static path; not under the admin, /media, /thumb or loginPath
+    'methods' => ['POST'],          // default
+    'access'  => 'public',          // 'members' = signed-in visitors only (403)
+    'handler' => function (ActionContext $ctx) {
+        if (!$ctx->throttle()->hit('contact:' . $ctx->ip(), 5, 3600)['allowed']) {
+            $ctx->state()->flash('error', 'throttled');
+            return $ctx->back();
+        }
+        $ctx->state()->flash('sent', true);   // template: action_state('contact').sent
+        return $ctx->redirect('/contact');
+    },
+];
+```
+
+- `ActionContext`: `input()` (trimmed; read passwords from `request()->getParsedBody()`), `ip()`, `state($ns = action name)` → `ActionState` (`get/set/forget/flash/clear`, session-backed), `visitor()`, `members()`, `throttle()`, `pages()`, `collections()`, `mail()`, `log()`, `config('a.b')`, `redirect()` (local paths only), `back()`, `render()`, `json()`. Returning null = `back()`.
+- Forms post with the `csrf` fields (global `Guard`). An action path shadows a page with the same path.
+- `action_state('<ns>')` in Twig returns the state and consumes flashed values — read it once per render.
 
 ## Common gotchas
 
