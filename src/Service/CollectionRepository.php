@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Station0\Service;
 
+use Station0\Support\FieldSchema;
 use Station0\Support\FrontMatter;
 use Station0\Support\Slug;
+use Station0\Support\Visibility;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -41,7 +43,16 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class CollectionRepository
 {
+    /** Front-matter keys mapped to CollectionItem properties. */
+    public const RESERVED_KEYS = ['title', 'published', 'sort', 'status', 'publishat', 'expireat'];
+
+    /** Visibility keys a collection schema may claim as its own fields → their front-matter spelling. */
+    private const VISIBILITY_KEYS = ['status' => 'Status', 'publishat' => 'PublishAt', 'expireat' => 'ExpireAt'];
+
     private array $parsedCache = [];
+
+    /** @var array<string, list<string>> collection → visibility keys claimed by its schema */
+    private array $claimedCache = [];
 
     public function __construct(private readonly string $collectionsDir)
     {
@@ -111,6 +122,7 @@ final class CollectionRepository
      */
     public function saveSchema(string $name, array $schema): void
     {
+        unset($this->claimedCache[$name]);
         $dir = $this->collectionDir($name);
         if (!is_dir($dir)) {
             @mkdir($dir, 0775, true);
@@ -312,14 +324,21 @@ final class CollectionRepository
         [$meta, $body] = $this->parseFrontMatterFromFile($filePath);
         $slug = basename(dirname($filePath));
 
+        // A schema field named e.g. `status` stays a schema field; visibility
+        // then falls back to the Published flag for that collection.
+        $claimed    = $this->claimedVisibilityKeys($collectionName);
+        $visibility = array_diff_key($meta, array_flip($claimed));
+
         $item = new CollectionItem(
             collection: $collectionName,
             slug:       $slug,
             title:      (string) ($meta['title'] ?? $slug),
             body:       $body,
-            published:  filter_var($meta['published'] ?? 'true', FILTER_VALIDATE_BOOLEAN),
             sort:       isset($meta['sort']) && $meta['sort'] !== '' ? (int) $meta['sort'] : null,
-            extra:      array_diff_key($meta, array_flip(['title', 'published', 'sort'])),
+            extra:      array_diff_key($meta, array_flip(array_diff(self::RESERVED_KEYS, $claimed))),
+            status:     Visibility::statusFromMeta($visibility),
+            publishAt:  Visibility::datetimeFromMeta($visibility, 'publishat'),
+            expireAt:   Visibility::datetimeFromMeta($visibility, 'expireat'),
         );
         $item->filePath = $filePath;
         return $item;
@@ -344,9 +363,17 @@ final class CollectionRepository
     {
         $fields = [
             'Title'     => $item->title,
-            'Published' => $item->published ? 'true' : 'false',
+            'Status'    => $item->status,
+            // Mirror of Status for pre-0.9 readers.
+            'Published' => $item->isPublished() ? 'true' : 'false',
+            'PublishAt' => $item->publishAt,
+            'ExpireAt'  => $item->expireAt,
             'Sort'      => $item->sort !== null ? (string) $item->sort : null,
         ];
+        // Keys the schema claims carry the schema field's value (from extra).
+        foreach ($this->claimedVisibilityKeys($item->collection) as $key) {
+            unset($fields[self::VISIBILITY_KEYS[$key]]);
+        }
 
         foreach ($item->extra as $k => $v) {
             $fields[ucfirst($k)] = $v;
@@ -356,6 +383,27 @@ final class CollectionRepository
     }
 
     // ─────────────────── Helpers ───────────────────
+
+    /**
+     * Visibility keys (status, publishat, expireat) that the collection's
+     * schema declares as its own fields.
+     *
+     * @return list<string>
+     */
+    private function claimedVisibilityKeys(string $name): array
+    {
+        if ($name === '') {
+            return [];
+        }
+        if (!isset($this->claimedCache[$name])) {
+            $names = array_map(
+                fn (array $f): string => strtolower((string) ($f['name'] ?? '')),
+                FieldSchema::normalize($this->schema($name)['fields'] ?? []),
+            );
+            $this->claimedCache[$name] = array_values(array_intersect(array_keys(self::VISIBILITY_KEYS), $names));
+        }
+        return $this->claimedCache[$name];
+    }
 
     private function labelFromName(string $name): string
     {

@@ -35,11 +35,7 @@
                     <code class="muted" style="font-size:.78rem; margin-left:.4rem;">{{ item.slug }}</code>
                 </td>
                 <td>
-                    {% if item.published %}
-                        <span class="badge badge-published">{{ t.pages_status_published }}</span>
-                    {% else %}
-                        <span class="badge badge-draft">{{ t.pages_status_draft }}</span>
-                    {% endif %}
+                    {% include '@admin/_visibility_status.twig' with {entry: item} only %}
                 </td>
                 <td class="muted">{{ item.sort ?? '—' }}</td>
                 <td class="text-right" style="white-space:nowrap;">

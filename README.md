@@ -64,6 +64,25 @@ rewrite isn't being applied — check `AllowOverride` and `mod_rewrite`.
 
 For a ready-to-use project skeleton, see [lexislav/get-station0](https://github.com/lexislav/get-station0).
 
+## Page visibility
+
+Publication and listing are separate (station0 ≥ 0.9, full reference in
+[docs/visibility.md](docs/visibility.md)):
+
+```
+Status: published          # draft | published | archived (legacy: Published: true|false)
+PublishAt: 2026-06-01 09:00
+ExpireAt: 2026-09-30 23:59 # archived / expired → 410 Gone
+Listing: nav-hidden        # listed | nav-hidden | unlisted
+Cascade: false             # when not live, keep the subpages live
+---
+```
+
+A page is live only when its parents are (homepage excluded). Menus use
+`nav_pages()` / `top_level_pages()`, listings `child_pages()`. Signed-in
+editors preview non-live pages with a "not public" bar. Set `timezone` in
+`site/config.php`; dates are stored in it.
+
 ## Media & uploads
 
 Uploaded assets are stored **next to the page** they belong to:
@@ -241,8 +260,8 @@ related:
       option_label: "{title} ({path})"
 ```
 
-Only published pages are offered. The stored value is the page's URL path;
-`page(value)` returns the page (or `null` if it is missing or not published):
+Only live pages are offered (unlisted ones included). The stored value is the page's URL path;
+`page(value)` returns the page (or `null` if it is missing or not live):
 
 ```twig
 {% for rel in fields.related %}

@@ -1,0 +1,25 @@
+{# Visibility badges of a page or collection item: effective state + listing.
+   Usage: {% include '@admin/_visibility_status.twig' with {entry: page} only %} #}
+{% set state = entry.state %}
+{% set fmt = 'j. n. Y H:i' %}
+{% if state == 'live' %}
+    <span class="tag ok"{% if entry.expireTime %} title="{{ t.pages_status_expires_title|format(entry.expireTime|date(fmt)) }}"{% endif %}>{{ t.pages_status_live }}</span>
+{% elseif state == 'scheduled' %}
+    <span class="tag planned" title="{{ t.pages_status_scheduled_title|format(entry.publishTime|date(fmt)) }}">{{ t.pages_status_scheduled }}</span>
+{% elseif state == 'expired' %}
+    <span class="tag gone" title="{{ t.pages_status_expires_title|format(entry.expireTime|date(fmt)) }}">{{ t.pages_status_expired }}</span>
+{% elseif state == 'archived' %}
+    <span class="tag gone">{{ t.pages_status_archived }}</span>
+{% elseif state == 'hidden' %}
+    {% set blocker = entry.blockingAncestor %}
+    <span class="tag hidden" title="{{ t.pages_status_hidden_title|format(blocker.title ~ ' (' ~ blocker.urlPath ~ ')') }}">{{ t.pages_status_hidden }}</span>
+{% else %}
+    <span class="tag">{{ t.pages_status_draft }}</span>
+{% endif %}
+{% if entry.listing is defined %}
+    {% if entry.listing == 'nav-hidden' %}
+        <span class="tag subtle">{{ t.pages_badge_nav_hidden }}</span>
+    {% elseif entry.listing == 'unlisted' %}
+        <span class="tag subtle">{{ t.pages_badge_unlisted }}</span>
+    {% endif %}
+{% endif %}

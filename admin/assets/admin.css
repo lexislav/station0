@@ -70,6 +70,14 @@ tr:last-child td { border-bottom: none; }
 .tag { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .75rem; background: #e5e7eb; color: var(--muted); }
 .tag.ok { background: #d1fae5; color: var(--ok); }
 .tag.planned { background: #fef3c7; color: #d97706; }
+.tag.gone { background: #fee2e2; color: var(--danger); }
+.tag.hidden { background: #ede9fe; color: #6d28d9; }
+.tag.subtle { background: transparent; border: 1px solid #e5e7eb; }
+.status .tag + .tag { margin-left: .25rem; }
+fieldset.visibility { border: 1px solid #e5e7eb; border-radius: 6px; padding: .75rem 1rem .25rem; margin: 0 0 1rem; }
+fieldset.visibility legend { padding: 0 .35rem; font-weight: 600; }
+fieldset.visibility legend .tag { font-weight: normal; margin-left: .35rem; }
+fieldset.visibility .hint { margin: 0 0 .75rem; font-size: .85rem; color: #d97706; }
 .empty { color: var(--muted); text-align: center; padding: 2rem; }
 .cards { display: flex; gap: 1rem; list-style: none; padding: 0; align-items: stretch; }
 .cards li { display: flex; }

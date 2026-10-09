@@ -5,6 +5,60 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Page visibility model** (see `docs/visibility.md`). Two independent axes:
+  - Publication: `Status: draft | published | archived`, `PublishAt` (published
+    page is scheduled until then), `ExpireAt` (published page expires then).
+    Archived and expired pages answer **410 Gone** (`410.twig` when the site
+    has one, else `404.twig` with status 410); draft / scheduled stay 404.
+  - Listing: `Listing: listed | nav-hidden | unlisted`. Nav-hidden pages
+    stay in `child_pages()` but leave menus; unlisted pages are reachable
+    by URL (and `page()`) only.
+- **Parent inheritance.** A page is live only when all its ancestors are;
+  the homepage is not an ancestor. `Cascade: false` on a parent hides only
+  the parent itself (e.g. a blog index taken down while posts stay live).
+- `nav_pages(path = '/')` Twig function for menus and submenus;
+  `child_pages(path, includeUnlisted = false)` gained its second argument.
+- Twig: `page.status`, `page.state`, `page.isLive`, `page.inNav`,
+  `page.isListed`, `page.listing`, `page.publishAt`, `page.expireAt`.
+- **Preview for editors.** A signed-in admin / editor sees non-live pages
+  with a "not public" bar (private, no-store, noindex); templates get a
+  `preview` flag.
+- **Time-aware cache.** `VisibilityHorizon` flushes cached HTML when the
+  next PublishAt / ExpireAt passes, so listings rendered inside blocks
+  never lag behind a schedule.
+- Site `timezone` config (`site/config.php`), used for all front-matter
+  datetimes; missing = PHP default.
+- Collection items: `Status`, `PublishAt`, `ExpireAt`.
+- Admin: Visibility fieldset (status, publish / expire at, listing, display
+  date, cascade) for pages, status + schedule for collection items;
+  validation that ExpireAt is after PublishAt; state badges in the page
+  tree, stream records and item lists (published / scheduled / expired /
+  archived / draft / hidden by parent, not in menu / unlisted); en + cs.
+- `page.saved` / `page.deleted` hook payloads carry `status`.
+
+### Changed
+- `PublishedAt` is the date shown to readers. It still schedules a page
+  while `PublishAt` is absent (unchanged behavior for existing content);
+  the admin moves such a schedule into `PublishAt` on the next save.
+- Saving writes `Status:` plus a `Published:` mirror (true only for
+  `published`), so older versions never expose drafts / archived pages.
+- `top_level_pages()` skips nav-hidden and unlisted pages; `child_pages()`
+  skips unlisted ones.
+- `collection_item()` returns live items only, like `collection()`
+  (it used to return drafts too).
+- Stream counters in the admin count non-live records, not just drafts.
+- `Page::$published` / `CollectionItem::$published` became `$status`;
+  reading or writing `->published` (PHP and Twig) still works.
+
+### Notes
+- `status`, `publishAt`, `expireAt`, `listing` and `cascade` are reserved
+  page-field names now. A collection schema field with one of the first
+  three names keeps working; that collection's visibility then uses
+  `Published`.
+
 ## [0.8.2] - 2026-09-27
 
 ### Added

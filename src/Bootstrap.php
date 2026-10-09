@@ -50,6 +50,7 @@ use Station0\Service\TaskRegistry;
 use Station0\Service\TemplateBlocks;
 use Station0\Service\ThumbService;
 use Station0\Service\UserRepository;
+use Station0\Service\VisibilityHorizon;
 
 final class Bootstrap
 {
@@ -61,6 +62,7 @@ final class Bootstrap
         $configFactory = require $siteRoot . '/config.php';
         $config = $configFactory($station0Root, $siteRoot, $projectRoot);
         $roles = require $station0Root . '/config/roles.php';
+        self::applyTimezone($config);
 
         foreach ([$config['paths']['cache'], $config['paths']['sessions'], $config['paths']['logs'], $config['paths']['uploads']] as $dir) {
             if (!is_dir($dir)) {
@@ -168,13 +170,13 @@ final class Bootstrap
             $twig->getEnvironment()->addGlobal('t', $c->get('lang'));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'top_level_pages',
-                function () use ($c) {
-                    $repo = $c->get(ContentRepository::class);
-                    return array_values(array_filter(
-                        $repo->all(false),
-                        fn (\Station0\Service\Page $p) => $p->depth() === 1
-                    ));
-                }
+                // Main menu: live top-level pages with `Listing: listed`.
+                fn () => $c->get(ContentRepository::class)->navChildren('/')
+            ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'nav_pages',
+                // Menu / submenu items under a path: live, `Listing: listed`.
+                fn (string $parentUrl = '/') => $c->get(ContentRepository::class)->navChildren($parentUrl)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'page_fields',
@@ -196,20 +198,9 @@ final class Bootstrap
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'child_pages',
-                function (string $parentUrl) use ($c) {
-                    $repo      = $c->get(ContentRepository::class);
-                    $parentUrl = '/' . trim($parentUrl, '/');
-                    return array_values(array_filter(
-                        $repo->all(false),
-                        function (\Station0\Service\Page $p) use ($parentUrl) {
-                            if ($p->urlPath === '/') {
-                                return false;
-                            }
-                            $pp = rtrim(dirname($p->urlPath), '/') ?: '/';
-                            return $pp === $parentUrl;
-                        }
-                    ));
-                }
+                // Content listing: live children incl. nav-hidden; unlisted only on request.
+                fn (string $parentUrl, bool $includeUnlisted = false)
+                    => $c->get(ContentRepository::class)->children($parentUrl, $includeUnlisted)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'has_streams',
@@ -284,7 +275,9 @@ final class Bootstrap
                     if ((string) $name === '' || (string) $slug === '') {
                         return null;
                     }
-                    return $c->get(CollectionRepository::class)->find($name, $slug);
+                    // Live items only, like collection() (drafts / scheduled / expired → null).
+                    $item = $c->get(CollectionRepository::class)->find($name, $slug);
+                    return $item !== null && $item->isLive() ? $item : null;
                 }
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
@@ -297,7 +290,7 @@ final class Bootstrap
                         slug:      $item->slug,
                         title:     $item->title,
                         body:      $item->body,
-                        published: $item->published,
+                        status:    $item->status,
                     );
                     $page->urlPath  = $virtualPath;
                     $page->filePath = $item->filePath;
@@ -360,6 +353,13 @@ final class Bootstrap
             $c->get(MediaService::class),
             $c->get(ThumbService::class),
             (int) ($config['thumbs']['markdown'] ?? PageRenderer::MARKDOWN_THUMB_WIDTH),
+            $c->get(VisibilityHorizon::class),
+        ));
+
+        $container->set(VisibilityHorizon::class, fn ($c) => new VisibilityHorizon(
+            $c->get(FileCache::class),
+            $c->get(ContentRepository::class),
+            $c->get(CollectionRepository::class),
         ));
 
         $container->set(UserRepository::class, fn ($c) => new UserRepository(
@@ -404,6 +404,21 @@ final class Bootstrap
             $c->get(Twig::class),
             $c->get(ContentRepository::class),
             $roles
+        ));
+
+        // Public pages. Signed-in admins / editors may preview non-live pages;
+        // Auth (and the DB) is only touched for those.
+        $container->set(PageController::class, fn ($c) => new PageController(
+            $c->get(ContentRepository::class),
+            $c->get(PageRenderer::class),
+            $c->get(Twig::class),
+            $c->get(PageFields::class),
+            function () use ($c, $roles): bool {
+                $auth = $c->get(Auth::class);
+                return $auth->isLoggedIn() && $auth->hasAnyRole(...array_values($roles));
+            },
+            $config['adminPath'],
+            $c->get('lang'),
         ));
 
         $container->set(AdminPageController::class, fn ($c) => new AdminPageController(
@@ -645,6 +660,25 @@ final class Bootstrap
             !empty($thumbs['static']) ? $public : null,
             isset($thumbs['format']) ? (string) $thumbs['format'] : null,
         );
+    }
+
+    /**
+     * Site timezone from the optional `timezone` config key (e.g. 'Europe/Prague').
+     * Naive front-matter datetimes (PublishedAt, PublishAt, ExpireAt) are read
+     * in this zone. Missing or invalid = PHP's default. Shared with bin/console.
+     */
+    public static function applyTimezone(array $config): void
+    {
+        $tz = trim((string) ($config['timezone'] ?? ''));
+        if ($tz === '') {
+            return;
+        }
+        try {
+            new \DateTimeZone($tz);
+        } catch (\Exception) {
+            return;
+        }
+        date_default_timezone_set($tz);
     }
 
     /** Web root used for static thumbnails (also by `thumbs:clear`). */

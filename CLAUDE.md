@@ -30,7 +30,7 @@ Flat-file CMS built on **Slim 4**, **Twig 3**, **League/CommonMark**, and **Deli
 
 ```
 Title: Page title
-Published: true
+Status: published
 Summary: |
   A multi-line value is a YAML literal block
 Features:
@@ -46,7 +46,7 @@ YAML. Keys are lower-cased on read. Serializing omits `null` / `''` / `[]`.
 
 **Block system:** Each block type lives in `site/templates/blocks/{type}/` (skeleton) with `schema.yaml` and `template.twig`.
 
-**Caching:** `FileCache` (SHA-1 keyed `.cache` files in `writable/cache/`). Invalidated on page save or `cache:clear`.
+**Caching:** `FileCache` (SHA-1 keyed `.cache` files in `writable/cache/`). Invalidated on page save, `cache:clear`, or when a scheduled PublishAt / ExpireAt passes (`VisibilityHorizon`).
 
 **First-run setup:** `AuthMiddleware` detects empty `users` table → redirects to `/admin/setup`. `SetupController` creates the first admin account and logs them in. Once any user exists, `/admin/setup` redirects to `/admin/login`.
 
@@ -77,6 +77,8 @@ YAML. Keys are lower-cased on read. Serializing omits `null` / `''` / `[]`.
 | `BlockRegistry` | `src/Service/BlockRegistry.php` | Block schema/template loading; `defaults()` builds a seeded block from schema defaults |
 | `TemplateBlocks` | `src/Service/TemplateBlocks.php` | Resolves per-template `allowedBlocks` / `defaultBlocks` / `fields` / `blocks` from `<template>.blocks.yaml` |
 | `PageFields` | `src/Service/PageFields.php` | Page-level fields: typed read, sanitized write into `Page::$extra`, asset-resolved values for templates |
+| `Visibility` | `src/Support/Visibility.php` | Status / PublishAt / ExpireAt / Listing rules shared by pages and collection items: state, next transition, 404 vs 410, admin form input |
+| `VisibilityHorizon` | `src/Service/VisibilityHorizon.php` | Stores the next scheduled transition as a cache entry; flushes `FileCache` when it passes (checked once per request in `PageRenderer::render()`) |
 | `FrontMatter` | `src/Support/FrontMatter.php` | Front-matter codec (pages + collection items); single-line values verbatim, YAML blocks for multi-line / arrays |
 | `FieldSchema` | `src/Support/FieldSchema.php` | `normalize()` dict-form schema fields → list form (`name`, `item` → `item_fields`) |
 | `UserRepository` | `src/Service/UserRepository.php` | Wrapper around Delight\Auth |
@@ -170,6 +172,42 @@ renders them through `admin/templates/_select_options.twig` (server) and
   `BlockRegistry::fieldDefault()`: explicit `default`, else `''` for
   data-source/placeholder selects, else the first static option.
 - A stored value missing from the options is kept as a "(not found)" option.
+
+## Page visibility
+
+Reference: `docs/visibility.md`. Two axes:
+
+- **Publication** — `Status: draft|published|archived` (legacy `Published:`
+  → published/draft), `PublishAt`, `ExpireAt`. Own state
+  (`Page::ownState()`, `Visibility::state()`): draft · archived · scheduled ·
+  expired · live. Draft ignores dates. `PublishedAt` = display date; it
+  schedules only while `PublishAt` is absent (legacy).
+- **Inheritance** — `Page::$parent` is set by `ContentRepository`
+  (`scanDir()` passes it down, `find()` builds the chain through the
+  memoized parse cache). The root page is never a parent. `isLive()` =
+  own live and no `blockingAncestor()` (outermost non-live ancestor with
+  `Cascade` ≠ false); else state `hidden`. `httpStatus()`: archived /
+  expired (own or blocker) → 410, else 404.
+- **Listing** — `Listing: listed|nav-hidden|unlisted`, not inherited.
+  `ContentRepository::children($path, $includeUnlisted)` → `child_pages()`;
+  `navChildren($path)` → `nav_pages()` / `top_level_pages()`.
+- **Public controller** — non-live: 404/410 (`410.twig` if present), or a
+  preview with an injected bar for a signed-in admin/editor
+  (`canPreview` closure wired in Bootstrap; private/no-store, noindex).
+- **Admin** — `_visibility_fields.twig` (inputs `visibility_status`,
+  `visibility_publish_at`, `visibility_expire_at`, `visibility_listing`,
+  `visibility_cascade[]` with hidden `0`) parsed by `Visibility::fromForm()`;
+  `Visibility::validate()` → 422 with `errorKey`. Badges:
+  `_visibility_status.twig`.
+- **Storage** — always `Status:` plus a `Published:` mirror; `Listing` /
+  `Cascade` only when non-default. Reserved page-field names include
+  `status`, `publishat`, `expireat`, `listing`, `cascade`.
+- **Collections** — `CollectionItem` has status / publishAt / expireAt
+  (no listing / inheritance); `collection_item()` is live-only. A schema
+  field named `status` / `publishAt` / `expireAt` wins over the
+  visibility key (`CollectionRepository::claimedVisibilityKeys()`).
+- **Timezone** — `config['timezone']`, applied by
+  `Bootstrap::applyTimezone()` (also bin/console).
 
 ## Per-template block restrictions
 
@@ -585,7 +623,7 @@ cannot loop. Sort-only reorders fire nothing.
 - `writable/` and `public/uploads/` live in the **skeleton project root**, not in `vendor/`. Paths come from `$projectRoot` in `site/config.php`.
 - `bin/console` is exposed via `composer bin` — users run `php vendor/bin/console`.
 - CSRF token: pass `csrf.nameKey / csrf.valueKey / csrf.name / csrf.value` from controllers to templates.
-- `Published: false` pages are hidden on the public site but visible in admin.
+- Non-live pages (draft / scheduled / expired / archived / under a hidden parent) are 404/410 on the public site, previewable by signed-in editors, always visible in admin.
 - Block types are defined in the skeleton's `site/templates/blocks/`, not in the library.
 - The setup route (`/admin/setup`) self-disables once any user exists.
 - For local dev with symlinked library: always start the server from the skeleton dir — `findProjectRoot()` relies on `getcwd()`.
