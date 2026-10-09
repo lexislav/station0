@@ -100,14 +100,6 @@ final class Bootstrap
 
         $app->addErrorMiddleware($config['debug'], true, true, $container->get(Logger::class));
 
-        if (($config['access']['mode'] ?? 'public') === 'members' && ($config['access']['media'] ?? true) !== false
-            && !empty($config['thumbs']['static'])) {
-            $container->get(Logger::class)->warning(
-                'access: media are members-only, but thumbs.static writes thumbnails to public/thumb/, '
-                . 'where the web server serves them to anyone. Turn thumbs.static off.'
-            );
-        }
-
         self::registerRoutes($app);
 
         return $app;
@@ -625,7 +617,12 @@ final class Bootstrap
             $c->get(TaskHooks::class),
         ));
 
-        $container->set(ThumbService::class, fn ($c) => self::thumbService($config, $c->get(MediaService::class)));
+        $container->set(ThumbService::class, fn ($c) => self::thumbService(
+            $config,
+            $c->get(MediaService::class),
+            // Static thumbnails bypass PHP — never for members-only media.
+            fn (string $rel): bool => !$c->get(AccessPolicy::class)->mediaRequiresMember($rel),
+        ));
 
         $container->set(AssetController::class, fn ($c) => new AssetController(
             $c->get(MediaService::class),
@@ -838,7 +835,7 @@ final class Bootstrap
      *   markdown — max width of markdown images in text blocks (0 = off)
      * Shared with bin/console.
      */
-    public static function thumbService(array $config, MediaService $media): ThumbService
+    public static function thumbService(array $config, MediaService $media, ?\Closure $staticAllowed = null): ThumbService
     {
         $thumbs = $config['thumbs'] ?? [];
         $public = self::publicDir($config);
@@ -849,6 +846,7 @@ final class Bootstrap
                 ?? ThumbService::loadOrCreateKey(dirname($config['paths']['cache']) . '/thumbs.key')),
             !empty($thumbs['static']) ? $public : null,
             isset($thumbs['format']) ? (string) $thumbs['format'] : null,
+            $staticAllowed,
         );
     }
 

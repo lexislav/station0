@@ -22,7 +22,9 @@ namespace Station0\Service;
  *
  * Static mode ($publicDir set): the preview is written to
  * `{public}/thumb/{spec}/{sig}/{path}` instead — exactly the URL path — so from
- * the second request on the web server sends it without starting PHP.
+ * the second request on the web server sends it without starting PHP. Assets
+ * that $staticAllowed rejects (members-only media, see AccessPolicy) stay in the
+ * cache and are always served through PHP, so the access gate keeps applying.
  *
  * Anything that cannot or need not be resized — external URLs, SVG, GIF,
  * documents, missing files, a size not smaller than the original, no GD —
@@ -52,6 +54,9 @@ final class ThumbService
     /**
      * @param ?string $publicDir     web root for static mode; null = serve through PHP
      * @param ?string $defaultFormat 'webp' to convert by default; null = keep the source format
+     * @param (\Closure(string): bool)|null $staticAllowed static mode: may this asset path
+     *                                               (after /media/) be written under the web root?
+     *                                               null = always
      */
     public function __construct(
         private readonly MediaService $media,
@@ -59,6 +64,7 @@ final class ThumbService
         private readonly string $secret,
         private readonly ?string $publicDir = null,
         private readonly ?string $defaultFormat = null,
+        private readonly ?\Closure $staticAllowed = null,
     ) {}
 
     public static function supportsWebp(): bool
@@ -331,7 +337,7 @@ final class ThumbService
      */
     private function destination(string $spec, string $sig, string $rel, int $mtime, string $outMime): ?string
     {
-        if ($this->publicDir === null) {
+        if ($this->publicDir === null || ($this->staticAllowed !== null && !($this->staticAllowed)($rel))) {
             $key = sha1($spec . '|' . $rel . '|' . $mtime);
             return rtrim($this->cacheDir, '/') . '/thumbs/' . substr($key, 0, 2) . '/' . $key . '.' . self::RASTER[$outMime];
         }

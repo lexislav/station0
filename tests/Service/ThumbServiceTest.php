@@ -9,6 +9,7 @@ use League\CommonMark\Environment\Environment;
 use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
 use League\CommonMark\MarkdownConverter;
 use PHPUnit\Framework\TestCase;
+use Station0\Service\AccessPolicy;
 use Station0\Service\ContentRepository;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
@@ -51,10 +52,10 @@ final class ThumbServiceTest extends TestCase
         $this->rrmdir($this->root);
     }
 
-    private function thumbs(?string $publicDir = null, ?string $format = null): ThumbService
+    private function thumbs(?string $publicDir = null, ?string $format = null, ?\Closure $staticAllowed = null): ThumbService
     {
         $media = new MediaService(new ContentRepository($this->pagesDir), $this->pagesDir, $this->root . '/collections');
-        return new ThumbService($media, $this->cacheDir, 'test-secret', $publicDir, $format);
+        return new ThumbService($media, $this->cacheDir, 'test-secret', $publicDir, $format, $staticAllowed);
     }
 
     /** Resolve a thumb URL produced by url() the way the /thumb route does. */
@@ -298,6 +299,27 @@ final class ThumbServiceTest extends TestCase
 
         self::assertSame(2, ThumbService::purge($this->cacheDir, $public));
         self::assertDirectoryDoesNotExist($public . '/thumb');
+    }
+
+    public function testStaticModeKeepsGatedMediaInTheCache(): void
+    {
+        $public = $this->root . '/public';
+        mkdir($this->pagesDir . '/blog', 0775, true);
+        file_put_contents($this->pagesDir . '/blog/page.txt', "Title: Blog\nAccess: members\n---\n");
+        copy($this->pagesDir . '/about/photo.jpg', $this->pagesDir . '/blog/photo.jpg');
+
+        // As wired in Bootstrap: members-only media never go under the web root.
+        $pages  = new ContentRepository($this->pagesDir);
+        $policy = new AccessPolicy([], fn (string $urlPath) => $pages->find($urlPath));
+        $thumbs = $this->thumbs($public, null, fn (string $rel) => !$policy->mediaRequiresMember($rel));
+
+        $gated = $thumbs->url('/media/blog/photo.jpg', 600);
+        $res   = $this->serve($thumbs, $gated);
+        self::assertStringStartsWith($this->cacheDir . '/thumbs/', $res['path']);
+        self::assertFileDoesNotExist($public . $gated);
+
+        $open = $thumbs->url('/media/about/photo.jpg', 600);
+        self::assertSame($public . $open, $this->serve($thumbs, $open)['path']);
     }
 
     public function testMarkdownImagesGetThumbnails(): void
