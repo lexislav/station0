@@ -169,13 +169,13 @@ final class Bootstrap
             $twig->getEnvironment()->addGlobal('t', $c->get('lang'));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'top_level_pages',
-                function () use ($c) {
-                    $repo = $c->get(ContentRepository::class);
-                    return array_values(array_filter(
-                        $repo->all(false),
-                        fn (\Station0\Service\Page $p) => $p->depth() === 1
-                    ));
-                }
+                // Main menu: live top-level pages with `Listing: listed`.
+                fn () => $c->get(ContentRepository::class)->navChildren('/')
+            ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'nav_pages',
+                // Menu / submenu items under a path: live, `Listing: listed`.
+                fn (string $parentUrl = '/') => $c->get(ContentRepository::class)->navChildren($parentUrl)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'page_fields',
@@ -197,20 +197,9 @@ final class Bootstrap
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'child_pages',
-                function (string $parentUrl) use ($c) {
-                    $repo      = $c->get(ContentRepository::class);
-                    $parentUrl = '/' . trim($parentUrl, '/');
-                    return array_values(array_filter(
-                        $repo->all(false),
-                        function (\Station0\Service\Page $p) use ($parentUrl) {
-                            if ($p->urlPath === '/') {
-                                return false;
-                            }
-                            $pp = rtrim(dirname($p->urlPath), '/') ?: '/';
-                            return $pp === $parentUrl;
-                        }
-                    ));
-                }
+                // Content listing: live children incl. nav-hidden; unlisted only on request.
+                fn (string $parentUrl, bool $includeUnlisted = false)
+                    => $c->get(ContentRepository::class)->children($parentUrl, $includeUnlisted)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'has_streams',

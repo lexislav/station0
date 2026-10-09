@@ -36,9 +36,12 @@ final class PageController
     {
         $page = $this->content->find($urlPath);
 
-        if ($page === null || !$page->isLive()) {
-            $response = $response->withStatus(404);
-            return $this->twig->render($response, '404.twig', ['urlPath' => $urlPath]);
+        if ($page === null) {
+            return $this->notFound($response, $urlPath, 404);
+        }
+        if (!$page->isLive()) {
+            // Archived / expired (or under such a page) = gone for good → 410.
+            return $this->notFound($response, $urlPath, $page->httpStatus());
         }
 
         $html     = $this->renderer->render($page, $this->content->mtime($page->urlPath));
@@ -48,6 +51,16 @@ final class PageController
             'page'    => $page,
             'content' => $html,
             'fields'  => $this->fields->resolved($page),
+        ]);
+    }
+
+    /** 404 / 410 page; a 410 uses the site's `410.twig` when it has one. */
+    private function notFound(Response $response, string $urlPath, int $status): Response
+    {
+        $template = $status === 410 && $this->twig->getLoader()->exists('410.twig') ? '410.twig' : '404.twig';
+        return $this->twig->render($response->withStatus($status), $template, [
+            'urlPath' => $urlPath,
+            'status'  => $status,
         ]);
     }
 }
