@@ -43,8 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to `access.redirect`) and — unless `media: false` — `/media` + `/thumb`
   (403). `public` lists always-public paths (`*` = prefix). A page can
   override it with `Access: public|members` in its front matter, inherited by
-  its sub-pages. Gated responses are sent `private` (never cached publicly).
-  Default `mode: public` changes nothing.
+  its sub-pages — also to gate just a section of a public site. Media follow
+  their page. For anonymous visitors `top_level_pages()`, `nav_pages()`,
+  `child_pages()` and `page()` leave out members-only pages
+  (`includeGated=true` keeps them for teasers). Gated responses are sent
+  `private` (never cached publicly). Default `mode: public` changes nothing.
 - **Visitors and passes.** `Visitor` service + `visitor` Twig global
   (`authenticated`, `guest`, `member`, `staff`, `label`, `email`,
   `expiresAt`, `meta`…). A guest pass (`grantPass()`) lets a browser in for a
@@ -81,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reading or writing `->published` (PHP and Twig) still works.
 - The admin is limited to `admin.roles` (default `admin`, `editor`): other
   accounts (members) are refused at the admin login and get 403 inside.
+  Previewing non-live pages is limited to the same roles.
 
 ### Notes
 - `status`, `publishAt`, `expireAt`, `listing`, `cascade` and `access` are

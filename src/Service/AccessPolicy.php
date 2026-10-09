@@ -20,7 +20,10 @@ namespace Station0\Service;
  * own setting applies to `/` only). The redirect target and the sign-in
  * routes are always public.
  *
- * Media are gated as a whole (members mode + `media`), not per page.
+ * Media follow the page they belong to (`/media/blog/post/photo.jpg` → `/blog/post`),
+ * so a members-only section keeps its photos and files private on a public
+ * site too; `media: false` leaves all media public. Collection assets
+ * (`/media/_collections/…`) follow the mode.
  */
 final class AccessPolicy
 {
@@ -78,10 +81,33 @@ final class AccessPolicy
     /** $path: the asset path after /media/ (or after the thumb signature). */
     public function mediaRequiresMember(string $path): bool
     {
-        if ($this->mode !== self::MEMBERS || ($this->access['media'] ?? true) === false) {
+        $path = ltrim($path, '/');
+        if (($this->access['media'] ?? true) === false || $this->isPublicPath('/media/' . $path)) {
             return false;
         }
-        return !$this->isPublicPath('/media/' . ltrim($path, '/'));
+        $parts = explode('/', $path);
+        array_pop($parts); // the file name
+        if ($parts === [] || $parts[0] === MediaService::COLLECTIONS_TOKEN) {
+            return $this->mode === self::MEMBERS;
+        }
+        // Page-local asset: /media/{page path}/{file}, the homepage's under `~`.
+        $pagePath = $parts === [MediaService::ROOT_TOKEN] ? '/' : '/' . implode('/', $parts);
+        return $this->pageRequiresMember($pagePath);
+    }
+
+    /**
+     * Pages an anonymous visitor may see in listings (menus, child_pages(),
+     * page()) — gated pages are left out so their titles and teasers don't leak.
+     *
+     * @param list<Page> $pages
+     * @return list<Page>
+     */
+    public function visiblePages(array $pages, bool $authenticated): array
+    {
+        if ($authenticated) {
+            return $pages;
+        }
+        return array_values(array_filter($pages, fn (Page $p) => !$this->pageRequiresMember($p->urlPath)));
     }
 
     public function isPublicPath(string $urlPath): bool

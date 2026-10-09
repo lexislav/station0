@@ -339,7 +339,10 @@ Gate the whole public site (or parts of it) behind a sign-in — `site/config.ph
 ```
 
 `Access: public` / `Access: members` in a page's front matter overrides the
-mode for that page and its sub-pages. Templates get a `visitor` global
+mode for that page and its sub-pages — `Access: members` on `/blog` gates just
+the blog on a public site, its media included. Anonymous visitors don't see
+gated pages in `top_level_pages()`, `nav_pages()`, `child_pages()` or `page()`;
+pass `includeGated=true` for a public teaser list. Templates get a `visitor` global
 (`{% if visitor.authenticated %}…{{ visitor.label }}`) and an `access` global
 with the sign-in paths. Member accounts have the `member` role
 (`console user:create <user> <email> member`) and cannot enter the admin.

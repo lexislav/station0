@@ -209,15 +209,21 @@ final class Bootstrap
                     return (new ActionState($_SESSION, $namespace))->pull();
                 }
             ));
+            // Members-only pages (AccessPolicy) are left out of listings for
+            // anonymous visitors; `includeGated: true` keeps them (teasers).
+            $visible = fn (array $pages, bool $includeGated = false): array => $includeGated
+                ? $pages
+                : $c->get(AccessPolicy::class)->visiblePages($pages, $c->get(Visitor::class)->isAuthenticated());
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'top_level_pages',
                 // Main menu: live top-level pages with `Listing: listed`.
-                fn () => $c->get(ContentRepository::class)->navChildren('/')
+                fn (bool $includeGated = false) => $visible($c->get(ContentRepository::class)->navChildren('/'), $includeGated)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'nav_pages',
                 // Menu / submenu items under a path: live, `Listing: listed`.
-                fn (string $parentUrl = '/') => $c->get(ContentRepository::class)->navChildren($parentUrl)
+                fn (string $parentUrl = '/', bool $includeGated = false)
+                    => $visible($c->get(ContentRepository::class)->navChildren($parentUrl), $includeGated)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'page_fields',
@@ -229,19 +235,23 @@ final class Bootstrap
                 'page',
                 // A published page by URL path, e.g. the value of an
                 // `options_from: pages` select; null when missing or not live.
-                function (?string $urlPath) use ($c) {
+                // Members-only pages are null for anonymous visitors unless includeGated.
+                function (?string $urlPath, bool $includeGated = false) use ($c, $visible) {
                     if ($urlPath === null || trim($urlPath) === '') {
                         return null;
                     }
                     $page = $c->get(ContentRepository::class)->find('/' . trim($urlPath, '/'));
-                    return $page !== null && $page->isLive() ? $page : null;
+                    if ($page === null || !$page->isLive()) {
+                        return null;
+                    }
+                    return $visible([$page], $includeGated) === [] ? null : $page;
                 }
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'child_pages',
                 // Content listing: live children incl. nav-hidden; unlisted only on request.
-                fn (string $parentUrl, bool $includeUnlisted = false)
-                    => $c->get(ContentRepository::class)->children($parentUrl, $includeUnlisted)
+                fn (string $parentUrl, bool $includeUnlisted = false, bool $includeGated = false)
+                    => $visible($c->get(ContentRepository::class)->children($parentUrl, $includeUnlisted), $includeGated)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'has_streams',
@@ -395,6 +405,7 @@ final class Bootstrap
             $c->get(ThumbService::class),
             (int) ($config['thumbs']['markdown'] ?? PageRenderer::MARKDOWN_THUMB_WIDTH),
             $c->get(VisibilityHorizon::class),
+            fn (): string => $c->get(Visitor::class)->isAuthenticated() ? 'signed-in' : 'anonymous',
         ));
 
         $container->set(VisibilityHorizon::class, fn ($c) => new VisibilityHorizon(
@@ -532,9 +543,14 @@ final class Bootstrap
             $c->get(PageRenderer::class),
             $c->get(Twig::class),
             $c->get(PageFields::class),
-            function () use ($c, $roles): bool {
+            // Only admin roles — not `member` accounts.
+            function () use ($c, $roles, $adminRoles): bool {
+                if ($adminRoles === []) {
+                    return false;
+                }
                 $auth = $c->get(Auth::class);
-                return $auth->isLoggedIn() && $auth->hasAnyRole(...array_values($roles));
+                return $auth->isLoggedIn()
+                    && $auth->hasAnyRole(...array_map(fn (string $r) => $roles[$r], $adminRoles));
             },
             $config['adminPath'],
             $c->get('lang'),

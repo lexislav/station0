@@ -652,12 +652,15 @@ Off by default. In `site/config.php`:
 'admin' => ['roles' => ['admin', 'editor']],  // who may enter the admin
 ```
 
-- **Per page:** `Access: public|members` in front matter overrides the mode for the page and its sub-pages (the homepage's own setting is not inherited). Media are gated as a whole, not per page.
+- **Per page:** `Access: public|members` in front matter overrides the mode for the page and its sub-pages (the homepage's own setting is not inherited). This also gates a section of an otherwise public site (`Access: members` on `/blog`).
+- **Media follow their page** (`AccessPolicy::mediaRequiresMember()`): `/media/blog/post/x.jpg` and its thumbnails are gated exactly when `/blog/post` is; collection assets follow the mode; `media: false` leaves all media public.
+- **Listings:** for anonymous visitors `top_level_pages()`, `nav_pages()`, `child_pages()` and `page()` leave out members-only pages (`AccessPolicy::visiblePages()`), so titles and teasers don't leak. `includeGated=true` (last argument) keeps them, e.g. a public teaser list. Because blocks may list pages, `PageRenderer` caches signed-in and anonymous renders apart.
+- **Preview** of non-live pages is limited to `admin.roles` — members never see drafts.
 - **Who counts as signed in** (`Visitor`): a guest with a pass from a site action (`$ctx->visitor()->grantPass($identity, $ttl, $label, $meta)`), a member signed in at `loginPath`, or an admin/editor signed into the admin. Cookie `station0_pass` (HttpOnly, `Secure` from `session.secure`), token hashed in `station0_passes`; deleting or deactivating a user ends their passes on the next request.
 - **Templates:** `visitor` global (`authenticated`, `guest`, `member`, `staff`, `label`, `email`, `expiresAt`, `meta`), `access` global (`loginPath`, `linkPath`, `passwordPath`, `logoutPath`). Sign-out is a POST (with `csrf` fields) to `access.logoutPath`.
 - **Sign-in routes** (`MemberAuthController`): `GET/POST {loginPath}`, `POST/GET {loginPath}/link` (one-time e-mail link, 20 min), `POST {loginPath}/password`, `POST {loginPath}/logout`. The page is the site's `login.twig` (else `@admin/member-login.twig`) with a `login` variable: `error` (`invalid`, `throttled`, `link_invalid`, `password_short`, `password_mismatch`, `not_signed_in`), `notice` (`link_sent`, `password_set`, `signed_out`), `email`, `retryAfter`, `next`, `paths`. Optional e-mail template `emails/login-link.twig` with blocks `subject` and `body` (vars `url`, `minutes`, `member`, `site`). Requires a valid `mail.from`.
 - **Accounts:** role `member` (`Role::SUBSCRIBER`); create in the admin, with `console user:create <user> <email> member`, or from an action (`$ctx->members()->create()`). Public sign-ins never touch the delight-im session; members are refused at the admin login (`admin.roles`).
-- Static thumbnails (`thumbs.static`) bypass PHP and so the media gate — Bootstrap logs a warning when both are on.
+- Static thumbnails (`thumbs.static`) bypass PHP and so the media gate — Bootstrap logs a warning in members mode; don't combine them with gated sections either.
 
 ## Site actions (`site/actions/*.php`)
 
