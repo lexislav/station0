@@ -6,6 +6,7 @@ namespace Station0\Service;
 
 use Station0\Support\FrontMatter;
 use Station0\Support\Slug;
+use Station0\Support\Visibility;
 
 /**
  * Manages hierarchical flat-file content stored as .txt files.
@@ -14,7 +15,10 @@ use Station0\Support\Slug;
  *   Title: My Page
  *   Metatitle: SEO title (optional, falls back to Title)
  *   Template: article (optional – also derivable from filename)
- *   Published: true
+ *   Status: published        (draft | published | archived; legacy `Published: true|false`)
+ *   PublishAt: 2026-05-12 08:00   (optional: scheduled until then)
+ *   ExpireAt: 2026-06-30 23:59    (optional: expired / 410 from then on)
+ *   Listing: nav-hidden      (optional: listed | nav-hidden | unlisted)
  *   Author: lexislav
  *   Updated: 2026-04-20 21:00:00
  *   ---
@@ -38,6 +42,12 @@ use Station0\Support\Slug;
  */
 final class ContentRepository
 {
+    /** Front-matter keys mapped to Page properties (everything else lands in Page::$extra). */
+    public const RESERVED_KEYS = [
+        'title', 'metatitle', 'published', 'publishedat', 'author', 'updated', 'template', 'sort',
+        'allowedchildtemplates', 'group', 'status', 'publishat', 'expireat', 'listing',
+    ];
+
     private array $parsedCache = [];
 
     public function __construct(private readonly string $pagesDir)
@@ -65,8 +75,11 @@ final class ContentRepository
     }
 
     /**
-     * Return ALL pages as flat list, sorted by urlPath.
-     * Used by admin page list and dashboard count.
+     * Return ALL pages as a flat list, depth-first in sibling sort order.
+     * $includeUnpublished = false keeps only live pages (own state live and
+     * every ancestor live — see Page::isLive()).
+     *
+     * @return list<Page>
      */
     public function all(bool $includeUnpublished = true): array
     {
@@ -77,6 +90,34 @@ final class ContentRepository
         }
 
         return $pages;
+    }
+
+    /**
+     * Live direct children of $parentUrl, in sort order — a content listing:
+     * nav-hidden pages are included, unlisted ones only on request.
+     *
+     * @return list<Page>
+     */
+    public function children(string $parentUrl, bool $includeUnlisted = false): array
+    {
+        $parentUrl = $this->normalizePath($parentUrl);
+        return array_values(array_filter(
+            $this->all(false),
+            fn (Page $p): bool => $p->urlPath !== '/'
+                && (rtrim(dirname($p->urlPath), '/') ?: '/') === $parentUrl
+                && ($includeUnlisted || $p->isListed()),
+        ));
+    }
+
+    /**
+     * Live direct children of $parentUrl that belong in navigation
+     * (Listing: listed).
+     *
+     * @return list<Page>
+     */
+    public function navChildren(string $parentUrl = '/'): array
+    {
+        return array_values(array_filter($this->children($parentUrl), fn (Page $p): bool => $p->inNav()));
     }
 
     /**
@@ -385,7 +426,12 @@ final class ContentRepository
         return !empty($files) ? $this->buildPage($files[0], $urlPath) : null;
     }
 
-    private function findBySegments(string $dir, array $segments, string $currentUrl): ?Page
+    /**
+     * Walks the path one segment at a time. Every ancestor is built too (its
+     * file parse is memoized in $parsedCache), so the result carries its
+     * parent chain for visibility inheritance.
+     */
+    private function findBySegments(string $dir, array $segments, string $currentUrl, ?Page $parent = null): ?Page
     {
         if (empty($segments)) {
             return null;
@@ -399,13 +445,14 @@ final class ContentRepository
         }
 
         $urlPath = $currentUrl . '/' . $segment;
+        $page    = $this->buildPage($file, $urlPath, $parent);
 
         if (empty($segments)) {
-            return $this->buildPage($file, $urlPath);
+            return $page;
         }
 
         // Children live in the same directory as the content file (the slug directory)
-        return $this->findBySegments(dirname($file), $segments, $urlPath);
+        return $this->findBySegments(dirname($file), $segments, $urlPath, $page);
     }
 
     /**
@@ -430,7 +477,7 @@ final class ContentRepository
     /**
      * @return Page[]
      */
-    private function scanDir(string $dir, string $urlBase, bool $includeDirectTxt = false): array
+    private function scanDir(string $dir, string $urlBase, bool $includeDirectTxt = false, ?Page $parent = null): array
     {
         $dir   = rtrim($dir, '/');
         $pages = [];
@@ -454,7 +501,7 @@ final class ContentRepository
             }
 
             $urlPath = ($urlBase === '' ? '' : rtrim($urlBase, '/')) . '/' . $slug;
-            $page    = $this->buildPage($files[0], $urlPath);
+            $page    = $this->buildPage($files[0], $urlPath, $parent);
             $siblings[] = ['subDir' => $subDir, 'urlPath' => $urlPath, 'page' => $page];
         }
 
@@ -469,7 +516,7 @@ final class ContentRepository
 
         foreach ($siblings as $s) {
             $pages[] = $s['page'];
-            $children = $this->scanDir($s['subDir'], $s['urlPath'], false);
+            $children = $this->scanDir($s['subDir'], $s['urlPath'], false, $s['page']);
             $pages    = array_merge($pages, $children);
         }
 
@@ -478,7 +525,7 @@ final class ContentRepository
 
     // ─────────────────── Page builder ───────────────────
 
-    private function buildPage(string $filePath, string $urlPath): Page
+    private function buildPage(string $filePath, string $urlPath, ?Page $parent = null): Page
     {
         [$meta, $body] = $this->parseFrontMatterFromFile($filePath);
 
@@ -492,16 +539,20 @@ final class ContentRepository
             title:     (string) ($meta['title'] ?? $slug),
             body:      $body,
             metatitle: isset($meta['metatitle']) && $meta['metatitle'] !== '' ? $meta['metatitle'] : null,
-            published: filter_var($meta['published'] ?? 'true', FILTER_VALIDATE_BOOLEAN),
             author:    $meta['author'] ?? null,
             updated:   $meta['updated'] ?? null,
             template:  $template,
             publishedAt: isset($meta['publishedat']) && $meta['publishedat'] !== '' ? $meta['publishedat'] : null,
             sort:      isset($meta['sort']) && $meta['sort'] !== '' ? (int) $meta['sort'] : null,
             allowedChildTemplates: $this->parseTemplateList($meta['allowedchildtemplates'] ?? ''),
-            extra:     array_diff_key($meta, array_flip(['title', 'metatitle', 'published', 'publishedat', 'author', 'updated', 'template', 'sort', 'allowedchildtemplates', 'group'])),
+            extra:     array_diff_key($meta, array_flip(self::RESERVED_KEYS)),
             group:     isset($meta['group']) && is_string($meta['group']) && trim($meta['group']) !== '' ? trim($meta['group']) : null,
+            status:    Visibility::statusFromMeta($meta),
+            publishAt: Visibility::datetimeFromMeta($meta, 'publishat'),
+            expireAt:  Visibility::datetimeFromMeta($meta, 'expireat'),
+            listing:   Visibility::listingFromMeta($meta),
         );
+        $page->parent = $parent;
 
         $page->urlPath    = $urlPath ?: '/';
         $page->filePath   = $filePath;
@@ -534,8 +585,13 @@ final class ContentRepository
             'Metatitle' => $page->metatitle,
             // Template is not stored for 'page' – it is derivable from the filename
             'Template'  => ($page->template !== 'page') ? $page->template : null,
-            'Published'   => $page->published ? 'true' : 'false',
+            'Status'      => $page->status,
+            // Mirror of Status for pre-0.9 readers: a downgrade never exposes drafts.
+            'Published'   => $page->isPublished() ? 'true' : 'false',
+            'PublishAt'   => $page->publishAt,
+            'ExpireAt'    => $page->expireAt,
             'PublishedAt' => $page->publishedAt,
+            'Listing'     => $page->listing !== Visibility::LISTED ? $page->listing : null,
             'Author'      => $page->author,
             'Updated'     => $page->updated,
             'Sort'        => $page->sort !== null ? (string) $page->sort : null,
