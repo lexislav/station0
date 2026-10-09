@@ -415,10 +415,7 @@ final class Bootstrap
         $container->set(MailerService::class, fn () => new MailerService($config['mail']));
 
         // ── Members-only access ───────────────────────────────────────────────
-        $container->set(AccessPolicy::class, fn ($c) => new AccessPolicy(
-            (array) ($config['access'] ?? []),
-            fn (string $urlPath) => $c->get(ContentRepository::class)->find($urlPath),
-        ));
+        $container->set(AccessPolicy::class, fn ($c) => self::accessPolicy($config, $c->get(ContentRepository::class)));
         $container->set(PassStore::class, fn ($c) => new PassStore($c->get(PDO::class)));
         $container->set(RateLimiter::class, fn ($c) => new RateLimiter($c->get(PDO::class)));
         $container->set(LoginLinks::class, fn ($c) => new LoginLinks($c->get(PDO::class)));
@@ -620,8 +617,7 @@ final class Bootstrap
         $container->set(ThumbService::class, fn ($c) => self::thumbService(
             $config,
             $c->get(MediaService::class),
-            // Static thumbnails bypass PHP — never for members-only media.
-            fn (string $rel): bool => !$c->get(AccessPolicy::class)->mediaRequiresMember($rel),
+            $c->get(AccessPolicy::class),
         ));
 
         $container->set(AssetController::class, fn ($c) => new AssetController(
@@ -833,9 +829,11 @@ final class Bootstrap
      *   static   — true: write thumbnails under public/thumb/ for the web server
      *   format   — 'webp': convert thumbnails to WebP by default
      *   markdown — max width of markdown images in text blocks (0 = off)
+     * Static thumbnails bypass PHP, so with $access they are never written for
+     * members-only media (those stay in the cache, behind the gate).
      * Shared with bin/console.
      */
-    public static function thumbService(array $config, MediaService $media, ?\Closure $staticAllowed = null): ThumbService
+    public static function thumbService(array $config, MediaService $media, ?AccessPolicy $access = null): ThumbService
     {
         $thumbs = $config['thumbs'] ?? [];
         $public = self::publicDir($config);
@@ -846,7 +844,16 @@ final class Bootstrap
                 ?? ThumbService::loadOrCreateKey(dirname($config['paths']['cache']) . '/thumbs.key')),
             !empty($thumbs['static']) ? $public : null,
             isset($thumbs['format']) ? (string) $thumbs['format'] : null,
-            $staticAllowed,
+            $access !== null ? fn (string $rel): bool => !$access->mediaRequiresMember($rel) : null,
+        );
+    }
+
+    /** The `access` config as a policy (see AccessPolicy). Shared with bin/console. */
+    public static function accessPolicy(array $config, ContentRepository $pages): AccessPolicy
+    {
+        return new AccessPolicy(
+            (array) ($config['access'] ?? []),
+            fn (string $urlPath) => $pages->find($urlPath),
         );
     }
 

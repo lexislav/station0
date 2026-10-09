@@ -48,9 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `child_pages()` and `page()` leave out members-only pages
   (`includeGated=true` keeps them for teasers). Gated responses are sent
   `private` (never cached publicly). With `thumbs.static`, thumbnails of
-  members-only media are not written to `public/thumb/` but served through
-  PHP (run `thumbs:clear` after gating a section that already had static
-  thumbnails). Default `mode: public` changes nothing.
+  members-only media are not written to `public/thumb/` — neither by the app
+  nor by `console thumbs:warm` — but served through PHP (run `thumbs:clear`
+  after gating a section that already had static thumbnails). Default `mode: public` changes nothing.
 - **Visitors and passes.** `Visitor` service + `visitor` Twig global
   (`authenticated`, `guest`, `member`, `staff`, `label`, `email`,
   `expiresAt`, `meta`…). A guest pass (`grantPass()`) lets a browser in for a
