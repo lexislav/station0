@@ -41,7 +41,7 @@ final class TemplateBlocks
     public const RESERVED_FIELD_NAMES = [
         'title', 'metatitle', 'published', 'publishedat', 'author', 'updated',
         'template', 'sort', 'allowedchildtemplates', 'group', 'body', 'slug',
-        'status', 'publishat', 'expireat', 'listing', 'cascade',
+        'status', 'publishat', 'expireat', 'listing', 'cascade', 'access',
     ];
 
     /** @var array<string, array{allowed: list<string>, default: list<string>, fields: list<array<string, mixed>>, builder: bool}> */

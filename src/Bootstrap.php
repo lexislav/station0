@@ -31,15 +31,26 @@ use Station0\Controller\Admin\TaskController;
 use Station0\Controller\Admin\UploadController;
 use Station0\Controller\Admin\UserController;
 use Station0\Controller\AssetController;
+use Station0\Controller\MemberAuthController;
 use Station0\Controller\PageController;
+use Station0\Middleware\AccessMiddleware;
 use Station0\Middleware\AuthMiddleware;
 use Station0\Middleware\RoleMiddleware;
+use Station0\Middleware\VisitorMiddleware;
+use Station0\Service\AccessPolicy;
+use Station0\Service\ActionContext;
+use Station0\Service\ActionRegistry;
+use Station0\Service\ActionState;
 use Station0\Service\BlockRegistry;
 use Station0\Service\CollectionRepository;
 use Station0\Service\ContentRepository;
 use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
+use Station0\Service\LoginLinks;
 use Station0\Service\MediaService;
+use Station0\Service\Members;
+use Station0\Service\PassStore;
+use Station0\Service\RateLimiter;
 use Station0\Service\NavGroups;
 use Station0\Service\MailerService;
 use Station0\Service\PageFields;
@@ -51,6 +62,7 @@ use Station0\Service\TemplateBlocks;
 use Station0\Service\ThumbService;
 use Station0\Service\UserRepository;
 use Station0\Service\VisibilityHorizon;
+use Station0\Service\Visitor;
 
 final class Bootstrap
 {
@@ -83,6 +95,7 @@ final class Bootstrap
             $container->get(Guard::class),
             $container->get(Twig::class),
         ));
+        $app->add(VisitorMiddleware::class);
         $app->add($container->get(Guard::class));
 
         $app->addErrorMiddleware($config['debug'], true, true, $container->get(Logger::class));
@@ -168,15 +181,41 @@ final class Bootstrap
             ]);
 
             $twig->getEnvironment()->addGlobal('t', $c->get('lang'));
+            // Members-only access (see AccessPolicy) — paths for sign-in forms.
+            $loginPath = $c->get(AccessPolicy::class)->loginPath();
+            $twig->getEnvironment()->addGlobal('access', [
+                'mode'         => $c->get(AccessPolicy::class)->mode(),
+                'loginPath'    => $loginPath,
+                'linkPath'     => $loginPath !== null ? $loginPath . '/link' : null,
+                'passwordPath' => $loginPath !== null ? $loginPath . '/password' : null,
+                'logoutPath'   => $loginPath !== null ? $loginPath . '/logout' : null,
+            ]);
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'action_state',
+                // State of a site action (site/actions/), see ActionState; flashed
+                // values are consumed by this read.
+                function (string $namespace): array {
+                    if (session_status() !== PHP_SESSION_ACTIVE) {
+                        return [];
+                    }
+                    return (new ActionState($_SESSION, $namespace))->pull();
+                }
+            ));
+            // Members-only pages (AccessPolicy) are left out of listings for
+            // anonymous visitors; `includeGated: true` keeps them (teasers).
+            $visible = fn (array $pages, bool $includeGated = false): array => $includeGated
+                ? $pages
+                : $c->get(AccessPolicy::class)->visiblePages($pages, $c->get(Visitor::class)->isAuthenticated());
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'top_level_pages',
                 // Main menu: live top-level pages with `Listing: listed`.
-                fn () => $c->get(ContentRepository::class)->navChildren('/')
+                fn (bool $includeGated = false) => $visible($c->get(ContentRepository::class)->navChildren('/'), $includeGated)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'nav_pages',
                 // Menu / submenu items under a path: live, `Listing: listed`.
-                fn (string $parentUrl = '/') => $c->get(ContentRepository::class)->navChildren($parentUrl)
+                fn (string $parentUrl = '/', bool $includeGated = false)
+                    => $visible($c->get(ContentRepository::class)->navChildren($parentUrl), $includeGated)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'page_fields',
@@ -188,19 +227,23 @@ final class Bootstrap
                 'page',
                 // A published page by URL path, e.g. the value of an
                 // `options_from: pages` select; null when missing or not live.
-                function (?string $urlPath) use ($c) {
+                // Members-only pages are null for anonymous visitors unless includeGated.
+                function (?string $urlPath, bool $includeGated = false) use ($c, $visible) {
                     if ($urlPath === null || trim($urlPath) === '') {
                         return null;
                     }
                     $page = $c->get(ContentRepository::class)->find('/' . trim($urlPath, '/'));
-                    return $page !== null && $page->isLive() ? $page : null;
+                    if ($page === null || !$page->isLive()) {
+                        return null;
+                    }
+                    return $visible([$page], $includeGated) === [] ? null : $page;
                 }
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'child_pages',
                 // Content listing: live children incl. nav-hidden; unlisted only on request.
-                fn (string $parentUrl, bool $includeUnlisted = false)
-                    => $c->get(ContentRepository::class)->children($parentUrl, $includeUnlisted)
+                fn (string $parentUrl, bool $includeUnlisted = false, bool $includeGated = false)
+                    => $visible($c->get(ContentRepository::class)->children($parentUrl, $includeUnlisted), $includeGated)
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'has_streams',
@@ -354,6 +397,7 @@ final class Bootstrap
             $c->get(ThumbService::class),
             (int) ($config['thumbs']['markdown'] ?? PageRenderer::MARKDOWN_THUMB_WIDTH),
             $c->get(VisibilityHorizon::class),
+            fn (): string => $c->get(Visitor::class)->isAuthenticated() ? 'signed-in' : 'anonymous',
         ));
 
         $container->set(VisibilityHorizon::class, fn ($c) => new VisibilityHorizon(
@@ -370,6 +414,79 @@ final class Bootstrap
 
         $container->set(MailerService::class, fn () => new MailerService($config['mail']));
 
+        // ── Members-only access ───────────────────────────────────────────────
+        $container->set(AccessPolicy::class, fn ($c) => self::accessPolicy($config, $c->get(ContentRepository::class)));
+        $container->set(PassStore::class, fn ($c) => new PassStore($c->get(PDO::class)));
+        $container->set(RateLimiter::class, fn ($c) => new RateLimiter($c->get(PDO::class)));
+        $container->set(LoginLinks::class, fn ($c) => new LoginLinks($c->get(PDO::class)));
+        $container->set(Members::class, fn ($c) => new Members($c->get(PDO::class), $c->get(Auth::class), $roles));
+        $adminRoles = array_values(array_filter(
+            (array) ($config['admin']['roles'] ?? ['admin', 'editor']),
+            fn ($r) => isset($roles[$r]),
+        ));
+        $container->set(Visitor::class, fn ($c) => new Visitor(
+            $c->get(PassStore::class),
+            $c->get(Members::class),
+            [
+                'secure'       => (bool) $config['session']['secure'],
+                'sameSite'     => (string) ($config['session']['sameSite'] ?? 'Lax'),
+                'rememberDays' => (int) ($config['access']['rememberDays'] ?? 365),
+                'sessionHours' => (int) ($config['access']['sessionHours'] ?? 12),
+            ],
+            // An admin/editor signed into the admin counts as a member on the site.
+            // Auth is only built when there is an admin session or remember cookie.
+            function () use ($c, $roles, $adminRoles): ?array {
+                $hasSession = !empty($_SESSION[\Delight\Auth\UserManager::SESSION_FIELD_LOGGED_IN]);
+                $hasCookie  = isset($_COOKIE[Auth::createRememberCookieName()]);
+                if (!$hasSession && !$hasCookie) {
+                    return null;
+                }
+                $auth = $c->get(Auth::class);
+                if (!$auth->isLoggedIn()) {
+                    return null;
+                }
+                foreach ($adminRoles as $name) {
+                    if ($auth->hasRole($roles[$name])) {
+                        $email = (string) $auth->getEmail();
+                        return [
+                            'userId' => (int) $auth->getUserId(),
+                            'email'  => $email,
+                            'label'  => (string) ($auth->getUsername() ?: strstr($email, '@', true)),
+                        ];
+                    }
+                }
+                return null;
+            },
+            null,
+            $_SERVER['REMOTE_ADDR'] ?? null,
+            $_SERVER['HTTP_USER_AGENT'] ?? null,
+        ));
+        $container->set(VisitorMiddleware::class, fn ($c) => new VisitorMiddleware(
+            $c->get(Visitor::class),
+            $c->get(Twig::class),
+        ));
+        $container->set(MemberAuthController::class, fn ($c) => new MemberAuthController(
+            $c->get(AccessPolicy::class),
+            $c->get(Visitor::class),
+            $c->get(Members::class),
+            $c->get(LoginLinks::class),
+            $c->get(RateLimiter::class),
+            $c->get(MailerService::class),
+            $c->get(Twig::class),
+            $c->get(Logger::class),
+            $c->get('lang'),
+            $config['baseUrl'],
+            $config['name'],
+            $config['paths']['templates'],
+            $_SESSION,
+        ));
+        $container->set(ActionRegistry::class, fn ($c) => new ActionRegistry(
+            $config['paths']['actions'] ?? dirname($config['paths']['templates']) . '/actions',
+            array_values(array_filter([
+                $config['adminPath'], '/media', '/thumb', $c->get(AccessPolicy::class)->loginPath(),
+            ])),
+        ));
+
         $container->set(AuthController::class, fn ($c) => new AuthController(
             $c->get(Auth::class),
             $c->get(Twig::class),
@@ -378,6 +495,7 @@ final class Bootstrap
             $config['baseUrl'],
             $config['adminPath'],
             $c->get('lang'),
+            array_map(fn (string $r) => $roles[$r], $adminRoles),
         ));
 
         $container->set(AuthMiddleware::class, fn ($c) => new AuthMiddleware(
@@ -386,6 +504,7 @@ final class Bootstrap
             $config['adminPath'],
             $c->get(Twig::class),
             $roles,
+            $adminRoles,
         ));
 
         $container->set(SetupController::class, fn ($c) => new SetupController(
@@ -413,9 +532,14 @@ final class Bootstrap
             $c->get(PageRenderer::class),
             $c->get(Twig::class),
             $c->get(PageFields::class),
-            function () use ($c, $roles): bool {
+            // Only admin roles — not `member` accounts.
+            function () use ($c, $roles, $adminRoles): bool {
+                if ($adminRoles === []) {
+                    return false;
+                }
                 $auth = $c->get(Auth::class);
-                return $auth->isLoggedIn() && $auth->hasAnyRole(...array_values($roles));
+                return $auth->isLoggedIn()
+                    && $auth->hasAnyRole(...array_map(fn (string $r) => $roles[$r], $adminRoles));
             },
             $config['adminPath'],
             $c->get('lang'),
@@ -490,7 +614,11 @@ final class Bootstrap
             $c->get(TaskHooks::class),
         ));
 
-        $container->set(ThumbService::class, fn ($c) => self::thumbService($config, $c->get(MediaService::class)));
+        $container->set(ThumbService::class, fn ($c) => self::thumbService(
+            $config,
+            $c->get(MediaService::class),
+            $c->get(AccessPolicy::class),
+        ));
 
         $container->set(AssetController::class, fn ($c) => new AssetController(
             $c->get(MediaService::class),
@@ -557,7 +685,12 @@ final class Bootstrap
         $roleMiddleware = fn (string $name) => $container->get('middleware.role')($name);
         $adminPath = $container->get('config')['adminPath'];
 
-        $app->get('/', [PageController::class, 'home'])->setName('home');
+        $access     = $container->get(AccessPolicy::class);
+        $visitor    = $container->get(Visitor::class);
+        $pageAccess = new AccessMiddleware($access, $visitor, AccessMiddleware::PAGES);
+        $mediaAccess = new AccessMiddleware($access, $visitor, AccessMiddleware::MEDIA);
+
+        $app->get('/', [PageController::class, 'home'])->setName('home')->add($pageAccess);
 
         $app->group($adminPath, function ($group) use ($roleMiddleware) {
             $group->get('/setup', [SetupController::class, 'showSetup'])->setName('admin.setup');
@@ -632,11 +765,61 @@ final class Bootstrap
         })->setName('admin.assets');
 
         // Page-local assets — must precede the page catch-all below.
-        $app->get('/media/{path:.+}', [AssetController::class, 'show'])->setName('media.show');
-        $app->get('/thumb/{spec}/{sig}/{path:.+}', [AssetController::class, 'thumb'])->setName('media.thumb');
+        $app->get('/media/{path:.+}', [AssetController::class, 'show'])->setName('media.show')->add($mediaAccess);
+        $app->get('/thumb/{spec}/{sig}/{path:.+}', [AssetController::class, 'thumb'])->setName('media.thumb')->add($mediaAccess);
+
+        // Member sign-in on the public site — only when `access.loginPath` is set.
+        $loginPath = $access->loginPath();
+        if ($loginPath !== null) {
+            $app->get($loginPath, [MemberAuthController::class, 'show'])->setName('member.login');
+            $app->post($loginPath, [MemberAuthController::class, 'login']);
+            $app->post($loginPath . '/link', [MemberAuthController::class, 'requestLink'])->setName('member.link');
+            $app->get($loginPath . '/link', [MemberAuthController::class, 'followLink']);
+            $app->post($loginPath . '/password', [MemberAuthController::class, 'setPassword'])->setName('member.password');
+            $app->post($loginPath . '/logout', [MemberAuthController::class, 'logout'])->setName('member.logout');
+        }
+
+        self::registerActions($app);
 
         // Catch-all for public pages — multi-segment paths like /about/team (registered last)
-        $app->get('/{slug:.+}', [PageController::class, 'show'])->setName('page.show');
+        $app->get('/{slug:.+}', [PageController::class, 'show'])->setName('page.show')->add($pageAccess);
+    }
+
+    /** Site actions (site/actions/*.php) — see ActionRegistry. */
+    private static function registerActions(App $app): void
+    {
+        $container = $app->getContainer();
+        $logger    = $container->get(Logger::class);
+
+        foreach ($container->get(ActionRegistry::class)->all() as $action) {
+            if ($action['error'] !== null) {
+                $logger->error('Site action skipped: ' . $action['error']);
+                continue;
+            }
+            $app->map($action['methods'], $action['path'], function ($request, $response) use ($action, $container) {
+                $visitor = $container->get(Visitor::class);
+                if ($action['access'] === AccessPolicy::MEMBERS && !$visitor->isAuthenticated()) {
+                    $response->getBody()->write('Forbidden');
+                    return $response->withStatus(403)->withHeader('Cache-Control', 'no-store');
+                }
+                $ctx = new ActionContext(
+                    $action['name'],
+                    $request,
+                    $container->get(Twig::class),
+                    $container->get('config'),
+                    $visitor,
+                    $container->get(Members::class),
+                    $container->get(RateLimiter::class),
+                    $container->get(ContentRepository::class),
+                    $container->get(CollectionRepository::class),
+                    $container->get(MailerService::class),
+                    $container->get(Logger::class),
+                    $_SESSION,
+                );
+                $result = ($action['handler'])($ctx);
+                return $result instanceof \Psr\Http\Message\ResponseInterface ? $result : $ctx->back();
+            })->setName('action.' . $action['name']);
+        }
     }
 
     /**
@@ -646,9 +829,11 @@ final class Bootstrap
      *   static   — true: write thumbnails under public/thumb/ for the web server
      *   format   — 'webp': convert thumbnails to WebP by default
      *   markdown — max width of markdown images in text blocks (0 = off)
+     * Static thumbnails bypass PHP, so with $access they are never written for
+     * members-only media (those stay in the cache, behind the gate).
      * Shared with bin/console.
      */
-    public static function thumbService(array $config, MediaService $media): ThumbService
+    public static function thumbService(array $config, MediaService $media, ?AccessPolicy $access = null): ThumbService
     {
         $thumbs = $config['thumbs'] ?? [];
         $public = self::publicDir($config);
@@ -659,6 +844,16 @@ final class Bootstrap
                 ?? ThumbService::loadOrCreateKey(dirname($config['paths']['cache']) . '/thumbs.key')),
             !empty($thumbs['static']) ? $public : null,
             isset($thumbs['format']) ? (string) $thumbs['format'] : null,
+            $access !== null ? fn (string $rel): bool => !$access->mediaRequiresMember($rel) : null,
+        );
+    }
+
+    /** The `access` config as a policy (see AccessPolicy). Shared with bin/console. */
+    public static function accessPolicy(array $config, ContentRepository $pages): AccessPolicy
+    {
+        return new AccessPolicy(
+            (array) ($config['access'] ?? []),
+            fn (string $urlPath) => $pages->find($urlPath),
         );
     }
 

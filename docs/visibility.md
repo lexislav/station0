@@ -118,6 +118,15 @@ state, the schedule or the hiding ancestor, and an edit link. The response is se
 `Cache-Control: private, no-store` and `X-Robots-Tag: noindex`. Listings inside the preview stay public: only the
 page itself is previewed. Everyone else gets the 404 / 410.
 
+## Members-only pages
+
+Visibility decides whether a page is public **at all**; `Access:` decides **who** may see a live page. With
+`Access: members` (or `access.mode: members` in `site/config.php`) a live page is shown only to signed-in visitors.
+For everyone else it redirects to `access.redirect`, it disappears from `top_level_pages()`, `nav_pages()`,
+`child_pages()` and `page()` (pass `includeGated=true` to keep it in a teaser list), and its media answer 403 (static thumbnails included — they are never written under the web root).
+Preview of non-live pages stays limited to admins and editors; members never see drafts. See the README section
+"Members-only access".
+
 ## Collections
 
 Collection items use the same `Status`, `PublishAt` and `ExpireAt`. They have no listing, no inheritance and no
@@ -139,4 +148,4 @@ When it saves, the admin writes `Status:` and also a matching `Published:` line 
 an older station0 never exposes a draft or archived page. If you edit files by hand and both keys are present,
 `Status` wins.
 
-`status`, `publishAt`, `expireAt`, `listing` and `cascade` are now reserved and can't be used as page-field names.
+`status`, `publishAt`, `expireAt`, `listing`, `cascade` and `access` are now reserved and can't be used as page-field names.

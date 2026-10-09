@@ -324,10 +324,54 @@ is enforced server-side too: the collection's list, forms, saves and uploads
 return 403 for users without the role. For pages, `roles` only hides the tab;
 the pages remain editable through the Structure tree.
 
+## Members-only access
+
+Gate the whole public site (or parts of it) behind a sign-in — `site/config.php`:
+
+```php
+'access' => [
+    'mode'      => 'members',       // 'public' (default) | 'members'
+    'public'    => ['/'],           // always-public paths; `*` = prefix
+    'redirect'  => '/',             // where anonymous visitors are sent
+    'media'     => true,            // also gate /media + /thumb
+    'loginPath' => '/login',        // member sign-in: password, e-mail link, new password, sign-out
+],
+```
+
+`Access: public` / `Access: members` in a page's front matter overrides the
+mode for that page and its sub-pages — `Access: members` on `/blog` gates just
+the blog on a public site, its media included. Anonymous visitors don't see
+gated pages in `top_level_pages()`, `nav_pages()`, `child_pages()` or `page()`;
+pass `includeGated=true` for a public teaser list. With `thumbs.static: true`,
+thumbnails of gated media are kept out of `public/thumb/` and served through
+PHP; run `console thumbs:clear` after gating a section that already has static
+thumbnails. Templates get a `visitor` global
+(`{% if visitor.authenticated %}…{{ visitor.label }}`) and an `access` global
+with the sign-in paths. Member accounts have the `member` role
+(`console user:create <user> <email> member`) and cannot enter the admin.
+Provide `site/templates/login.twig` for a sign-in page in the site's design.
+
+## Site actions
+
+`site/actions/<name>.php` adds a form handler or small endpoint to the site:
+
+```php
+return [
+    'path'    => '/newsletter',
+    'handler' => function (Station0\Service\ActionContext $ctx) {
+        $ctx->state()->flash('thanks', true);   // {{ action_state('newsletter').thanks }}
+        return $ctx->back();
+    },
+];
+```
+
+Forms post with the `csrf` fields. A handler can grant a time-limited guest
+pass (`$ctx->visitor()->grantPass(...)`), e.g. after its own verification.
+
 ## CLI (via skeleton)
 
 ```bash
-php vendor/bin/console user:create <username> <email> [role]
+php vendor/bin/console user:create <username> <email> [role]   # role: admin | editor | member
 php vendor/bin/console user:reset-password <email>
 php vendor/bin/console cache:clear
 php vendor/bin/console assets:relink [--dry-run]

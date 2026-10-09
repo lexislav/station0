@@ -1,0 +1,54 @@
+{# Fallback public sign-in page (MemberAuthController) — a site overrides it with
+   its own site/templates/login.twig, which gets the same `login` variable. #}
+<!doctype html>
+<html lang="{{ t.html_lang }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex">
+    <title>{{ t.member_login_title }} · {{ app.name }}</title>
+    <link rel="stylesheet" href="{{ app.adminPath }}/assets/admin.css">
+</head>
+<body class="admin login-page">
+<div class="login-card">
+    <h1>{{ app.name }}</h1>
+    {% if login.error %}<p class="error">{{ attribute(t, 'member_err_' ~ login.error) ?? login.error }}</p>{% endif %}
+    {% if login.notice %}<p class="success">{{ attribute(t, 'member_notice_' ~ login.notice) ?? login.notice }}</p>{% endif %}
+
+    {% if visitor.member %}
+        <p>{{ t.member_signed_in_as }} <strong>{{ visitor.label }}</strong></p>
+        <form method="post" action="{{ login.paths.password }}">
+            <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+            <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+            <h2>{{ t.member_password_heading }}</h2>
+            <label>{{ t.member_password_new }}<input type="password" name="password" minlength="8" required autocomplete="new-password"></label>
+            <label>{{ t.member_password_confirm }}<input type="password" name="password_confirm" minlength="8" required autocomplete="new-password"></label>
+            <button type="submit">{{ t.member_password_submit }}</button>
+        </form>
+        <form method="post" action="{{ login.paths.logout }}">
+            <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+            <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+            <button type="submit" class="link">{{ t.member_logout }}</button>
+        </form>
+    {% else %}
+        <form method="post" action="{{ login.paths.login }}">
+            <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+            <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+            {% if login.next %}<input type="hidden" name="next" value="{{ login.next }}">{% endif %}
+            <label>{{ t.member_login_email }}<input type="email" name="email" value="{{ login.email }}" required autocomplete="username"></label>
+            <label>{{ t.member_login_password }}<input type="password" name="password" required autocomplete="current-password"></label>
+            <label class="checkbox"><input type="checkbox" name="remember" value="1" checked> {{ t.member_login_remember }}</label>
+            <button type="submit">{{ t.member_login_submit }}</button>
+        </form>
+        <form method="post" action="{{ login.paths.link }}">
+            <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+            <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+            <h2>{{ t.member_link_heading }}</h2>
+            <p>{{ t.member_link_help }}</p>
+            <label>{{ t.member_login_email }}<input type="email" name="email" value="{{ login.email }}" required></label>
+            <button type="submit">{{ t.member_link_submit }}</button>
+        </form>
+    {% endif %}
+</div>
+</body>
+</html>

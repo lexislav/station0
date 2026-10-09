@@ -38,6 +38,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tree, stream records and item lists (published / scheduled / expired /
   archived / draft / hidden by parent, not in menu / unlisted); en + cs.
 - `page.saved` / `page.deleted` hook payloads carry `status`.
+- **Members-only access.** New `access` section in `site/config.php`:
+  `mode: members` gates every public page (anonymous visitors are redirected
+  to `access.redirect`) and — unless `media: false` — `/media` + `/thumb`
+  (403). `public` lists always-public paths (`*` = prefix). A page can
+  override it with `Access: public|members` in its front matter, inherited by
+  its sub-pages — also to gate just a section of a public site. Media follow
+  their page. For anonymous visitors `top_level_pages()`, `nav_pages()`,
+  `child_pages()` and `page()` leave out members-only pages
+  (`includeGated=true` keeps them for teasers). Gated responses are sent
+  `private` (never cached publicly). With `thumbs.static`, thumbnails of
+  members-only media are not written to `public/thumb/` — neither by the app
+  nor by `console thumbs:warm` — but served through PHP (run `thumbs:clear`
+  after gating a section that already had static thumbnails). Default `mode: public` changes nothing.
+- **Visitors and passes.** `Visitor` service + `visitor` Twig global
+  (`authenticated`, `guest`, `member`, `staff`, `label`, `email`,
+  `expiresAt`, `meta`…). A guest pass (`grantPass()`) lets a browser in for a
+  fixed time without an account; a member sign-in (`signInMember()`) lasts
+  for the browser session or, remembered, `access.rememberDays` (sliding).
+  Tokens live in the `station0_passes` table (hashed); an admin/editor signed
+  into the admin counts as a member on the site.
+- **`member` role** and **public member sign-in** at `access.loginPath`:
+  e-mail + password (+ remember), one-time sign-in links by e-mail
+  (`/link`), set a new password (`/password`), sign out (`/logout`). The page
+  is the site's `login.twig` (fallback: a minimal built-in page); the e-mail
+  can be customised with `emails/login-link.twig`.
+- **Site actions** (`site/actions/*.php`): the site's own request handlers
+  (form posts, small endpoints) on static paths, CSRF-protected, optionally
+  members-only. The handler gets an `ActionContext` (input, session-backed
+  state + flash, visitor, members, rate limiter, collections, mail, redirect /
+  render / json). Templates read the state with `action_state('<name>')`.
+- `RateLimiter` (fixed window + lockout, table `station0_throttle`), used by
+  the member sign-in and available to actions.
+- Users list: filter by role.
 
 ### Changed
 - `PublishedAt` is the date shown to readers. It still schedules a page
@@ -52,10 +85,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stream counters in the admin count non-live records, not just drafts.
 - `Page::$published` / `CollectionItem::$published` became `$status`;
   reading or writing `->published` (PHP and Twig) still works.
+- The admin is limited to `admin.roles` (default `admin`, `editor`): other
+  accounts (members) are refused at the admin login and get 403 inside.
+  Previewing non-live pages is limited to the same roles.
 
 ### Notes
-- `status`, `publishAt`, `expireAt`, `listing` and `cascade` are reserved
-  page-field names now. A collection schema field with one of the first
+- `status`, `publishAt`, `expireAt`, `listing`, `cascade` and `access` are
+  reserved page-field names now. A collection schema field with one of the first
   three names keeps working; that collection's visibility then uses
   `Published`.
 

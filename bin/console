@@ -145,6 +145,9 @@ switch ($command) {
         $thumbs  = \Station0\Bootstrap::thumbService(
             $config,
             new MediaService($repo, $config['paths']['content'] . '/pages', $config['paths']['content'] . '/collections'),
+            // Members-only media never get static copies (e.g. from a teaser
+            // list with includeGated=true) — same rule as the web app.
+            \Station0\Bootstrap::accessPolicy($config, $repo),
         );
         $done = 0;
         $failed = 0;

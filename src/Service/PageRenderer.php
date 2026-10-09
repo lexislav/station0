@@ -43,13 +43,23 @@ final class PageRenderer
         private readonly ?ThumbService $thumbs = null,
         private readonly int $markdownThumbWidth = self::MARKDOWN_THUMB_WIDTH,
         private readonly ?VisibilityHorizon $horizon = null,
+        /**
+         * Extra cache-key part for output that differs per visitor — blocks
+         * that list pages hide members-only ones from anonymous visitors
+         * (see AccessPolicy::visiblePages()), so signed-in and anonymous
+         * renders are cached apart.
+         *
+         * @var (\Closure(): string)|null
+         */
+        private readonly ?\Closure $variant = null,
     ) {}
 
     public function render(Page $page, int $sourceMtime): string
     {
         // Drop cached HTML once a scheduled PublishAt / ExpireAt has passed.
         $this->horizon?->check();
-        $key = 'page:' . sha1($page->filePath) . ':' . $sourceMtime;
+        $key = 'page:' . sha1($page->filePath) . ':' . $sourceMtime
+            . ($this->variant !== null ? ':' . ($this->variant)() : '');
         $hit = $this->cache->get($key);
         if ($hit !== null) {
             return $hit;

@@ -229,4 +229,38 @@ return [
     'task_err_option'     => 'Choose one of the options.',
     'task_err_file'       => 'The file was not uploaded.',
     'task_err_running'    => 'This task is already running — wait for it to finish.',
+
+    // Members-only access — admin
+    'err_no_admin_access' => 'This account has no access to the administration.',
+    'users_filter_all'    => 'All',
+
+    // Members-only access — public sign-in (fallback template, site templates may word their own)
+    'member_login_title'        => 'Sign in',
+    'member_login_email'        => 'E-mail',
+    'member_login_password'     => 'Password',
+    'member_login_remember'     => 'Keep me signed in',
+    'member_login_submit'       => 'Sign in',
+    'member_link_heading'       => 'Sign in without a password',
+    'member_link_help'          => 'We will e-mail you a one-time sign-in link.',
+    'member_link_submit'        => 'Send link',
+    'member_password_heading'   => 'Set a new password',
+    'member_password_new'       => 'New password',
+    'member_password_confirm'   => 'New password again',
+    'member_password_submit'    => 'Save password',
+    'member_signed_in_as'       => 'Signed in as',
+    'member_logout'             => 'Sign out',
+    'member_err_invalid'        => 'Wrong e-mail or password.',
+    'member_err_throttled'      => 'Too many attempts. Try again in a few minutes.',
+    'member_err_link_invalid'   => 'The sign-in link is invalid, expired or already used.',
+    'member_err_password_short' => 'The password must have at least 8 characters.',
+    'member_err_password_mismatch' => 'The passwords do not match.',
+    'member_err_not_signed_in'  => 'Sign in first.',
+    'member_notice_link_sent'   => 'If the address has an account, a sign-in link is on its way.',
+    'member_notice_password_set' => 'Password saved.',
+    'member_notice_signed_out'  => 'You are signed out.',
+
+    // Sign-in link e-mail (%s = site name, %d = minutes)
+    'member_link_subject' => 'Sign-in link – %s',
+    'member_link_intro'   => 'Click the link below to sign in to %s. It works once and is valid for %d minutes.',
+    'member_link_ignore'  => 'If you did not ask for it, ignore this e-mail.',
 ];
