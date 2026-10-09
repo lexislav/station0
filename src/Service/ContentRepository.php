@@ -19,6 +19,7 @@ use Station0\Support\Visibility;
  *   PublishAt: 2026-05-12 08:00   (optional: scheduled until then)
  *   ExpireAt: 2026-06-30 23:59    (optional: expired / 410 from then on)
  *   Listing: nav-hidden      (optional: listed | nav-hidden | unlisted)
+ *   Cascade: false           (optional: when not live, hide only this page, not its subpages)
  *   Author: lexislav
  *   Updated: 2026-04-20 21:00:00
  *   ---
@@ -45,7 +46,7 @@ final class ContentRepository
     /** Front-matter keys mapped to Page properties (everything else lands in Page::$extra). */
     public const RESERVED_KEYS = [
         'title', 'metatitle', 'published', 'publishedat', 'author', 'updated', 'template', 'sort',
-        'allowedchildtemplates', 'group', 'status', 'publishat', 'expireat', 'listing',
+        'allowedchildtemplates', 'group', 'status', 'publishat', 'expireat', 'listing', 'cascade',
     ];
 
     private array $parsedCache = [];
@@ -551,6 +552,7 @@ final class ContentRepository
             publishAt: Visibility::datetimeFromMeta($meta, 'publishat'),
             expireAt:  Visibility::datetimeFromMeta($meta, 'expireat'),
             listing:   Visibility::listingFromMeta($meta),
+            cascade:   filter_var($meta['cascade'] ?? 'true', FILTER_VALIDATE_BOOLEAN),
         );
         $page->parent = $parent;
 
@@ -592,6 +594,7 @@ final class ContentRepository
             'ExpireAt'    => $page->expireAt,
             'PublishedAt' => $page->publishedAt,
             'Listing'     => $page->listing !== Visibility::LISTED ? $page->listing : null,
+            'Cascade'     => $page->cascade ? null : 'false',
             'Author'      => $page->author,
             'Updated'     => $page->updated,
             'Sort'        => $page->sort !== null ? (string) $page->sort : null,

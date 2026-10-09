@@ -57,6 +57,8 @@ final class Page
         public ?string $expireAt = null,
         /** listed | nav-hidden | unlisted */
         public string $listing = Visibility::LISTED,
+        /** False: when this page is not live, its subpages stay live (only the page itself is hidden). */
+        public bool $cascade = true,
     ) {
         $this->status = $status !== null
             ? Visibility::normalizeStatus($status)
@@ -98,12 +100,15 @@ final class Page
         return $this->state($now) === Visibility::LIVE;
     }
 
-    /** The outermost non-live ancestor (the root cause), or null. */
+    /**
+     * The outermost non-live ancestor (the root cause), or null. Ancestors
+     * with `Cascade: false` hide only themselves and are skipped.
+     */
     public function blockingAncestor(?int $now = null): ?Page
     {
         $blocker = null;
         for ($p = $this->parent; $p !== null; $p = $p->parent) {
-            if ($p->ownState($now) !== Visibility::LIVE) {
+            if ($p->cascade && $p->ownState($now) !== Visibility::LIVE) {
                 $blocker = $p;
             }
         }

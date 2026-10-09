@@ -136,6 +136,32 @@ final class ContentRepositoryVisibilityTest extends TestCase
         self::assertSame('/a', $this->repo()->find('/a/b/c')->blockingAncestor()->urlPath);
     }
 
+    public function testCascadeFalseHidesOnlyTheParent(): void
+    {
+        $this->addPage('/blog', 'Blog', "Status: draft\nCascade: false\n");
+        $this->addPage('/blog/post', 'Post');
+        $this->addPage('/blog/post/attachment', 'Attachment');
+
+        $repo = $this->repo();
+        self::assertSame(404, $repo->find('/blog')->httpStatus());
+        self::assertTrue($repo->find('/blog/post')->isLive());
+        self::assertTrue($repo->find('/blog/post/attachment')->isLive());
+        self::assertSame(['/blog/post'], self::paths($repo->children('/blog')));
+        self::assertNotContains('/blog', self::paths($repo->all(false)));
+    }
+
+    public function testCascadeFalseDoesNotShieldFromHigherAncestors(): void
+    {
+        $this->addPage('/section', 'Section', "Status: archived\n");
+        $this->addPage('/section/blog', 'Blog', "Status: draft\nCascade: false\n");
+        $this->addPage('/section/blog/post', 'Post');
+
+        $post = $this->repo()->find('/section/blog/post');
+        self::assertFalse($post->isLive());
+        self::assertSame('/section', $post->blockingAncestor()->urlPath);
+        self::assertSame(410, $post->httpStatus());
+    }
+
     public function testDraftRootDoesNotHideTheSite(): void
     {
         $this->addPage('/', 'Home', "Status: draft\n");
@@ -198,6 +224,7 @@ final class ContentRepositoryVisibilityTest extends TestCase
         $page->publishAt = '2026-01-01 08:00';
         $page->expireAt  = '2026-12-31 23:59';
         $page->listing   = V::NAV_HIDDEN;
+        $page->cascade   = false;
         $repo->save($page);
 
         [$meta] = FrontMatter::parse((string) file_get_contents($page->filePath));
@@ -206,10 +233,12 @@ final class ContentRepositoryVisibilityTest extends TestCase
         self::assertSame('2026-01-01 08:00', $meta['publishat']);
         self::assertSame('2026-12-31 23:59', $meta['expireat']);
         self::assertSame('nav-hidden', $meta['listing']);
+        self::assertSame('false', $meta['cascade']);
 
         $again = $this->repo()->find('/rt');
         self::assertSame(V::ARCHIVED, $again->status);
         self::assertSame(V::NAV_HIDDEN, $again->listing);
+        self::assertFalse($again->cascade);
         self::assertSame([], $again->extra);
     }
 
@@ -225,5 +254,6 @@ final class ContentRepositoryVisibilityTest extends TestCase
         self::assertArrayNotHasKey('listing', $meta);
         self::assertArrayNotHasKey('publishat', $meta);
         self::assertArrayNotHasKey('expireat', $meta);
+        self::assertArrayNotHasKey('cascade', $meta);
     }
 }
