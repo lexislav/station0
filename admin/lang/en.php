@@ -66,6 +66,8 @@ return [
     'pages_status_expires_title' => 'Expires %s',
     'pages_badge_nav_hidden' => 'not in menu',
     'pages_badge_unlisted'   => 'unlisted',
+    'preview_bar_text'       => 'Not public: %s. You see this page because you are signed in.',
+    'preview_bar_edit'       => 'Edit page',
     'pages_view'            => 'View ↗',
     'pages_add_child'       => '+ Add child page',
     'pages_edit'            => 'Edit',

@@ -406,6 +406,21 @@ final class Bootstrap
             $roles
         ));
 
+        // Public pages. Signed-in admins / editors may preview non-live pages;
+        // Auth (and the DB) is only touched for those.
+        $container->set(PageController::class, fn ($c) => new PageController(
+            $c->get(ContentRepository::class),
+            $c->get(PageRenderer::class),
+            $c->get(Twig::class),
+            $c->get(PageFields::class),
+            function () use ($c, $roles): bool {
+                $auth = $c->get(Auth::class);
+                return $auth->isLoggedIn() && $auth->hasAnyRole(...array_values($roles));
+            },
+            $config['adminPath'],
+            $c->get('lang'),
+        ));
+
         $container->set(AdminPageController::class, fn ($c) => new AdminPageController(
             $c->get(ContentRepository::class),
             $c->get(Twig::class),

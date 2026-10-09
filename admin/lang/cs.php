@@ -79,6 +79,8 @@ return [
     'pages_status_expires_title' => 'Vyprší %s',
     'pages_badge_nav_hidden' => 'mimo menu',
     'pages_badge_unlisted'   => 'neuvedeno',
+    'preview_bar_text'       => 'Neveřejné: %s. Stránku vidíte, protože jste přihlášeni.',
+    'preview_bar_edit'       => 'Upravit stránku',
     'pages_view'             => 'Zobrazit ↗',
     'pages_add_child'        => '+ Přidat podstránku',
     'pages_edit'             => 'Upravit',
