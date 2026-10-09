@@ -274,7 +274,9 @@ final class Bootstrap
                     if ((string) $name === '' || (string) $slug === '') {
                         return null;
                     }
-                    return $c->get(CollectionRepository::class)->find($name, $slug);
+                    // Live items only, like collection() (drafts / scheduled / expired → null).
+                    $item = $c->get(CollectionRepository::class)->find($name, $slug);
+                    return $item !== null && $item->isLive() ? $item : null;
                 }
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
@@ -287,7 +289,7 @@ final class Bootstrap
                         slug:      $item->slug,
                         title:     $item->title,
                         body:      $item->body,
-                        published: $item->published,
+                        status:    $item->status,
                     );
                     $page->urlPath  = $virtualPath;
                     $page->filePath = $item->filePath;
