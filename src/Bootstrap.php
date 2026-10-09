@@ -61,6 +61,7 @@ final class Bootstrap
         $configFactory = require $siteRoot . '/config.php';
         $config = $configFactory($station0Root, $siteRoot, $projectRoot);
         $roles = require $station0Root . '/config/roles.php';
+        self::applyTimezone($config);
 
         foreach ([$config['paths']['cache'], $config['paths']['sessions'], $config['paths']['logs'], $config['paths']['uploads']] as $dir) {
             if (!is_dir($dir)) {
@@ -645,6 +646,25 @@ final class Bootstrap
             !empty($thumbs['static']) ? $public : null,
             isset($thumbs['format']) ? (string) $thumbs['format'] : null,
         );
+    }
+
+    /**
+     * Site timezone from the optional `timezone` config key (e.g. 'Europe/Prague').
+     * Naive front-matter datetimes (PublishedAt, PublishAt, ExpireAt) are read
+     * in this zone. Missing or invalid = PHP's default. Shared with bin/console.
+     */
+    public static function applyTimezone(array $config): void
+    {
+        $tz = trim((string) ($config['timezone'] ?? ''));
+        if ($tz === '') {
+            return;
+        }
+        try {
+            new \DateTimeZone($tz);
+        } catch (\Exception) {
+            return;
+        }
+        date_default_timezone_set($tz);
     }
 
     /** Web root used for static thumbnails (also by `thumbs:clear`). */

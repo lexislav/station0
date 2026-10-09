@@ -44,6 +44,7 @@ $siteRoot = rtrim(getenv('SITE_PATH') ?: ($projectRoot . '/site'), '/');
 $configFactory = require $siteRoot . '/config.php';
 $config = $configFactory($station0Root, $siteRoot, $projectRoot);
 $roles = require $station0Root . '/config/roles.php';
+\Station0\Bootstrap::applyTimezone($config);
 
 foreach ([$config['paths']['cache'], $config['paths']['sessions'], $config['paths']['logs'], $config['paths']['uploads']] as $dir) {
     if (!is_dir($dir)) {
