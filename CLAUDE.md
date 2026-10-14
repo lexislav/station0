@@ -17,6 +17,15 @@ Flat-file CMS built on **Slim 4**, **Twig 3**, **League/CommonMark**, and **Deli
 | `admin/templates/` | Admin Twig templates |
 | `bin/console` | CLI binary — exposed via `composer bin`, runs as `php vendor/bin/console` |
 | `config/roles.php` | Role definitions |
+| `TODO/` | Open work items, one Markdown file each — format in `TODO/README.md` |
+
+## TODO workflow
+
+Deferred work, follow-ups and known gaps go into `TODO/<area>-<slug>.md`
+(front matter `title` / `status` / `priority` / `area` / `created` /
+`related`, then Problem · Why · Proposed fix · Done when). When you defer
+something, add a file there instead of only mentioning it. Check `TODO/` before
+starting related work. Delete the file in the PR that resolves it.
 
 ## Architecture
 
