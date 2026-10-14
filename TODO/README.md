@@ -41,3 +41,6 @@ Concrete acceptance criteria — tests to add, docs to update.
 - Finished → **delete the file** in the same PR that fixes it; the PR / commit
   history is the record. Mention the fix in `CHANGELOG.md` as usual.
 - Dropped → delete the file and say why in the commit message.
+
+TODO-only changes never trigger a release: commit straight to `main` as
+`chore(todo): …`, with no version bump, `CHANGELOG.md` entry or tag.

@@ -27,6 +27,11 @@ Deferred work, follow-ups and known gaps go into `TODO/<area>-<slug>.md`
 something, add a file there instead of only mentioning it. Check `TODO/` before
 starting related work. Delete the file in the PR that resolves it.
 
+Changes to `TODO/` alone (adding, editing, deleting items) are bookkeeping:
+commit them directly to `main` as `chore(todo): …` — no branch / PR, no
+version bump, no `CHANGELOG.md` entry, no tag. Only the code fix that resolves
+an item goes through the normal release process.
+
 ## Architecture
 
 **Request flow:** `public/index.php` (skeleton) → dotenv → `Bootstrap::createApp()` → Slim app with PHP-DI container → middleware stack → controller → Twig response.
