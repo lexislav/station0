@@ -5,6 +5,20 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-10-22
+
+### Fixed
+- **A `.txt` upload could replace a page's content.** The content file was
+  the first `*.txt` in the page folder, so an uploaded `a.txt` beside
+  `page.txt` became the page: it rendered the upload, switched template, and
+  the real `page.txt` (front matter included) could be downloaded through
+  `/media`. Pages, the homepage included, now reject `.txt` uploads (use
+  `.md` or `.pdf`); collection items still accept them. When a page folder
+  already holds several `.txt` files, the one named after a template wins,
+  then `page.txt`, and `app.log` gets a warning naming the folder.
+  `ContentRepository` takes the templates dir and a logger as optional
+  constructor arguments for this.
+
 ## [0.9.2] - 2026-10-22
 
 ### Changed
@@ -357,6 +371,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.9.3]: https://github.com/lexislav/station0/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/lexislav/station0/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/lexislav/station0/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/lexislav/station0/compare/v0.8.2...v0.9.0
