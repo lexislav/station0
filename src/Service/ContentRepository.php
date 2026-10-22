@@ -72,6 +72,15 @@ final class ContentRepository
         }
 
         $segments = array_values(array_filter(explode('/', $urlPath)));
+        foreach ($segments as $segment) {
+            // Segments become directory names: `.` / `..` (Slim URL-decodes
+            // `%2e%2e`), backslashes and control bytes must never reach the
+            // filesystem, or a lookup — and delete() — escapes the pages tree.
+            if ($segment === '.' || $segment === '..' || str_contains($segment, '\\')
+                || preg_match('/[\x00-\x1F]/', $segment)) {
+                return null;
+            }
+        }
         return $this->findBySegments($this->pagesDir, $segments, '');
     }
 
