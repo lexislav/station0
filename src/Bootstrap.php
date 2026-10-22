@@ -371,7 +371,9 @@ final class Bootstrap
         });
 
         $container->set(ContentRepository::class, fn ($c) => new ContentRepository(
-            $config['paths']['content'] . '/pages'
+            $config['paths']['content'] . '/pages',
+            $config['paths']['templates'],
+            $c->get(Logger::class),
         ));
 
         $container->set(BlockRegistry::class, fn ($c) => new BlockRegistry(
