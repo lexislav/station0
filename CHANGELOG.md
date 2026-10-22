@@ -5,6 +5,29 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **Uploads could keep a disallowed extension.** A document upload was
+  accepted when *either* its extension or its sniffed MIME type was on the
+  allow-list, and the client extension was kept on disk — so a `%PDF-` or
+  plain-text file named `shell.php` was stored as `shell.php` in the page
+  (or collection item) folder. Only admins / editors can upload, but on hosts
+  that serve the project root it was code execution. The extension must now
+  be on the document allow-list (`MediaService::DOCUMENT_EXT`).
+- **`..` in page paths escaped the pages tree.** `ContentRepository::find()`
+  used URL segments as directory names, and Slim URL-decodes `%2e%2e`, so
+  `GET /%2e%2e` could render a `.txt` file above `site/content/pages/`, and
+  `POST /admin/pages/%2e%2e/delete` could delete a file there together with
+  every other file in its folder. `find()` now rejects `.`, `..`, backslashes
+  and control bytes (which also turns a NUL byte from a 500 into a 404).
+- Dependency floors raised past published advisories: `twig/twig` ^3.27
+  (code injection via `{% use %}` / `_self` macro names, sandbox bypasses),
+  `league/commonmark` ^2.10.4 (GFM table DoS and other parser DoS),
+  `symfony/yaml` ^8.1.6 (recursion / alias-expansion crashes),
+  `slim/slim` ^4.15.3 (reflected XSS in `HtmlErrorRenderer`).
+  Sites should run `composer update` to pick them up.
+
 ## [0.9.0] - 2026-10-09
 
 ### Added

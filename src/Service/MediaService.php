@@ -70,45 +70,6 @@ final class MediaService
         'md'   => 'text/markdown',
     ];
 
-    /**
-     * Document MIMEs accepted on upload → extension.
-     * For Office formats mime_content_type() is unreliable, so we fall back
-     * to the client extension (see detectDocumentExt()).
-     */
-    private const DOCUMENT_MIME = [
-        'application/pdf'                                                          => 'pdf',
-        'application/msword'                                                       => 'doc',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
-        'application/vnd.ms-excel'                                                 => 'xls',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'       => 'xlsx',
-        'application/vnd.ms-powerpoint'                                            => 'ppt',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation' => 'pptx',
-        'application/vnd.oasis.opendocument.text'                                  => 'odt',
-        'application/vnd.oasis.opendocument.spreadsheet'                           => 'ods',
-        'application/vnd.oasis.opendocument.presentation'                          => 'odp',
-        'text/csv'                                                                 => 'csv',
-        'text/plain'                                                               => 'txt',
-        'application/rtf'                                                          => 'rtf',
-        'application/zip'                                                          => 'zip',
-        'application/gzip'                                                         => 'gz',
-        'application/x-gzip'                                                       => 'gz',
-        'application/x-tar'                                                        => 'tar',
-        'application/x-7z-compressed'                                              => '7z',
-        'application/vnd.rar'                                                      => 'rar',
-        'audio/mpeg'                                                               => 'mp3',
-        'audio/wav'                                                                => 'wav',
-        'audio/ogg'                                                                => 'ogg',
-        'video/mp4'                                                                => 'mp4',
-        'video/webm'                                                               => 'webm',
-        'application/json'                                                         => 'json',
-        'application/xml'                                                          => 'xml',
-        'text/xml'                                                                 => 'xml',
-        'text/markdown'                                                            => 'md',
-        // application/octet-stream is the generic binary fallback — we allow it
-        // and rely on the client extension to determine the real type.
-        'application/octet-stream'                                                 => '',
-    ];
-
     public const ROOT_TOKEN       = '~';
     public const COLLECTIONS_TOKEN = '_collections';
 
@@ -155,7 +116,7 @@ final class MediaService
             $targetDir = $this->resolvePageDir($pageUrlPath);
             // Force extension to match detected MIME — prevents extension spoofing.
             $name = $this->resolveFilename($targetDir, $clientName, self::ALLOWED_MIME[$mime]);
-        } elseif ($this->isAllowedDocument($mime, $clientName)) {
+        } elseif ($this->isAllowedDocument($clientName)) {
             // ── Document upload ──────────────────────────────────────────────
             $maxBytes = self::MAX_BYTES_DOCUMENT;
             if ($file->getSize() === null || $file->getSize() > $maxBytes) {
@@ -285,7 +246,7 @@ final class MediaService
                 @mkdir($targetDir, 0775, true);
             }
             $name = $this->resolveFilename($targetDir, $clientName, self::ALLOWED_MIME[$mime]);
-        } elseif ($this->isAllowedDocument($mime, $clientName)) {
+        } elseif ($this->isAllowedDocument($clientName)) {
             $maxBytes = self::MAX_BYTES_DOCUMENT;
             if ($file->getSize() === null || $file->getSize() > $maxBytes) {
                 throw new \RuntimeException('File too large (max ' . ($maxBytes / 1024 / 1024) . ' MB for documents)');
@@ -506,14 +467,17 @@ final class MediaService
 
     /**
      * Return true if the file is an allowed document type.
-     * We check both the detected MIME and the client extension, because
-     * mime_content_type() often returns application/octet-stream or
-     * application/zip for Office Open XML files.
+     *
+     * The client extension is kept on disk, so it alone decides: an allowed
+     * sniffed MIME is not enough (a `%PDF-` or plain-text file named
+     * `shell.php` would otherwise be stored as `.php`). The MIME is not
+     * required to match either — mime_content_type() reports Office Open XML
+     * as application/zip and varies across libmagic versions (audio/x-wav…).
      */
-    private function isAllowedDocument(string $mime, string $clientName): bool
+    private function isAllowedDocument(string $clientName): bool
     {
         $ext = strtolower(pathinfo($clientName, PATHINFO_EXTENSION));
-        return isset(self::DOCUMENT_EXT[$ext]) || isset(self::DOCUMENT_MIME[$mime]);
+        return isset(self::DOCUMENT_EXT[$ext]);
     }
 
     private static function uploadErrorMessage(int $code): string
