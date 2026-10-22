@@ -1,6 +1,6 @@
 # Station0
 
-Lightweight flat-file CMS built on PHP 8.2+. Pages are stored as plain text files on disk — no database migrations, fully Git-friendly. SQLite is used only for authentication.
+Lightweight flat-file CMS built on PHP 8.4+. Pages are stored as plain text files on disk — no database migrations, fully Git-friendly. SQLite is used only for authentication.
 
 ## Stack
 
@@ -12,7 +12,7 @@ Lightweight flat-file CMS built on PHP 8.2+. Pages are stored as plain text file
 
 ## Requirements
 
-- PHP ≥ 8.2 (with `pdo_sqlite` extension)
+- PHP ≥ 8.4.1 (with `pdo_sqlite` extension)
 - Composer
 
 ## Installation

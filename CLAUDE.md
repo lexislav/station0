@@ -68,7 +68,7 @@ YAML. Keys are lower-cased on read. Serializing omits `null` / `''` / `[]`.
 
 - Namespace: `Station0\`
 - Composer package: `lexislav/station0` (type: library)
-- PHP ≥ 8.2 required
+- PHP ≥ 8.4.1 required (floor set by symfony/yaml 8)
 
 ## Middleware stack
 

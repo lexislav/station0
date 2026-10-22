@@ -5,6 +5,15 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- The required PHP version is now `^8.4.1` (was `^8.2`). Nothing new is
+  needed at runtime: `symfony/yaml` 8 already required PHP 8.4.1, so
+  installing on 8.2 or 8.3 already failed. It failed while Composer resolved
+  dependencies; now station0 reports the requirement itself. README and
+  CLAUDE.md say the same.
+
 ## [0.9.1] - 2026-10-22
 
 ### Security
