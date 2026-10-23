@@ -84,6 +84,41 @@ final class MediaServiceUploadTest extends TestCase
         self::assertFileExists($this->pagesDir . '/about/price-list.pdf');
     }
 
+    /** @return iterable<string, array{string}> */
+    public static function textFileNames(): iterable
+    {
+        yield 'sorts before page.txt' => ['a.txt'];
+        yield 'upper-case extension'  => ['Notes.TXT'];
+        yield 'named like a template' => ['page.txt'];
+    }
+
+    /** @dataProvider textFileNames */
+    public function testPageUploadRejectsTextFiles(string $name): void
+    {
+        try {
+            $this->make()->storeForPage('/about', $this->upload($name, "Title: Hijack\n---\nNot the page\n"));
+            self::fail('Upload of ' . $name . ' was accepted');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('.txt', $e->getMessage());
+        }
+        self::assertSame(['page.txt'], array_values(array_diff(scandir($this->pagesDir . '/about'), ['.', '..'])));
+        self::assertSame('About', (new ContentRepository($this->pagesDir))->find('/about')?->title);
+    }
+
+    public function testRootPageUploadRejectsTextFiles(): void
+    {
+        file_put_contents($this->pagesDir . '/home.txt', "Title: Home\n---\nHome\n");
+        $this->expectException(\RuntimeException::class);
+        $this->make()->storeForPage('/', $this->upload('a.txt', "notes\n"));
+    }
+
+    public function testCollectionUploadKeepsTextFiles(): void
+    {
+        file_put_contents($this->collectionsDir . '/banners/sale/item.txt', "Title: Sale\n---\n");
+        $result = $this->make()->storeForCollection('banners', 'sale', $this->upload('a.txt', "notes\n"));
+        self::assertSame('a.txt', $result['filename']);
+    }
+
     public function testAllowedDocumentWithUnlistedSniffedMimeIsAccepted(): void
     {
         // Office Open XML sniffs as application/zip; the extension decides.

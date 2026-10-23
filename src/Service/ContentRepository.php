@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Station0\Service;
 
+use Psr\Log\LoggerInterface;
 use Station0\Support\FrontMatter;
 use Station0\Support\Slug;
 use Station0\Support\Visibility;
@@ -40,6 +41,9 @@ use Station0\Support\Visibility;
  *
  * Slug  = directory name (never stored in the file)
  * Template = filename without .txt (authoritative; front-matter Template: is kept for readability)
+ *
+ * A directory should hold one content file. When it holds several `*.txt`
+ * (e.g. a stray upload), contentFileIn() picks the one named after a template.
  */
 final class ContentRepository
 {
@@ -51,8 +55,18 @@ final class ContentRepository
 
     private array $parsedCache = [];
 
-    public function __construct(private readonly string $pagesDir)
-    {
+    /** @var array<string, true> directories already reported as ambiguous */
+    private array $warnedDirs = [];
+
+    /**
+     * @param ?string $templatesDir site templates; lets contentFileIn() tell the
+     *                              content file (`<template>.txt`) from other `.txt` files
+     */
+    public function __construct(
+        private readonly string $pagesDir,
+        private readonly ?string $templatesDir = null,
+        private readonly ?LoggerInterface $logger = null,
+    ) {
         if (!is_dir($this->pagesDir)) {
             @mkdir($this->pagesDir, 0775, true);
         }
@@ -429,11 +443,11 @@ final class ContentRepository
 
     // ─────────────────── Traversal ───────────────────
 
-    /** Root page: any .txt file directly in $dir (should be exactly one). */
+    /** Root page: the content file directly in $dir. */
     private function findRoot(string $dir, string $urlPath): ?Page
     {
-        $files = glob(rtrim($dir, '/') . '/*.txt') ?: [];
-        return !empty($files) ? $this->buildPage($files[0], $urlPath) : null;
+        $file = $this->contentFileIn($dir);
+        return $file !== null ? $this->buildPage($file, $urlPath) : null;
     }
 
     /**
@@ -478,8 +492,45 @@ final class ContentRepository
             return null;
         }
 
-        $files = glob($pageDir . '/*.txt') ?: [];
-        return !empty($files) ? $files[0] : null;
+        return $this->contentFileIn($pageDir);
+    }
+
+    /**
+     * The content file of the page directory $dir, or null when it has none.
+     *
+     * Normally the only `*.txt` there. When there are several, the first one
+     * named after an existing template (`<name>.twig`) wins, then `page.txt`,
+     * then the first alphabetically — never just whichever sorts first, so a
+     * stray `a.txt` cannot replace the page. The clash is logged once per dir.
+     */
+    private function contentFileIn(string $dir): ?string
+    {
+        $dir   = rtrim($dir, '/');
+        $files = array_values(array_filter(glob($dir . '/*.txt') ?: [], 'is_file'));
+        if (count($files) <= 1) {
+            return $files[0] ?? null;
+        }
+
+        $pick = null;
+        if ($this->templatesDir !== null) {
+            foreach ($files as $file) {
+                if (is_file(rtrim($this->templatesDir, '/') . '/' . basename($file, '.txt') . '.twig')) {
+                    $pick = $file;
+                    break;
+                }
+            }
+        }
+        $pick ??= in_array($dir . '/page.txt', $files, true) ? $dir . '/page.txt' : $files[0];
+
+        if ($this->logger !== null && !isset($this->warnedDirs[$dir])) {
+            $this->warnedDirs[$dir] = true;
+            $this->logger->warning('Several .txt files in a page directory; using ' . basename($pick), [
+                'dir'   => $dir,
+                'files' => array_map('basename', $files),
+            ]);
+        }
+
+        return $pick;
     }
 
     // ─────────────────── Recursive scan ───────────────────
@@ -494,9 +545,9 @@ final class ContentRepository
 
         if ($includeDirectTxt) {
             // Root page: a .txt file living directly in pagesDir
-            foreach (glob($dir . '/*.txt') ?: [] as $file) {
+            $file = $this->contentFileIn($dir);
+            if ($file !== null) {
                 $pages[] = $this->buildPage($file, '/');
-                break;
             }
         }
 
@@ -504,14 +555,14 @@ final class ContentRepository
         $siblings = [];
         foreach (glob($dir . '/*', GLOB_ONLYDIR) ?: [] as $subDir) {
             $slug  = basename($subDir);
-            $files = glob($subDir . '/*.txt') ?: [];
+            $file  = $this->contentFileIn($subDir);
 
-            if (empty($files)) {
+            if ($file === null) {
                 continue;
             }
 
             $urlPath = ($urlBase === '' ? '' : rtrim($urlBase, '/')) . '/' . $slug;
-            $page    = $this->buildPage($files[0], $urlPath, $parent);
+            $page    = $this->buildPage($file, $urlPath, $parent);
             $siblings[] = ['subDir' => $subDir, 'urlPath' => $urlPath, 'page' => $page];
         }
 

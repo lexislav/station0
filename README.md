@@ -95,7 +95,8 @@ site/content/pages/about/
 
 Filenames are slugified on upload (`Team Photo.JPG` → `team-photo.jpg`) and
 collisions resolve as `team-photo-2.jpg`, `-3`, … Allowed types: jpg, png,
-gif, webp, svg (max 8 MB).
+gif, webp, svg (max 8 MB). Pages do not accept `.txt` uploads, because a
+page's content file is the `.txt` in its folder; use `.md` or `.pdf` instead.
 
 In stored content, asset references are **page-relative** — bare filenames:
 

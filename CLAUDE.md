@@ -364,6 +364,10 @@ site/content/pages/about/
 that delegates to it. Uploads accept: **jpg, png, gif, webp, svg** (max 8 MB).
 SVG detection sniffs file content for `<svg xmlns` because `mime_content_type()`
 misidentifies SVGs as `text/plain`/`text/html`.
+`.txt` documents are rejected for pages (collection items keep them): the
+content file is the `*.txt` in the page dir. When a dir still holds several,
+`ContentRepository::contentFileIn()` picks the one named after a template
+(`paths.templates`), then `page.txt`, and logs a warning.
 
 **Stored references are page-relative.** Image fields and markdown image links
 hold a bare filename (`team-photo.jpg`), not a URL. `PageRenderer` resolves

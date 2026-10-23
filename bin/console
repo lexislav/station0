@@ -141,7 +141,7 @@ switch ($command) {
         // and pre-generates each /thumb/... URL found in it, so the first
         // visitor does not wait for them.
         $baseUrl = rtrim($args[0] ?? $config['baseUrl'], '/');
-        $repo    = new ContentRepository($config['paths']['content'] . '/pages');
+        $repo    = new ContentRepository($config['paths']['content'] . '/pages', $config['paths']['templates']);
         $thumbs  = \Station0\Bootstrap::thumbService(
             $config,
             new MediaService($repo, $config['paths']['content'] . '/pages', $config['paths']['content'] . '/collections'),
@@ -177,7 +177,7 @@ switch ($command) {
 
     case 'assets:relink':
         $dryRun = in_array('--dry-run', $args, true);
-        $repo   = new ContentRepository($config['paths']['content'] . '/pages');
+        $repo   = new ContentRepository($config['paths']['content'] . '/pages', $config['paths']['templates']);
         $changedFiles = 0;
         $changedRefs  = 0;
 
@@ -227,7 +227,7 @@ switch ($command) {
     case 'task:list':
     case 'task:run':
     case 'task:worker':
-        $pages       = new ContentRepository($config['paths']['content'] . '/pages');
+        $pages       = new ContentRepository($config['paths']['content'] . '/pages', $config['paths']['templates']);
         $collections = new CollectionRepository($config['paths']['content'] . '/collections');
         $tasks = new TaskRegistry(
             $config['paths']['tasks'] ?? $siteRoot . '/tasks',

@@ -118,6 +118,12 @@ final class MediaService
             $name = $this->resolveFilename($targetDir, $clientName, self::ALLOWED_MIME[$mime]);
         } elseif ($this->isAllowedDocument($clientName)) {
             // ── Document upload ──────────────────────────────────────────────
+            // A page's content file is the `*.txt` in its directory, so a
+            // `.txt` asset there could be taken for it. Collection items keep
+            // `.txt` uploads: their source is always `item.txt`.
+            if (strtolower(pathinfo($clientName, PATHINFO_EXTENSION)) === 'txt') {
+                throw new \RuntimeException('Text files (.txt) cannot be attached to pages — the name is reserved for page content. Use .md or .pdf instead.');
+            }
             $maxBytes = self::MAX_BYTES_DOCUMENT;
             if ($file->getSize() === null || $file->getSize() > $maxBytes) {
                 throw new \RuntimeException('File too large (max ' . ($maxBytes / 1024 / 1024) . ' MB for documents)');
