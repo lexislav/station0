@@ -6,6 +6,7 @@ namespace Station0\Service;
 
 use Station0\Support\FieldSchema;
 use Station0\Support\FrontMatter;
+use Station0\Support\Placeholders;
 use Station0\Support\Slug;
 use Station0\Support\Visibility;
 use Symfony\Component\Yaml\Exception\ParseException;
@@ -40,11 +41,20 @@ use Symfony\Component\Yaml\Yaml;
  *     image:
  *       type: image
  *       label: Background Image
+ *
+ * Optional computed title (see titleSpec()):
+ *   title: "{name} {surname}"           # shorthand, input: readonly
+ *   title:
+ *     from: "{brand} – {model}"
+ *     input: editable                   # editable | readonly | hidden
  */
 final class CollectionRepository
 {
     /** Front-matter keys mapped to CollectionItem properties. */
     public const RESERVED_KEYS = ['title', 'published', 'sort', 'status', 'publishat', 'expireat'];
+
+    /** Title input modes of a computed title; the first is the default. */
+    public const TITLE_INPUTS = ['readonly', 'editable', 'hidden'];
 
     /** Visibility keys a collection schema may claim as its own fields → their front-matter spelling. */
     private const VISIBILITY_KEYS = ['status' => 'Status', 'publishat' => 'PublishAt', 'expireat' => 'ExpireAt'];
@@ -115,6 +125,49 @@ final class CollectionRepository
         } catch (ParseException) {
             return [];
         }
+    }
+
+    /**
+     * The collection's computed title, normalized from the schema's `title`
+     * key: a string is the pattern (`from`) with the default input mode,
+     * a dict gives `from` and `input`. No (or an empty) pattern ⇒ null, the
+     * title is typed by hand as before. `fields` lists the placeholders.
+     *
+     * @return array{from: string, input: string, fields: list<string>}|null
+     */
+    public function titleSpec(string $name): ?array
+    {
+        $raw   = $this->schema($name)['title'] ?? null;
+        $from  = is_array($raw) ? ($raw['from'] ?? null) : $raw;
+        $input = is_array($raw) ? strtolower(trim((string) ($raw['input'] ?? ''))) : '';
+        if (!is_string($from) || trim($from) === '') {
+            return null;
+        }
+        return [
+            'from'   => trim($from),
+            'input'  => in_array($input, self::TITLE_INPUTS, true) ? $input : self::TITLE_INPUTS[0],
+            'fields' => Placeholders::names($from),
+        ];
+    }
+
+    /**
+     * The title the collection's pattern builds from the item's fields,
+     * `{slug}` and `{collection}`; null when the collection has no pattern.
+     */
+    public function computeTitle(CollectionItem $item): ?string
+    {
+        $spec = $this->titleSpec($item->collection);
+        return $spec === null ? null : $this->fillTitle($spec['from'], $item->extra, $item->slug, $item->collection);
+    }
+
+    /**
+     * Whether the item's title is what the pattern builds — false for a
+     * title written by hand in `editable` mode (an override).
+     */
+    public function titleInSync(CollectionItem $item): bool
+    {
+        $computed = $this->computeTitle($item);
+        return $computed === null || $computed === $item->title;
     }
 
     /**
@@ -202,6 +255,8 @@ final class CollectionRepository
             }
             $filePath = $this->itemDir($item->collection, $item->slug) . '/item.txt';
         }
+
+        $this->applyComputedTitle($item, $filePath);
 
         $dir = dirname($filePath);
         if (!is_dir($dir)) {
@@ -380,6 +435,68 @@ final class CollectionRepository
         }
 
         return FrontMatter::serialize($fields, $item->body);
+    }
+
+    // ─────────────────── Computed title ───────────────────
+
+    /**
+     * Sets the item's title from the collection's pattern before a save.
+     *
+     * `readonly` / `hidden`: always the computed title — a posted one is
+     * ignored. `editable`: an empty title, or one left as it was while it
+     * still matched the pattern, follows the fields; anything else was
+     * written by hand and is kept (an override). The stored file is the
+     * reference, so this works for the admin form and for tasks alike.
+     * An empty result keeps the current title (or the slug).
+     */
+    private function applyComputedTitle(CollectionItem $item, string $filePath): void
+    {
+        $spec = $this->titleSpec($item->collection);
+        if ($spec === null) {
+            return;
+        }
+        $computed = $this->fillTitle($spec['from'], $item->extra, $item->slug, $item->collection);
+        $title    = trim($item->title);
+
+        if ($spec['input'] === 'editable' && $title !== '') {
+            $previous = $this->storedTitleState($spec['from'], $item, $filePath);
+            $followed = $previous !== null && $previous['inSync'] && $title === $previous['title'];
+            if (!$followed) {
+                $item->title = $title;
+                return;
+            }
+        }
+
+        $item->title = $computed !== '' ? $computed : ($title !== '' ? $title : $item->slug);
+    }
+
+    /**
+     * Title stored in $filePath and whether it matched the pattern then.
+     *
+     * @return array{title: string, inSync: bool}|null null for a new item
+     */
+    private function storedTitleState(string $from, CollectionItem $item, string $filePath): ?array
+    {
+        $raw = is_file($filePath) ? @file_get_contents($filePath) : false;
+        if ($raw === false) {
+            return null;
+        }
+        [$meta] = FrontMatter::parse($raw);
+        $title  = trim((string) ($meta['title'] ?? ''));
+        unset($meta['title']);
+        return [
+            'title'  => $title,
+            'inSync' => $title === $this->fillTitle($from, $meta, basename(dirname($filePath)), $item->collection),
+        ];
+    }
+
+    /** @param array<string, mixed> $fields */
+    private function fillTitle(string $from, array $fields, string $slug, string $collection): string
+    {
+        return Placeholders::fill($from, array_replace(
+            ['slug' => $slug, 'collection' => $collection],
+            array_change_key_case($fields, CASE_LOWER),
+        ));
     }
 
     // ─────────────────── Helpers ───────────────────

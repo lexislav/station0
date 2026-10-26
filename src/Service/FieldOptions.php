@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Station0\Service;
 
+use Station0\Support\Placeholders;
+
 /**
  * Resolves the option list of `select` fields for the admin editors.
  *
@@ -359,12 +361,7 @@ final class FieldOptions
     /** @param array<string, mixed> $fields */
     private function label(string $template, array $fields): string
     {
-        $label = preg_replace_callback('/\{([a-zA-Z0-9_-]+)\}/', function (array $m) use ($fields): string {
-            $v = $fields[strtolower($m[1])] ?? '';
-            return is_scalar($v) ? (string) $v : '';
-        }, $template);
-
-        $label = trim((string) $label);
+        $label = Placeholders::fill($template, $fields);
         return $label !== '' ? $label : (string) $fields['title'];
     }
 }

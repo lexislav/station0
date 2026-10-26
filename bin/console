@@ -224,6 +224,46 @@ switch ($command) {
         }
         break;
 
+    case 'collections:retitle':
+        // Recompute the titles of existing items after adding or changing a
+        // `title` pattern in _collection.yaml (items otherwise update when
+        // next saved). In `editable` mode only items without a title of
+        // their own (none, or the slug fallback) are filled in.
+        $dryRun = in_array('--dry-run', $args, true);
+        $given  = array_values(array_filter($args, fn ($a) => !str_starts_with($a, '--')));
+        $repo   = new CollectionRepository($config['paths']['content'] . '/collections');
+        $changed = 0;
+        foreach ($given ?: $repo->names() as $name) {
+            $spec = $repo->titleSpec($name);
+            if ($spec === null) {
+                if ($given !== []) {
+                    fwrite(STDERR, "  {$name}: kolekce nemá vzor titulku (title v _collection.yaml)\n");
+                }
+                continue;
+            }
+            foreach ($repo->items($name, true) as $item) {
+                $before = $item->title;
+                if ($spec['input'] === 'editable' && $before !== '' && $before !== $item->slug) {
+                    continue;
+                }
+                $after = (string) $repo->computeTitle($item);
+                if ($after === '' || $after === $before) {
+                    continue;
+                }
+                $changed++;
+                echo ($dryRun ? '[dry] ' : '') . "{$name}/{$item->slug}: \"{$before}\" → \"{$after}\"\n";
+                if (!$dryRun) {
+                    $item->title = '';   // save() fills in the computed title
+                    $repo->save($item);
+                }
+            }
+        }
+        echo ($dryRun ? '[dry] ' : '') . "Hotovo: {$changed} titulk(ů) přepočítáno.\n";
+        if (!$dryRun && $changed > 0) {
+            (new FileCache($config['paths']['cache']))->flush();
+        }
+        break;
+
     case 'task:list':
     case 'task:run':
     case 'task:worker':
@@ -306,6 +346,7 @@ switch ($command) {
         echo "  thumbs:clear                  Smaže vygenerované náhledy obrázků\n";
         echo "  thumbs:warm [baseUrl]         Předgeneruje náhledy všech publikovaných stránek (běžící server)\n";
         echo "  assets:relink [--dry-run]     Převede absolutní /media/... odkazy na page-local názvy\n";
+        echo "  collections:retitle [name…] [--dry-run]  Přepočítá titulky položek podle vzoru title v _collection.yaml\n";
         echo "  task:list                     Vypíše úlohy webu (site/tasks/*.php)\n";
         echo "  task:run <name> [--param=value]  Spustí úlohu webu\n";
         break;

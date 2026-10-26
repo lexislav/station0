@@ -26,14 +26,17 @@
 .form-actions { display: flex; gap: .75rem; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #eee; }
 .meta-row { display: flex; gap: 1rem; flex-wrap: wrap; }
 .meta-row .field { flex: 1 1 140px; }
+#title-field [hidden] { display: none; }
+#title-field input[readonly] { background: #f5f6f8; color: #555; }
 </style>
 {% endblock %}
 
 {% block body %}
 {# isNew: a create form; `item` may then still hold the posted values (validation error). #}
 {% set isNew = isNew ?? (item is null) %}
+{% set ts = titleSpec ?? null %}
 <div class="page-header">
-    <h1>{{ isNew ? t.collections_new_item : item.title }}</h1>
+    <h1 id="item-heading">{{ isNew ? t.collections_new_item : item.title }}</h1>
 </div>
 
 <p style="margin-bottom:1.25rem;">
@@ -52,10 +55,39 @@
     {% if errorKey ?? false %}<p class="error">{{ attribute(t, errorKey) }}</p>{% endif %}
 
     {# ── Core fields ── #}
+    {% if ts is null %}
     <div class="field">
         <label for="f-title">{{ t.page_field_title }}</label>
         <input type="text" id="f-title" name="title" value="{{ item ? item.title : '' }}" required autofocus>
     </div>
+    {% else %}
+    {# Computed title (_collection.yaml `title`); kept in sync by the script below. #}
+    <div class="field" id="title-field"
+         data-from="{{ ts.from }}" data-mode="{{ ts.input }}"
+         data-sync="{{ titleInSync ? '1' : '0' }}" data-collection="{{ collectionName }}">
+        {% if ts.input == 'hidden' %}
+            <label>{{ t.page_field_title }}</label>
+            <p style="margin:0;"><strong id="f-title-preview">{{ item ? item.title : '' }}</strong></p>
+        {% else %}
+            <label for="f-title">{{ t.page_field_title }}</label>
+            <div class="input-with-btn">
+                <input type="text" id="f-title" name="title" value="{{ item ? item.title : '' }}"
+                       {{ ts.input == 'readonly' ? 'readonly tabindex="-1"' : 'autofocus' }}>
+                {% if ts.input == 'editable' %}
+                    <button type="button" class="btn btn-sm" id="title-reset"
+                            {{ titleInSync ? 'hidden' : '' }}>{{ t.collections_title_reset }}</button>
+                {% endif %}
+            </div>
+        {% endif %}
+        <p class="hint">
+            {{ t.collections_title_from }} {{ ts.labels|join(', ') }}.
+            {% if ts.input == 'editable' %}
+                <span id="title-auto-hint" {{ titleInSync ? '' : 'hidden' }}>{{ t.collections_title_auto_hint }}</span>
+                <span id="title-override-hint" {{ titleInSync ? 'hidden' : '' }}>{{ t.collections_title_override }}</span>
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
 
     <div class="meta-row">
         <div class="field">
@@ -189,6 +221,81 @@
 
 {# Hidden file input for image field uploads #}
 <input type="file" id="collection-file-input" accept="image/*" style="display:none;">
+
+{% if ts is not null %}
+<script>
+// Computed title preview. Mirrors Station0\Support\Placeholders::fill() —
+// the server recomputes on save, this only keeps the form honest.
+(function () {
+    var box = document.getElementById('title-field');
+    var form = document.getElementById('collection-form');
+    var input = document.getElementById('f-title');
+    var preview = document.getElementById('f-title-preview');
+    var heading = {% if isNew %}document.getElementById('item-heading'){% else %}null{% endif %};
+    var resetBtn = document.getElementById('title-reset');
+    var mode = box.dataset.mode;
+    var from = box.dataset.from;
+    var following = mode !== 'editable' || box.dataset.sync === '1';
+    var SEP = '\\-–—,;:|/·';
+
+    function fill(tpl, values) {
+        var empty = false;
+        var out = tpl.replace(/\{([a-zA-Z0-9_-]+)\}/g, function (_, key) {
+            var v = values[key.toLowerCase()];
+            v = v == null ? '' : String(v).trim();
+            if (v === '') empty = true;
+            return v;
+        }).replace(/\s+/g, ' ');
+        if (!empty) return out.trim();
+        out = out.replace(/\(\s*\)|\[\s*\]/g, '')
+            .replace(new RegExp('(\\s*[' + SEP + '])(?:\\s*[' + SEP + '])+', 'g'), '$1')
+            .replace(new RegExp('^[\\s' + SEP + ']+|[\\s' + SEP + ']+$', 'g'), '');
+        return out.replace(/\s+/g, ' ').trim();
+    }
+
+    function values() {
+        var v = { collection: box.dataset.collection };
+        var slug = document.getElementById('f-slug');
+        v.slug = slug ? slug.value.trim() : '';
+        Array.prototype.forEach.call(form.elements, function (el) {
+            if (!el.name || el.name === 'title') return;
+            v[el.name.toLowerCase()] = el.type === 'checkbox' ? (el.checked ? 'true' : 'false') : el.value;
+        });
+        return v;
+    }
+
+    function setFollowing(on) {
+        following = on;
+        if (mode !== 'editable') return;
+        if (resetBtn) resetBtn.hidden = on;
+        document.getElementById('title-auto-hint').hidden = !on;
+        document.getElementById('title-override-hint').hidden = on;
+    }
+
+    function update() {
+        if (!following) return;
+        var title = fill(from, values());
+        if (input) input.value = title;
+        if (preview) preview.textContent = title;
+        if (heading && title) heading.textContent = title;
+    }
+
+    form.addEventListener('input', function (e) { if (e.target !== input) update(); });
+    form.addEventListener('change', function (e) { if (e.target !== input) update(); });
+    if (mode === 'editable' && input) {
+        input.addEventListener('input', function () {
+            setFollowing(input.value.trim() === '');
+            if (heading && !following) heading.textContent = input.value;
+            update();
+        });
+    }
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function () { setFollowing(true); update(); });
+    }
+    update();
+})();
+</script>
+{% endif %}
 
 <script>
 (function () {

@@ -101,6 +101,7 @@ final class CollectionController
             'schema'          => $schema,
             'fields'          => $this->fieldOptions->resolveFields(FieldSchema::normalize($schema['fields'] ?? [])),
             'item'            => null,
+            ...$this->titleContext($name, null),
             'csrf'            => $this->csrfFields($request),
         ]);
     }
@@ -115,34 +116,32 @@ final class CollectionController
         }
         $data = (array) $request->getParsedBody();
 
-        $title = trim((string) ($data['title'] ?? ''));
-        if ($title === '') {
+        $schema = $this->collections->schema($name);
+        $item   = new CollectionItem(
+            collection: $name,
+            slug:       Slug::sanitize((string) ($data['slug'] ?? '')),
+            title:      trim((string) ($data['title'] ?? '')),
+            body:       trim((string) ($data['body'] ?? '')),
+            sort:       ($data['sort'] ?? '') !== '' ? (int) $data['sort'] : null,
+            extra:      $this->extractExtraFields($data, $schema),
+        );
+
+        // A computed title is known before the slug, which derives from it.
+        $titleError = $this->resolveTitle($item);
+        if ($item->title === '' && $titleError === null) {
             return $this->redirectToItems($response, $name);
         }
 
-        $slug = Slug::sanitize((string) ($data['slug'] ?? ''));
-        if ($slug === '') {
-            $slug = Slug::sanitize($title);
-        }
+        $slug = $item->slug !== '' ? $item->slug : Slug::sanitize($item->title);
         // Ensure uniqueness by appending -2, -3, …
         $base = $slug;
         $i    = 2;
         while ($this->collections->find($name, $slug) !== null) {
             $slug = $base . '-' . $i++;
         }
+        $item->slug = $slug;
 
-        $schema = $this->collections->schema($name);
-        $extra  = $this->extractExtraFields($data, $schema);
-
-        $item = new CollectionItem(
-            collection: $name,
-            slug:       $slug,
-            title:      $title,
-            body:       trim((string) ($data['body'] ?? '')),
-            sort:       ($data['sort'] ?? '') !== '' ? (int) $data['sort'] : null,
-            extra:      $extra,
-        );
-        $errorKey = $this->applyVisibility($item, $data);
+        $errorKey = $this->applyVisibility($item, $data) ?? $titleError;
         if ($errorKey !== null) {
             return $this->invalidForm($request, $response, $item, true, $errorKey);
         }
@@ -181,6 +180,7 @@ final class CollectionController
             'schema'          => $schema,
             'fields'          => $this->fieldOptions->resolveFields(FieldSchema::normalize($schema['fields'] ?? [])),
             'item'            => $item,
+            ...$this->titleContext($name, $item),
             'csrf'            => $this->csrfFields($request),
         ]);
     }
@@ -209,7 +209,7 @@ final class CollectionController
         $schema     = $this->collections->schema($name);
         $item->extra = $this->extractExtraFields($data, $schema);
 
-        $errorKey = $this->applyVisibility($item, $data);
+        $errorKey = $this->applyVisibility($item, $data) ?? $this->resolveTitle($item);
         if ($errorKey !== null) {
             return $this->invalidForm($request, $response, $item, false, $errorKey);
         }
@@ -331,7 +331,50 @@ final class CollectionController
         ];
     }
 
-    /** Extract schema-defined extra fields from POST data. */
+    /**
+     * Fills in a computed title (see CollectionRepository::titleSpec()) so
+     * the form can derive the slug from it; the repository recomputes on save.
+     * Returns an error key when the pattern comes out empty and there is no
+     * typed title to use instead.
+     */
+    private function resolveTitle(CollectionItem $item): ?string
+    {
+        $spec = $this->collections->titleSpec($item->collection);
+        if ($spec === null) {
+            return null;
+        }
+        $computed = (string) $this->collections->computeTitle($item);
+        if ($spec['input'] !== 'editable' || $item->title === '') {
+            if ($computed === '') {
+                return 'collections_title_from_empty';
+            }
+            $item->title = $computed;
+        }
+        return null;
+    }
+
+    /**
+     * Computed-title data for the item form: the spec, the labels of the
+     * fields it uses, and whether an existing item still follows it.
+     */
+    private function titleContext(string $name, ?CollectionItem $item): array
+    {
+        $spec = $this->collections->titleSpec($name);
+        if ($spec === null) {
+            return ['titleSpec' => null];
+        }
+        $labels = [];
+        foreach (FieldSchema::normalize($this->collections->schema($name)['fields'] ?? []) as $field) {
+            $labels[strtolower((string) ($field['name'] ?? ''))] = (string) ($field['label'] ?? $field['name'] ?? '');
+        }
+        return [
+            'titleSpec'   => $spec + [
+                'labels' => array_map(fn (string $f) => $labels[$f] ?? $f, $spec['fields']),
+            ],
+            'titleInSync' => $item === null || $item->filePath === '' || $this->collections->titleInSync($item),
+        ];
+    }
+
     /**
      * Status / PublishAt / ExpireAt from the form (see Visibility::fromForm());
      * returns a translation key when the schedule is invalid.
@@ -362,6 +405,7 @@ final class CollectionController
             'fields'          => $this->fieldOptions->resolveFields(FieldSchema::normalize($schema['fields'] ?? [])),
             'item'            => $item,
             'isNew'           => $isNew,
+            ...$this->titleContext($name, $item),
             'errorKey'        => $errorKey,
             'csrf'            => $this->csrfFields($request),
         ]);
