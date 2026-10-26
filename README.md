@@ -58,6 +58,14 @@ Restart: `brew services restart httpd`.
 was not found on this server." page on `/admin` (or any sub-path) means the
 rewrite isn't being applied — check `AllowOverride` and `mod_rewrite`.
 
+**Security headers:** every response under the admin path already carries
+`X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`,
+`Referrer-Policy: same-origin` and `X-Content-Type-Options: nosniff`, sent by
+station0 itself. Public pages get none of these from station0. Set the ones you
+want in the vhost (e.g. `Header always set X-Content-Type-Options "nosniff"`
+with `mod_headers`), because only you know whether the site is meant to be
+framed or embedded elsewhere.
+
 ## This package
 
 `lexislav/station0` is the **core library** — it contains the PHP classes, admin templates, and CLI binary. It is installed into `vendor/` by the skeleton project.
@@ -279,6 +287,44 @@ does not rewrite references to it — the editor then shows the old path as
 Static `options` also accept richer forms now — `{value: label}` maps and
 `[{value, label, group}]` entries — next to the plain string list.
 
+## Computed collection titles
+
+A collection can build each item's title from its fields instead of having
+editors type it:
+
+```yaml
+# site/content/collections/people/_collection.yaml
+label: People
+title: "{name} {surname}"            # shorthand: input readonly
+fields:
+  name:    { type: text, label: Name }
+  surname: { type: text, label: Surname }
+```
+
+```yaml
+title:
+  from: "{brand} – {model} ({year})" # any text around the placeholders is kept
+  input: editable                    # readonly (default) | editable | hidden
+```
+
+- **Placeholders:** schema fields, `{slug}` and `{collection}`. When a field is
+  empty, the separator next to it (`- – — , ; : | / ·`) and empty `()` / `[]`
+  are dropped. `{brand} - {model}` without a model gives `Škoda`, not `Škoda -`.
+- **`readonly`:** the title input fills itself while the editor types; a posted
+  title is ignored. **`hidden`:** no title input, only a preview line.
+- **`editable`:** the title follows the fields until the editor types their
+  own; that title is then kept even when the fields change. Clearing it, or
+  the "Use built title" button, makes it follow the fields again.
+- The title is **stored** in the item's `Title:` on save (also when a site
+  task saves the item), so `item.title`, lists, `option_label` and hooks work
+  as before. The slug of a new item comes from the built title. If every
+  referenced field is empty, the form refuses to save.
+- `{field}` is the stored value: a select gives its slug / path, an image its
+  filename, a boolean `true` / `false`.
+- Existing items change on their next save, or all at once with
+  `php vendor/bin/console collections:retitle [name…] [--dry-run]` (in
+  `editable` mode only items without a title of their own).
+
 ## Menu groups (admin menu tabs)
 
 Collections and page subtrees can be grouped into their own tab in the admin
@@ -376,6 +422,11 @@ php vendor/bin/console user:create <username> <email> [role]   # role: admin | e
 php vendor/bin/console user:reset-password <email>
 php vendor/bin/console cache:clear
 php vendor/bin/console assets:relink [--dry-run]
+php vendor/bin/console thumbs:warm [baseUrl]      # pre-generate thumbnails (server must run)
+php vendor/bin/console thumbs:clear
+php vendor/bin/console collections:retitle [name…] [--dry-run]   # recompute computed titles
+php vendor/bin/console task:list                  # site tasks (site/tasks/)
+php vendor/bin/console task:run <name> [--param=value]
 ```
 
 ## Package structure
