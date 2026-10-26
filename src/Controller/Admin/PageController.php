@@ -382,14 +382,14 @@ final class PageController
         $rawSlug   = trim((string) ($data['slug'] ?? ''));
         $parentUrl = trim((string) ($data['parent'] ?? '/'));
 
-        $template = $this->safeTemplate((string) ($data['template'] ?? 'page'));
+        $parentPage = $this->content->find($parentUrl);
+
+        $template = $this->safeTemplate((string) ($data['template'] ?? 'page'), $parentPage);
         $allowedChildTemplates = $this->parseTemplateList((string) ($data['allowed_child_templates'] ?? ''));
 
         if ($title === '') {
             return $response->withStatus(422);
         }
-
-        $parentPage = $this->content->find($parentUrl);
 
         $error = null;
         try {
@@ -525,7 +525,11 @@ final class PageController
         $page->title     = trim((string) ($data['title'] ?? $page->title));
         $page->body      = (string) ($data['body'] ?? $page->body);
         $page->metatitle = trim((string) ($data['metatitle'] ?? '')) ?: null;
-        $page->template  = $this->safeTemplate((string) ($data['template'] ?? $page->template), $page->template);
+        $page->template  = $this->safeTemplate(
+            (string) ($data['template'] ?? $page->template),
+            $this->parentPageOf($page->urlPath),
+            $page->template,
+        );
         if (array_key_exists('allowed_child_templates', $data)) {
             $page->allowedChildTemplates = $this->parseTemplateList((string) $data['allowed_child_templates']);
         }
@@ -767,8 +771,10 @@ final class PageController
      * by a real `<name>.twig` file collapses to $fallback ('page' by default).
      * 'layout' is rejected too — it is the base layout, not a page template
      * (mirrors the exclusion in availablePageTemplates() / SettingsController).
+     * A child-only template (hidden from the select) is accepted only under a
+     * $parent that lists it; $parent = null is the root page.
      */
-    private function safeTemplate(string $template, string $fallback = 'page'): string
+    private function safeTemplate(string $template, ?Page $parent, string $fallback = 'page'): string
     {
         $template = trim($template);
         if ($template === '' || $template === 'layout' || $template !== basename($template)
@@ -777,6 +783,9 @@ final class PageController
         }
         if ($this->templatesPath !== ''
             && !is_file(rtrim($this->templatesPath, '/') . '/' . $template . '.twig')) {
+            return $fallback;
+        }
+        if (!$this->content->templateAllowedUnder($parent, $template)) {
             return $fallback;
         }
         return $template;

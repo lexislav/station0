@@ -416,6 +416,22 @@ final class ContentRepository
     }
 
     /**
+     * Whether a page under $parent (null = the root page) may use $template,
+     * as far as child-only templates go: a child-only template is allowed only
+     * where the parent's effective AllowedChildTemplates lists it, mirroring
+     * the admin template select. Every other template passes here; a parent's
+     * own restriction is enforced by assertChildTemplateAllowed().
+     */
+    public function templateAllowedUnder(?Page $parent, string $template): bool
+    {
+        if (!in_array($template, $this->childOnlyTemplates(), true)) {
+            return true;
+        }
+        return $parent !== null
+            && in_array($template, $this->effectiveAllowedChildTemplates($parent), true);
+    }
+
+    /**
      * Throws \RuntimeException if $childTemplate is not allowed under the
      * parent at $parentUrl. Empty/absent parent list = unrestricted.
      */

@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`SecurityHeadersMiddleware`). Public routes are unchanged. They stay up
   to the site or the web server.
 
+### Fixed
+- **A crafted POST could give a page a child-only template.** Templates
+  listed only in some page's `AllowedChildTemplates` are hidden from the
+  template select, but the server still accepted them anywhere. Saving a
+  page now keeps such a template only under a parent that lists it; elsewhere
+  it falls back (`page` for a new page, the current template on edit), as
+  for an unknown template. Correctly placed child pages save as before.
+  New `ContentRepository::templateAllowedUnder()`.
+
 ## [0.9.3] - 2026-10-22
 
 ### Fixed
