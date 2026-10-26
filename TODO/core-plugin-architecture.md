@@ -77,6 +77,8 @@ interface Plugin
 | `twigFunction` / `twigFilter` / `twigGlobal` | public + admin Twig |
 | `templates(namespace, dir)` | e.g. `@redirects/list.twig` for admin views |
 | `adminNav(label, url, role, icon?)` | rendered in `layout.twig` via a `plugin_nav()` Twig function |
+| `contentPanel(target, id, label, template, data, role?)` | a panel on the page / collection-item edit form (see below) |
+| `contentBadge(target, provider, role?)` | small info on a row in the Structure tree / group view / item list (e.g. "3 redirects") |
 | `command(name, callable, help)` | `bin/console` dispatches unknown commands here |
 | `migration(id, sql)` | SQLite schema, applied once, tracked in `station0_migrations` |
 | `translations(locale => array)` | merged into `t` |
@@ -84,6 +86,33 @@ interface Plugin
 `register()` only declares; it runs on every request for enabled plugins, so
 it must stay side-effect free (same rule as task files). Heavy work belongs in
 lazily-built services.
+
+### Content panels and badges
+
+Plugins often hold data *about* a piece of content that lives outside its
+front matter — redirects pointing to a page, form submissions from it, its
+search-index status, SEO checks. The editor should see and manage that on the
+content itself, not only in the plugin's own tab.
+
+- `target` = `page` | `collectionItem` (optionally narrowed: `page:/blog`,
+  `page@article` by template, `collectionItem:products`).
+- `data(Page|CollectionItem $entity, $user): ?array` — called when the edit
+  form renders; `null` hides the panel. Must be cheap (it runs on every edit
+  form open) — read precomputed indexes, not scan everything.
+- The panel template (`@<plugin>/…`) is rendered collapsible below the page
+  fields / visibility panel, in registration order, with `entity`, `data`,
+  `csrf` and the plugin's admin base URL.
+- **Self-contained in v1:** a panel acts through the plugin's own admin routes
+  (`fetch` with the CSRF fields) and does not take part in the page form's
+  save, so plugins can't break saving a page and the page form needs no
+  plugin-specific parsing. Values that must be saved *with* the page belong
+  in page fields. (Joining the form submit — fields posted with the page and
+  handed to the plugin on `page.saved` — is a possible later extension.)
+- A new, unsaved page has no URL / identity yet: panels get `entity = null`
+  and either hide or show "available after the first save".
+- `contentBadge` providers return `?{label, title?, tone?}` per entity for
+  lists; they are called per row, so they must be O(1) against a cached index.
+- `role` hides a panel / badge from users without it (admin always passes).
 
 ### Events
 
@@ -118,7 +147,10 @@ breaks the admin action — same contract as hooks today.
 - Each `Registrar` method covered by a test with a fixture plugin (route
   reachable, admin route role-guarded, middleware present only when `when`
   returns true, nav item rendered, console command runs, migration applied
-  once, event listener called, notFound resolver short-circuits the 404).
+  once, event listener called, notFound resolver short-circuits the 404,
+  content panel rendered on the page and collection-item edit forms with
+  the entity's data and hidden for a `null` result / missing role / new
+  page, badge shown in the Structure tree row).
 - `TaskHooks` runs through `Events`; existing task hook tests pass unchanged.
 - Broken plugin is logged and skipped, app still boots.
 - No measurable overhead with `plugins` empty.

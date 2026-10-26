@@ -155,6 +155,32 @@ Listen to the existing events (`page.saved` with `previous_path`,
 - Writes go through `RedirectStore` (flock + tmp file + rename, then
   recompile), never by string-editing the YAML.
 
+### On the page itself (content panel + badge)
+
+Through the plugin API's `contentPanel` / `contentBadge`
+(`TODO/core-plugin-architecture.md`), each page's edit form gets a
+**"Redirects"** panel:
+
+- **Incoming** — every rule whose target resolves to this page: exact
+  aliases, pattern/regex rules whose static target is this path, and the auto
+  subtree rules that cover it (shown as "via /old-section/… → this page").
+  Each with type, status, auto/manual, hits (when counting is on), remove.
+- **Outgoing / conflicts** — a `force` rule redirecting *from* this page's
+  path (the page is unreachable!) and fallback rules shadowed by it.
+- **"Add old URL"** — creates an exact rule `from: <typed path>` → this page;
+  validated like any rule. Editors may use it (exact rules only).
+- Actions go through the plugin's admin routes, the page form's save is not
+  involved. New page: panel shows "available after the first save".
+- Badge in the Structure tree / group views: number of incoming rules, warning
+  tone when a force rule blocks the page.
+- Needs a reverse index `byTarget` (page path → rule ids) in the compiled
+  set; it is admin-only data, built at compile time, so the panel and per-row
+  badges are O(1). Captured targets (`/articles/{slug}`, `$1`) can't be
+  attributed to one page — listed only in the central view.
+- Deleting a page whose panel lists incoming rules: the delete confirm says
+  so and offers "redirect them to the parent" / "make them 410" / "keep"
+  (the follow-up mentioned under auto-redirects).
+
 ### Validation & safety
 
 - `from` must be a local path; reject sources under `adminPath`, `/thumb`,
@@ -190,6 +216,10 @@ Listen to the existing events (`page.saved` with `previous_path`,
 - Validation tests: open-redirect via captures rejected, reserved sources
   rejected, loops rejected, bad regex rejected with a readable error.
 - 404 log records, ignores, caps and prunes; "Create redirect" from the log.
+- Page edit form shows the Redirects panel with incoming rules (exact, auto
+  subtree, static pattern targets) and blocking force rules; "Add old URL"
+  works for editors; Structure tree badge counts incoming rules. Tests for
+  the `byTarget` index, incl. subtree coverage after a move.
 - Benchmark test (skipped in normal runs, `--group bench`) meets the budget
   above.
 - `docs/redirects.md` + a CLAUDE.md section; CHANGELOG entry.
