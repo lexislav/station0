@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Computed collection titles.** `_collection.yaml` can build an item's
+  title from its fields: `title: "{name} {surname}"`, or
+  `title: {from: "{brand} – {model}", input: editable}`. Literal text
+  between placeholders is kept, and separators left by an empty field are
+  cleaned up. The title input is `readonly` (the default: filled
+  automatically), `hidden`, or `editable`. In editable mode a typed title is
+  kept as an override; the item follows the fields again once the title is
+  cleared or the "Use built title" button is used. The title is stored in
+  `Title:` on save, also for items saved by tasks, so templates, lists and
+  hooks are unchanged. New console command `collections:retitle` updates
+  existing items. Select `option_label` uses the same placeholder rules.
+
 ### Security
 - **Admin pages could be framed by another site (clickjacking).** Every
   response under the admin path, including login, setup, error pages and

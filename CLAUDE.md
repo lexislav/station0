@@ -486,6 +486,38 @@ fields:
 ```
 Supported field types: `text`, `textarea`, `image`, `number`, `select`, `boolean`, `color`. Schema is optional — without it, items are free-form (title + body only).
 
+### Computed title (`title` in `_collection.yaml`)
+
+```yaml
+title: "{name} {surname}"          # shorthand = from + input: readonly
+title:
+  from: "{brand} – {model} ({year})"
+  input: editable                  # readonly (default) | editable | hidden
+```
+
+- Placeholders: schema fields, `{slug}`, `{collection}` (case-insensitive);
+  literal text is kept. `Station0\Support\Placeholders::fill()` (also used
+  for select `option_label`): whitespace collapsed; when a placeholder is
+  empty, the separators it leaves (`- – — , ; : | / ·`) and empty `()` / `[]`
+  are cleaned up (`{brand} - {model}` without model → `Škoda`).
+- **Stored, not computed on read**: `CollectionRepository::save()`
+  (`applyComputedTitle()`) writes the result to `Title:`, so tasks and imports
+  get it too. Empty result → current title, else the slug.
+- `readonly` — input shown, filled live by JS, posted value ignored.
+  `hidden` — no input, a preview line instead.
+  `editable` — **override by comparison**: the item follows the fields while
+  its stored title equals what the pattern built from the stored fields;
+  a different typed title is an override and is kept. Clearing the title or
+  the "Use built title" button (`titleInSync()` false) returns to following.
+- Admin: `CollectionController::resolveTitle()` fills the title before the
+  slug is derived from it; an empty result with no typed title → 422
+  `collections_title_from_empty`. Form gets `titleSpec` (+ field `labels`) and
+  `titleInSync`; the JS in `collections/form.twig` mirrors `Placeholders`.
+- Limits: `{field}` is the stored value (select = slug/path, image = filename,
+  boolean = `true`/`false`). Existing items change on their next save or with
+  `php vendor/bin/console collections:retitle [name…] [--dry-run]` (in
+  `editable` mode only items without an own title).
+
 **Twig functions (registered in Bootstrap):**
 ```twig
 collection('banners')                    {# → CollectionItem[]  (published only) #}

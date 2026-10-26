@@ -150,6 +150,11 @@ return [
     'collections_field_sort'     => 'Sort',
     'collections_field_body'     => 'Body',
     'collections_field_body_hint' => 'Markdown or YAML block list. Rendered via render_collection_item() in templates.',
+    'collections_title_from'      => 'Title is built from',
+    'collections_title_auto_hint' => 'Filled in from the fields until you type a title of your own.',
+    'collections_title_override'  => 'Typed by hand — it no longer follows the fields.',
+    'collections_title_reset'     => 'Use built title',
+    'collections_title_from_empty' => 'The title is built from other fields. Fill in at least one of them.',
 
     // Settings
     'settings_title'        => 'Site Settings',
