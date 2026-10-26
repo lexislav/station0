@@ -6,7 +6,9 @@ namespace Station0\Controller;
 
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Log\LoggerInterface;
 use Slim\Views\Twig;
+use Station0\Plugin\Plugins;
 use Station0\Service\ContentRepository;
 use Station0\Service\Page;
 use Station0\Service\PageFields;
@@ -22,6 +24,7 @@ final class PageController
      * @param ?callable(): bool $canPreview  true for a signed-in admin / editor;
      *        only called for a page that is not live
      * @param array<string, string> $lang    admin translations (preview bar)
+     * @param ?Plugins $plugins              their notFound() resolvers run before a 404 / 410 page
      */
     public function __construct(
         private readonly ContentRepository $content,
@@ -31,6 +34,8 @@ final class PageController
         ?callable $canPreview = null,
         private readonly string $adminPath = '/admin',
         private readonly array $lang = [],
+        private readonly ?Plugins $plugins = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {
         $this->canPreview = $canPreview !== null ? \Closure::fromCallable($canPreview) : static fn (): bool => false;
     }
@@ -52,14 +57,14 @@ final class PageController
         $page = $this->content->find($urlPath);
 
         if ($page === null) {
-            return $this->notFound($response, $urlPath, 404);
+            return $this->notFound($request, $response, $urlPath, 404);
         }
 
         // A non-live page: signed-in editors get a preview, everyone else
         // 404 — or 410 when it (or the hiding ancestor) is archived / expired.
         $preview = !$page->isLive();
         if ($preview && !($this->canPreview)()) {
-            return $this->notFound($response, $urlPath, $page->httpStatus());
+            return $this->notFound($request, $response, $urlPath, $page->httpStatus());
         }
 
         $html     = $this->renderer->render($page, $this->content->mtime($page->urlPath));
@@ -83,9 +88,16 @@ final class PageController
         return $response;
     }
 
-    /** 404 / 410 page; a 410 uses the site's `410.twig` when it has one. */
-    private function notFound(Response $response, string $urlPath, int $status): Response
+    /**
+     * 404 / 410 page; a 410 uses the site's `410.twig` when it has one.
+     * A plugin resolver (e.g. a redirect rule) may answer first.
+     */
+    private function notFound(Request $request, Response $response, string $urlPath, int $status): Response
     {
+        $resolved = $this->plugins?->resolveNotFound($request, $response, $urlPath, $status, $this->logger);
+        if ($resolved !== null) {
+            return $resolved;
+        }
         $template = $status === 410 && $this->twig->getLoader()->exists('410.twig') ? '410.twig' : '404.twig';
         return $this->twig->render($response->withStatus($status), $template, [
             'urlPath' => $urlPath,

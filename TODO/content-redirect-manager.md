@@ -4,7 +4,7 @@ status: open
 priority: medium
 area: content
 created: 2026-10-26
-related: [TODO/core-plugin-architecture.md, src/Controller/PageController.php (notFound), src/Controller/Admin/PageController.php (rename ~571, move ~208), src/Service/ContentRepository.php (rename, move), src/Controller/AssetController.php, src/Bootstrap.php (registerRoutes)]
+related: [docs/plugins.md (plugin API), src/Controller/PageController.php (notFound), src/Controller/Admin/PageController.php (rename ~571, move ~208), src/Service/ContentRepository.php (rename, move), src/Controller/AssetController.php, src/Bootstrap.php (registerRoutes)]
 ---
 
 ## Problem
@@ -28,8 +28,8 @@ into which URLs visitors actually hit and miss.
 
 ## Proposed fix
 
-Ship it as the first bundled plugin (`redirects`) on top of
-`TODO/core-plugin-architecture.md`, off by default:
+Ship it as the first bundled plugin (`redirects`) on top of the plugin API
+(`docs/plugins.md`), off by default:
 
 ```php
 // site/config.php
@@ -42,9 +42,6 @@ Ship it as the first bundled plugin (`redirects`) on top of
     ],
 ],
 ```
-
-If the plugin API is not ready, the same design works as a core service behind
-`'redirects' => ['enabled' => true]`; only the wiring differs.
 
 ### Rules file — `site/content/_redirects.yaml`
 
@@ -158,7 +155,7 @@ Listen to the existing events (`page.saved` with `previous_path`,
 ### On the page itself (content panel + badge)
 
 Through the plugin API's `contentPanel` / `contentBadge`
-(`TODO/core-plugin-architecture.md`), each page's edit form gets a
+(`docs/plugins.md`), each page's edit form gets a
 **"Redirects"** panel:
 
 - **Incoming** — every rule whose target resolves to this page: exact

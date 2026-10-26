@@ -415,6 +415,23 @@ return [
 Forms post with the `csrf` fields. A handler can grant a time-limited guest
 pass (`$ctx->visitor()->grantPass(...)`), e.g. after its own verification.
 
+## Plugins (experimental)
+
+Optional features are enabled per site in `site/config.php`. A plugin that
+is not listed is never loaded.
+
+```php
+'plugins' => [
+    'redirects' => ['log404' => true],          // bundled with station0
+    \Acme\Station0Sitemap\Plugin::class => [],  // from a Composer package
+],
+```
+
+A plugin can add routes, admin pages and menu tabs, middleware, content
+event listeners, 404 handling, Twig functions, console commands, SQLite
+tables, and panels and badges on pages and collection items. See
+[docs/plugins.md](docs/plugins.md).
+
 ## CLI (via skeleton)
 
 ```bash
@@ -427,6 +444,7 @@ php vendor/bin/console thumbs:clear
 php vendor/bin/console collections:retitle [name…] [--dry-run]   # recompute computed titles
 php vendor/bin/console task:list                  # site tasks (site/tasks/)
 php vendor/bin/console task:run <name> [--param=value]
+php vendor/bin/console plugins:list               # enabled plugins, their commands and migrations
 ```
 
 ## Package structure
@@ -436,6 +454,8 @@ admin/templates/   Admin Twig templates
 bin/console        CLI binary (exposed via composer bin)
 config/roles.php   Role definitions
 src/               PHP source (namespace Station0\)
+src/Plugin/        Plugin API and bundled plugins
+docs/              Reference docs (visibility, plugins)
 ```
 
 ## License

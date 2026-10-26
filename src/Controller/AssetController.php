@@ -6,6 +6,8 @@ namespace Station0\Controller;
 
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Log\LoggerInterface;
+use Station0\Plugin\Plugins;
 use Station0\Service\MediaService;
 use Station0\Service\ThumbService;
 
@@ -18,6 +20,9 @@ final class AssetController
     public function __construct(
         private readonly MediaService $media,
         private readonly ?ThumbService $thumbs = null,
+        /** Their notFound() resolvers may answer a missing /media file. */
+        private readonly ?Plugins $plugins = null,
+        private readonly ?LoggerInterface $logger = null,
     ) {}
 
     public function thumb(Request $request, Response $response, array $args): Response
@@ -44,7 +49,8 @@ final class AssetController
         $path = (string) ($args['path'] ?? '');
         $asset = $this->media->resolveAsset($path);
         if ($asset === null) {
-            return $response->withStatus(404);
+            return $this->plugins?->resolveNotFound($request, $response, '/media/' . ltrim($path, '/'), 404, $this->logger)
+                ?? $response->withStatus(404);
         }
 
         $response = $this->send($response, $asset['path'], $asset['mime']);

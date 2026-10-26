@@ -33,6 +33,7 @@
                         {{ item.title }}
                     </a>
                     <code class="muted" style="font-size:.78rem; margin-left:.4rem;">{{ item.slug }}</code>
+                    {% include '@admin/_plugin_badges.twig' with {entity: item} %}
                 </td>
                 <td>
                     {% include '@admin/_visibility_status.twig' with {entry: item} only %}

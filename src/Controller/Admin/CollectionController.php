@@ -14,8 +14,8 @@ use Station0\Service\CollectionRepository;
 use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
 use Station0\Service\MediaService;
-use Station0\Service\TaskHooks;
 use Station0\Service\ThumbService;
+use Station0\Support\Events;
 use Station0\Support\FieldSchema;
 use Station0\Support\Slug;
 use Station0\Support\Visibility;
@@ -32,7 +32,7 @@ final class CollectionController
         private readonly FieldOptions $fieldOptions = new FieldOptions(),
         private readonly ?NavGroups $groups = null,
         private readonly ?ThumbService $thumbs = null,
-        private readonly ?TaskHooks $hooks = null,
+        private readonly ?Events $events = null,
     ) {}
 
     // ─── Collection list ───
@@ -149,7 +149,7 @@ final class CollectionController
         $filePath = rtrim($this->collections->itemDir($name, $slug), '/') . '/item.txt';
         $this->collections->save($item, $filePath);
         $this->cache->flush();
-        $this->hooks?->dispatch('collection.item.saved', [
+        $this->events?->dispatch('collection.item.saved', [
             'collection' => $name, 'slug' => $slug, 'title' => $item->title, 'created' => true,
         ]);
 
@@ -226,7 +226,7 @@ final class CollectionController
 
         $this->collections->save($item);
         $this->cache->flush();
-        $this->hooks?->dispatch('collection.item.saved', [
+        $this->events?->dispatch('collection.item.saved', [
             'collection' => $name, 'slug' => $item->slug, 'title' => $item->title, 'created' => false,
         ] + ($item->slug !== $slug ? ['previous_slug' => $slug] : []));
 
@@ -247,7 +247,7 @@ final class CollectionController
         $deleted = $this->collections->delete($name, $slug);
         $this->cache->flush();
         if ($deleted && $item !== null) {
-            $this->hooks?->dispatch('collection.item.deleted', [
+            $this->events?->dispatch('collection.item.deleted', [
                 'collection' => $name, 'slug' => $slug, 'title' => $item->title,
             ]);
         }

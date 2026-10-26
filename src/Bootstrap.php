@@ -14,6 +14,7 @@ use League\CommonMark\Environment\Environment;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
 use PDO;
+use Psr\Log\LoggerInterface;
 use Slim\App;
 use Slim\Csrf\Guard;
 use Slim\Factory\AppFactory;
@@ -37,6 +38,9 @@ use Station0\Middleware\AccessMiddleware;
 use Station0\Middleware\AuthMiddleware;
 use Station0\Middleware\RoleMiddleware;
 use Station0\Middleware\VisitorMiddleware;
+use Station0\Plugin\Migrations;
+use Station0\Plugin\Plugins;
+use Station0\Plugin\TwigExtension as PluginTwigExtension;
 use Station0\Service\AccessPolicy;
 use Station0\Service\ActionContext;
 use Station0\Service\ActionRegistry;
@@ -63,6 +67,7 @@ use Station0\Service\ThumbService;
 use Station0\Service\UserRepository;
 use Station0\Service\VisibilityHorizon;
 use Station0\Service\Visitor;
+use Station0\Support\Events;
 
 final class Bootstrap
 {
@@ -84,13 +89,24 @@ final class Bootstrap
 
         self::startSession($config);
 
-        $container = self::buildContainer($config, $roles, $station0Root);
+        $logger = self::logger($config);
+        return self::app(self::container($config, $roles, $station0Root, self::plugins($config, $logger), $logger));
+    }
+
+    /**
+     * The Slim app around a container from container(): middleware stack and
+     * routes. Split from createApp() so tests can swap services first.
+     */
+    public static function app(Container $container): App
+    {
+        $config = $container->get('config');
 
         AppFactory::setContainer($container);
         $app = AppFactory::create();
 
         $app->addRoutingMiddleware();
         $app->add(TwigMiddleware::createFromContainer($app, Twig::class));
+        self::addPluginMiddleware($app);
         $app->add(new \Station0\Middleware\CsrfTwigGlobalMiddleware(
             $container->get(Guard::class),
             $container->get(Twig::class),
@@ -124,33 +140,61 @@ final class Bootstrap
         session_start();
     }
 
-    private static function buildContainer(array $config, array $roles, string $station0Root): Container
+    /** The app log (writable/logs/app.log). Shared with bin/console. */
+    public static function logger(array $config): Logger
     {
+        $logger = new Logger('station0');
+        $logger->pushHandler(new StreamHandler($config['paths']['logs'] . '/app.log', Logger::DEBUG));
+        return $logger;
+    }
+
+    /**
+     * Enabled plugins (`plugins` config, see Plugins). Unlisted plugins are
+     * never loaded; with none listed this is free. Shared with bin/console.
+     */
+    public static function plugins(array $config, ?LoggerInterface $logger = null): Plugins
+    {
+        $list = (array) ($config['plugins'] ?? []);
+        return $list === [] ? Plugins::none() : Plugins::load($list, $config['adminPath'] ?? '/admin', $logger);
+    }
+
+    /**
+     * The DI container with every core service and the plugins' services.
+     * Lazy: nothing is built until asked for. Shared with bin/console
+     * (plugin commands).
+     */
+    public static function container(
+        array $config,
+        array $roles,
+        string $station0Root,
+        ?Plugins $plugins = null,
+        ?LoggerInterface $logger = null,
+    ): Container {
+        $plugins ??= Plugins::none();
         $container = new Container();
 
         $container->set('config', $config);
         $container->set('roles', $roles);
         $container->set('station0Root', $station0Root);
+        $container->set(Plugins::class, $plugins);
 
         // Admin UI translations — set 'admin_locale' in site/config.php ('en' default).
         // Missing keys always fall back to the English base. Shared by Twig (as the
         // `t` global) and by controllers that emit user-facing messages.
-        $container->set('lang', function () use ($config, $station0Root) {
+        // Plugin strings sit under the core ones (core keys win).
+        $container->set('lang', function () use ($config, $station0Root, $plugins) {
             $locale   = preg_replace('/[^a-z]/', '', strtolower($config['admin_locale'] ?? 'en'));
             $langFile = $station0Root . '/admin/lang/' . $locale . '.php';
             $base     = require $station0Root . '/admin/lang/en.php';
-            return is_file($langFile) && $langFile !== $station0Root . '/admin/lang/en.php'
+            $core     = is_file($langFile) && $langFile !== $station0Root . '/admin/lang/en.php'
                 ? array_merge($base, require $langFile)
                 : $base;
+            return $plugins->isEmpty() ? $core : array_merge($plugins->translations($locale), $core);
         });
 
-        $container->set(Logger::class, function () use ($config) {
-            $logger = new Logger('station0');
-            $logger->pushHandler(new StreamHandler($config['paths']['logs'] . '/app.log', Logger::DEBUG));
-            return $logger;
-        });
+        $container->set(Logger::class, $logger ?? self::logger($config));
 
-        $container->set(PDO::class, function () use ($config) {
+        $container->set(PDO::class, function ($c) use ($config, $plugins) {
             $dbPath = $config['paths']['db'];
             // An empty file (left by an earlier failed run) still needs the schema.
             $fresh = !file_exists($dbPath) || filesize($dbPath) === 0;
@@ -160,6 +204,11 @@ final class Bootstrap
                 $schema = file_get_contents($config['paths']['projectRoot'] . '/vendor/delight-im/auth/Database/SQLite.sql');
                 $pdo->exec($schema);
             }
+            // Plugin schema changes, once each (see Registrar::migration()).
+            $migrations = $plugins->migrations();
+            if ($migrations !== []) {
+                Migrations::apply($pdo, $migrations, $c->get(Logger::class));
+            }
             return $pdo;
         });
 
@@ -167,14 +216,28 @@ final class Bootstrap
             return new Auth($c->get(PDO::class), $_SERVER['REMOTE_ADDR'] ?? null);
         });
 
-        $container->set(Twig::class, function ($c) use ($config, $station0Root) {
-            $twig = Twig::create([
+        $container->set(Twig::class, function ($c) use ($config, $station0Root, $plugins) {
+            $paths = [
                 FilesystemLoader::MAIN_NAMESPACE => $config['paths']['templates'],
                 'admin'                          => $config['paths']['adminTemplates'],
-            ], [
+            ];
+            // Plugin template namespaces (@redirects/…).
+            foreach ($plugins->all('templates') as [, $dir, $namespace]) {
+                $paths[$namespace] ??= $dir;
+            }
+            $twig = Twig::create($paths, [
                 'cache'       => $config['debug'] ? false : $config['paths']['cache'] . '/twig',
                 'auto_reload' => true,
             ]);
+            // Plugin functions / filters / globals and the admin hooks
+            // plugin_nav(), plugin_panels(), plugin_badges().
+            $twig->addExtension(new PluginTwigExtension(
+                $plugins,
+                fn (string $role): bool => ($c->get('admin.can'))($role),
+                fn (): array => ($c->get('admin.user'))(),
+                $config['adminPath'],
+                $c->get(Logger::class),
+            ));
             $twig->getEnvironment()->addGlobal('app', [
                 'name'          => $config['name'],
                 'baseUrl'       => $config['baseUrl'],
@@ -350,7 +413,12 @@ final class Bootstrap
         });
 
         $container->set(Guard::class, function () {
-            $guard = new Guard(new ResponseFactory());
+            // Session storage; an array only without a session (tests, CLI).
+            $storage = null;
+            if (session_status() !== PHP_SESSION_ACTIVE) {
+                $storage = [];
+            }
+            $guard = new Guard(new ResponseFactory(), 'csrf', $storage);
             // Keep the same token valid across the session — async POSTs (uploads, etc.)
             // reuse the token rendered into the page; per-request rotation breaks them.
             $guard->setPersistentTokenMode(true);
@@ -521,6 +589,29 @@ final class Bootstrap
             $c->get(Logger::class),
         ));
         $container->set('middleware.role', fn ($c) => fn (string $name) => new RoleMiddleware($c->get(Auth::class), $roles, $name));
+        // The signed-in admin user has a role (admin always passes) — plugin
+        // nav, panels and badges.
+        $container->set('admin.can', fn ($c) => function (string $role) use ($c, $roles): bool {
+            $auth = $c->get(Auth::class);
+            if (!$auth->isLoggedIn()) {
+                return false;
+            }
+            return $auth->hasRole($roles['admin']) || (isset($roles[$role]) && $auth->hasRole($roles[$role]));
+        });
+        // The signed-in admin user, as plugin panel callbacks get it.
+        $container->set('admin.user', fn ($c) => function () use ($c, $roles): array {
+            $auth = $c->get(Auth::class);
+            if (!$auth->isLoggedIn()) {
+                return [];
+            }
+            $names = array_keys(array_filter($roles, fn (int $value) => $auth->hasRole($value)));
+            return [
+                'id'      => (int) $auth->getUserId(),
+                'email'   => (string) $auth->getEmail(),
+                'roles'   => $names,
+                'isAdmin' => in_array('admin', $names, true),
+            ];
+        });
 
         $container->set(DashboardController::class, fn ($c) => new DashboardController(
             $c->get(Auth::class),
@@ -547,6 +638,8 @@ final class Bootstrap
             },
             $config['adminPath'],
             $c->get('lang'),
+            $plugins->isEmpty() ? null : $plugins,
+            $c->get(Logger::class),
         ));
 
         $container->set(AdminPageController::class, fn ($c) => new AdminPageController(
@@ -561,7 +654,7 @@ final class Bootstrap
             $config['adminPath'],
             $config['paths']['templates'],
             $c->get(FieldOptions::class),
-            $c->get(TaskHooks::class),
+            $c->get(Events::class),
             $c->get(NavGroups::class),
         ));
 
@@ -615,7 +708,7 @@ final class Bootstrap
             $c->get(FieldOptions::class),
             $c->get(NavGroups::class),
             $c->get(ThumbService::class),
-            $c->get(TaskHooks::class),
+            $c->get(Events::class),
         ));
 
         $container->set(ThumbService::class, fn ($c) => self::thumbService(
@@ -627,6 +720,8 @@ final class Bootstrap
         $container->set(AssetController::class, fn ($c) => new AssetController(
             $c->get(MediaService::class),
             $c->get(ThumbService::class),
+            $plugins->isEmpty() ? null : $plugins,
+            $c->get(Logger::class),
         ));
 
         $container->set(TaskRegistry::class, fn ($c) => new TaskRegistry(
@@ -660,6 +755,15 @@ final class Bootstrap
             $c->get(Logger::class),
         ));
 
+        // Content events from the admin. Plugins listen first, then site
+        // tasks subscribed with `on` (TaskHooks — one listener for all).
+        $container->set(Events::class, function ($c) use ($plugins) {
+            $events = new Events($c->get(Logger::class));
+            $plugins->subscribe($events);
+            $events->on('*', fn (array $payload, string $event) => $c->get(TaskHooks::class)->dispatch($event, $payload));
+            return $events;
+        });
+
         $container->set(TaskController::class, fn ($c) => new TaskController(
             $c->get(TaskRegistry::class),
             $c->get(TaskLauncher::class),
@@ -680,7 +784,39 @@ final class Bootstrap
             $station0Root,
         ));
 
+        // Plugin services — new ids only; core definitions are not replaceable.
+        $core = array_flip($container->getKnownEntryNames());
+        foreach ($plugins->all('services') as [$name, $factory, $id]) {
+            if (isset($core[$id])) {
+                $container->get(Logger::class)->error(sprintf("Plugin '%s': service '%s' is a core service, not replaced.", $name, $id));
+                continue;
+            }
+            $container->set($id, $factory);
+        }
+        $plugins->bind($container);
+
         return $container;
+    }
+
+    /**
+     * Global plugin middleware, inside the CSRF guard / visitor middleware
+     * and around routing; the first declared runs first. A `when` closure
+     * decides once here whether the middleware is added at all.
+     */
+    private static function addPluginMiddleware(App $app): void
+    {
+        $container = $app->getContainer();
+        $plugins   = $container->get(Plugins::class);
+        foreach (array_reverse($plugins->all('middleware')) as [$name, $item]) {
+            try {
+                if ($item['when'] !== null && !($item['when'])()) {
+                    continue;
+                }
+                $app->add($item['middleware']);
+            } catch (\Throwable $e) {
+                $container->get(Logger::class)->error(sprintf("Plugin '%s' middleware skipped: %s", $name, $e->getMessage()));
+            }
+        }
     }
 
     private static function registerRoutes(App $app): void
@@ -688,6 +824,9 @@ final class Bootstrap
         $container = $app->getContainer();
         $roleMiddleware = fn (string $name) => $container->get('middleware.role')($name);
         $adminPath = $container->get('config')['adminPath'];
+        $plugins   = $container->get(Plugins::class);
+        $roles     = $container->get('roles');
+        $logger    = $container->get(Logger::class);
 
         $access     = $container->get(AccessPolicy::class);
         $visitor    = $container->get(Visitor::class);
@@ -696,7 +835,7 @@ final class Bootstrap
 
         $app->get('/', [PageController::class, 'home'])->setName('home')->add($pageAccess);
 
-        $app->group($adminPath, function ($group) use ($roleMiddleware) {
+        $app->group($adminPath, function ($group) use ($roleMiddleware, $plugins, $roles, $logger) {
             $group->get('/setup', [SetupController::class, 'showSetup'])->setName('admin.setup');
             $group->post('/setup', [SetupController::class, 'setup']);
             $group->get('/login', [AuthController::class, 'showLogin'])->setName('admin.login');
@@ -706,7 +845,7 @@ final class Bootstrap
             $group->get('/reset-password', [AuthController::class, 'showResetPassword'])->setName('admin.reset-password');
             $group->post('/reset-password', [AuthController::class, 'resetPassword']);
 
-            $group->group('', function ($authed) use ($roleMiddleware) {
+            $group->group('', function ($authed) use ($roleMiddleware, $plugins, $roles, $logger) {
                 $authed->post('/logout', [AuthController::class, 'logout'])->setName('admin.logout');
                 $authed->get('', [DashboardController::class, 'index'])->setName('admin.dashboard');
                 $authed->get('/', [DashboardController::class, 'index']);
@@ -748,6 +887,15 @@ final class Bootstrap
                 $authed->get('/settings', [SettingsController::class, 'index'])
                     ->setName('admin.settings')
                     ->add($roleMiddleware('admin'));
+
+                // Plugin admin pages: {adminPath}/{plugin}/…, behind their role.
+                foreach ($plugins->all('adminRoutes') as [$name, $item]) {
+                    if (!isset($roles[$item['role']])) {
+                        $logger->error(sprintf("Plugin '%s': admin routes skipped, unknown role '%s'.", $name, $item['role']));
+                        continue;
+                    }
+                    $authed->group('/' . $name, $item['routes'])->add($roleMiddleware($item['role']));
+                }
             })->add(AuthMiddleware::class);
         });
 
@@ -781,6 +929,11 @@ final class Bootstrap
             $app->get($loginPath . '/link', [MemberAuthController::class, 'followLink']);
             $app->post($loginPath . '/password', [MemberAuthController::class, 'setPassword'])->setName('member.password');
             $app->post($loginPath . '/logout', [MemberAuthController::class, 'logout'])->setName('member.logout');
+        }
+
+        // Plugin public routes, before site actions and the catch-all.
+        foreach ($plugins->all('publicRoutes') as [, $routes]) {
+            $routes($app);
         }
 
         self::registerActions($app);
