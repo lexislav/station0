@@ -5,6 +5,17 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **Admin pages could be framed by another site (clickjacking).** Every
+  response under the admin path, including login, setup, error pages and
+  admin assets, now sends `X-Frame-Options: DENY`,
+  `Content-Security-Policy: frame-ancestors 'none'`,
+  `Referrer-Policy: same-origin` and `X-Content-Type-Options: nosniff`
+  (`SecurityHeadersMiddleware`). Public routes are unchanged. They stay up
+  to the site or the web server.
+
 ## [0.9.3] - 2026-10-22
 
 ### Fixed
