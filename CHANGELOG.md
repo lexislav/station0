@@ -5,7 +5,7 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.10.0] - 2026-10-26
 
 ### Added
 - **Computed collection titles.** `_collection.yaml` can build an item's
@@ -429,6 +429,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.10.0]: https://github.com/lexislav/station0/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/lexislav/station0/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/lexislav/station0/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/lexislav/station0/compare/v0.9.0...v0.9.1
