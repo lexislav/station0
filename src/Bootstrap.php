@@ -99,6 +99,8 @@ final class Bootstrap
         $app->add($container->get(Guard::class));
 
         $app->addErrorMiddleware($config['debug'], true, true, $container->get(Logger::class));
+        // Outermost, so admin error pages get the headers too.
+        $app->add(new \Station0\Middleware\SecurityHeadersMiddleware($config['adminPath']));
 
         self::registerRoutes($app);
 

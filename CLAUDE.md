@@ -74,12 +74,16 @@ YAML. Keys are lower-cased on read. Serializing omits `null` / `''` / `[]`.
 
 Global, outermost first (Slim runs the last-added first):
 
-1. `ErrorMiddleware`
-2. `Guard` (CSRF — every POST/PUT/PATCH/DELETE, public routes included)
-3. `VisitorMiddleware` — loads the public-site visitor (pass cookie), `visitor` Twig global, writes pass cookies
-4. `CsrfTwigGlobalMiddleware` — `csrf` Twig global
-5. `TwigMiddleware`
-6. `RoutingMiddleware`
+1. `SecurityHeadersMiddleware` — admin paths only: `X-Frame-Options: DENY`,
+   `Content-Security-Policy: frame-ancestors 'none'`, `Referrer-Policy: same-origin`,
+   `X-Content-Type-Options: nosniff` (outermost, so error pages get them too;
+   headers a controller set are kept)
+2. `ErrorMiddleware`
+3. `Guard` (CSRF — every POST/PUT/PATCH/DELETE, public routes included)
+4. `VisitorMiddleware` — loads the public-site visitor (pass cookie), `visitor` Twig global, writes pass cookies
+5. `CsrfTwigGlobalMiddleware` — `csrf` Twig global
+6. `TwigMiddleware`
+7. `RoutingMiddleware`
 
 Route middleware:
 
