@@ -26,6 +26,12 @@
                     {%- elseif g.icon %}<span class="nav-icon">{{ g.icon }}</span>{% endif -%}
                     {{ g.label }}</a>
             {% endfor %}
+            {% for item in plugin_nav() %}
+                <a data-nav="{{ item.id }}" href="{{ item.url }}">
+                    {%- if item.icon starts with '<svg' %}<span class="nav-icon">{{ item.icon|raw }}</span>
+                    {%- elseif item.icon %}<span class="nav-icon">{{ item.icon }}</span>{% endif -%}
+                    {{ attribute(t, item.label) ?? item.label }}</a>
+            {% endfor %}
             {% if has_tasks() %}
                 <a data-nav="tasks" href="{{ app.adminPath }}/tasks">{{ t.nav_tasks }}</a>
             {% endif %}

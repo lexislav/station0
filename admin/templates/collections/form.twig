@@ -219,6 +219,8 @@
     </div>
 </form>
 
+{% include '@admin/_plugin_panels.twig' with {kind: 'collectionItem', entity: isNew ? null : item} %}
+
 {# Hidden file input for image field uploads #}
 <input type="file" id="collection-file-input" accept="image/*" style="display:none;">
 

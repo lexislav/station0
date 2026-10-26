@@ -19,6 +19,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Title:` on save, also for items saved by tasks, so templates, lists and
   hooks are unchanged. New console command `collections:retitle` updates
   existing items. Select `option_label` uses the same placeholder rules.
+- **Plugins (experimental).** Optional features can be enabled per site in
+  `site/config.php` under `'plugins' => [...]`. A short name loads a plugin
+  bundled with station0 (`src/Plugin/<Name>`), and a class name loads one
+  from a Composer package. A plugin that is not listed is never loaded, so
+  a site without plugins runs as before. A plugin implements
+  `Station0\Plugin\Plugin` (`name()`, `register(Registrar)`) and can declare
+  services, public and admin routes, middleware that is added only when it
+  is needed, content event listeners, 404/410 resolvers, Twig functions,
+  filters, globals and templates, admin menu tabs, console commands, SQLite
+  migrations (`station0_migrations`) and admin translations. It can also add
+  **panels** to the page and collection-item edit forms and **badges** to
+  their list rows. A plugin that fails to load is logged and skipped, and the
+  site keeps running. New console command `plugins:list`. See
+  `docs/plugins.md`.
+- **Content events dispatcher** `Station0\Support\Events`. The admin's
+  `page.*` and `collection.item.*` events now go through it. Site task hooks
+  (`TaskHooks`) are one listener of it and plugins can be others. Event names,
+  payloads and the hook behavior are unchanged.
+
+### Changed
+- The admin `PageController` and `CollectionController` take an
+  `?Events` dispatcher where they took `?TaskHooks`.
+- `RoleMiddleware` always lets the `admin` role through, so a route that
+  needs `editor` also works for admins. Core routes only check `admin`, so
+  they behave as before.
 
 ### Security
 - **Admin pages could be framed by another site (clickjacking).** Every

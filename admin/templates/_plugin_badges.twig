@@ -1,0 +1,4 @@
+{# Plugin badges on a list row (Registrar::contentBadge); entity: Page or CollectionItem. #}
+{% for b in plugin_badges(entity) %}
+    <span class="badge-plugin tone-{{ b.tone }}" data-plugin="{{ b.plugin }}"{% if b.title %} title="{{ b.title }}"{% endif %}>{{ b.label }}</span>
+{% endfor %}

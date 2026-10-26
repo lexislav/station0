@@ -71,6 +71,10 @@ ini_set('session.cache_limiter', '');
 $auth = new Auth($pdo);
 $users = new UserRepository($auth, $pdo, $roles);
 
+// Enabled plugins (`plugins` config) — their commands run in the default branch.
+$logger  = \Station0\Bootstrap::logger($config);
+$plugins = \Station0\Bootstrap::plugins($config, $logger);
+
 $command = $argv[1] ?? 'help';
 $args = array_slice($argv, 2);
 
@@ -337,8 +341,37 @@ switch ($command) {
         });
         exit($result['exit'] === 0 ? 0 : max(1, min(255, (int) $result['exit'])));
 
+    case 'plugins:list':
+        if ($plugins->isEmpty()) {
+            echo "Žádné zapnuté pluginy (config `plugins`).\n";
+            break;
+        }
+        $container = \Station0\Bootstrap::container($config, $roles, $station0Root, $plugins, $logger);
+        $applied = [];
+        if ($plugins->migrations() !== []) {
+            $container->get(\PDO::class); // applies pending migrations
+            $applied = array_flip($pdo->query('SELECT id FROM ' . \Station0\Plugin\Migrations::TABLE)->fetchAll(\PDO::FETCH_COLUMN));
+        }
+        foreach ($plugins->registrars() as $name => $registrar) {
+            printf("  %-16s %s\n", $name, get_class($registrar->plugin()));
+            foreach ($registrar->declarations()['commands'] as $cmd => $def) {
+                printf("  %-16s   %s  %s\n", '', $cmd, $def['help']);
+            }
+            foreach (array_keys($registrar->declarations()['migrations']) as $id) {
+                printf("  %-16s   migrace %s%s\n", '', $id, isset($applied[$name . '.' . $id]) ? '' : '  [neaplikována]');
+            }
+        }
+        break;
+
     case 'help':
     default:
+        $pluginCommand = $command !== 'help' ? $plugins->command($command) : null;
+        if ($pluginCommand !== null) {
+            // Builds the (lazy) container and binds it, so the handler's $r->get() works.
+            \Station0\Bootstrap::container($config, $roles, $station0Root, $plugins, $logger);
+            $exit = ($pluginCommand['handler'])($args);
+            exit(is_int($exit) ? max(0, min(255, $exit)) : 0);
+        }
         echo "Station0 console\n";
         echo "  user:create <username> <email> [role]    Vytvoří uživatele (role: admin|editor)\n";
         echo "  user:reset-password <email>   Resetuje heslo\n";
@@ -349,5 +382,11 @@ switch ($command) {
         echo "  collections:retitle [name…] [--dry-run]  Přepočítá titulky položek podle vzoru title v _collection.yaml\n";
         echo "  task:list                     Vypíše úlohy webu (site/tasks/*.php)\n";
         echo "  task:run <name> [--param=value]  Spustí úlohu webu\n";
+        echo "  plugins:list                  Vypíše zapnuté pluginy, jejich příkazy a migrace\n";
+        foreach ($plugins->registrars() as $name => $registrar) {
+            foreach ($registrar->declarations()['commands'] as $cmd => $def) {
+                printf("  %-29s %s [%s]\n", $cmd, $def['help'], $name);
+            }
+        }
         break;
 }

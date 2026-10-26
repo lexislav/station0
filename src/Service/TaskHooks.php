@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Station0\Service;
 
 use Psr\Log\LoggerInterface;
+use Station0\Support\Events;
 
 /**
  * Hooks — site tasks that run on content events. A task subscribes with
@@ -25,7 +26,9 @@ use Psr\Log\LoggerInterface;
  *   collection.item.saved    collection, slug, title, created (bool), previous_slug (after a rename)
  *   collection.item.deleted  collection, slug, title
  *
- * Every payload also carries `event` (its name). Hook runs start via
+ * Every payload also carries `event` (its name). The admin dispatches into
+ * Station0\Support\Events; TaskHooks is one listener of it (wired in
+ * Bootstrap), plugins may be others. Hook runs start via
  * TaskLauncher (background unless the task says `'background' => false`),
  * with param defaults; a task with a required param that has no default is
  * not run. A failing hook never breaks the admin action — errors are logged.
@@ -111,34 +114,9 @@ final class TaskHooks
         ));
     }
 
+    /** Pattern matching shared with the content event dispatcher (see Events). */
     public static function matches(string $pattern, string $event, array $payload = []): bool
     {
-        [$name, $filter] = array_pad(explode(':', $pattern, 2), 2, null);
-        if (!fnmatch(trim((string) $name), $event)) {
-            return false;
-        }
-        $filter = trim((string) $filter);
-        if ($filter === '') {
-            return true;
-        }
-
-        if (str_starts_with($event, 'page.')) {
-            $prefix = '/' . trim($filter, '/');
-            foreach ([$payload['path'] ?? null, $payload['previous_path'] ?? null] as $path) {
-                if (!is_string($path)) {
-                    continue;
-                }
-                if ($prefix === '/' || $path === $prefix || str_starts_with($path, $prefix . '/')) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        if (str_starts_with($event, 'collection.')) {
-            return is_string($payload['collection'] ?? null) && fnmatch($filter, $payload['collection']);
-        }
-
-        return false;
+        return Events::matches($pattern, $event, $payload);
     }
 }

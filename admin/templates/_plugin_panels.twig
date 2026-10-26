@@ -1,0 +1,32 @@
+{#
+  Plugin content panels (Registrar::contentPanel) below an edit form.
+  kind: 'page' | 'collectionItem'; entity: the saved page / item, null when new.
+  Panels act through their plugin's admin routes — never through the form's save.
+#}
+{% set panels = plugin_panels(kind, entity, csrf) %}
+{% if panels is not empty %}
+<section class="content-panels"
+         data-csrf-name-key="{{ csrf.nameKey }}" data-csrf-name="{{ csrf.name }}"
+         data-csrf-value-key="{{ csrf.valueKey }}" data-csrf-value="{{ csrf.value }}">
+    {% for p in panels %}
+    <details class="content-panel" id="panel-{{ p.plugin }}-{{ p.id }}" data-plugin="{{ p.plugin }}" open>
+        <summary>{{ attribute(t, p.label) ?? p.label }}</summary>
+        <div class="content-panel-body">{{ p.html|raw }}</div>
+    </details>
+    {% endfor %}
+</section>
+<script>
+// station0.post(url, data) — a POST with the admin's CSRF fields, for panels.
+window.station0 = window.station0 || {};
+window.station0.post = window.station0.post || function (url, data) {
+    var el = document.querySelector('.content-panels');
+    var body = data instanceof FormData ? data : new FormData();
+    if (!(data instanceof FormData)) {
+        Object.keys(data || {}).forEach(function (k) { body.append(k, data[k]); });
+    }
+    body.append(el.dataset.csrfNameKey, el.dataset.csrfName);
+    body.append(el.dataset.csrfValueKey, el.dataset.csrfValue);
+    return fetch(url, { method: 'POST', body: body, credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+};
+</script>
+{% endif %}

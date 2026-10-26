@@ -152,3 +152,20 @@ fieldset.visibility .hint { margin: 0 0 .75rem; font-size: .85rem; color: #d9770
 .task-output .lvl-warn { color: #fcd34d; }
 .task-output .lvl-error { color: #fca5a5; }
 .task-result tr.current td { background: #f8fafc; }
+
+/* ── Plugins: content panels + list badges ─────────────────────────────── */
+.content-panels { margin: 1.5rem 0 0; display: grid; gap: .75rem; }
+.content-panel { border: 1px solid #dde1e7; border-radius: var(--radius); background: var(--panel); }
+.content-panel > summary {
+    cursor: pointer; padding: .6rem .9rem;
+    font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #5a6478;
+}
+.content-panel-body { padding: 0 .9rem .9rem; }
+.badge-plugin {
+    display: inline-flex; align-items: center;
+    padding: .1rem .45rem; border-radius: 99px;
+    background: #eef2ff; color: #3730a3;
+    font-size: .68rem; font-weight: 600; flex-shrink: 0;
+}
+.badge-plugin.tone-warn { background: #fef3c7; color: #92400e; }
+.badge-plugin.tone-danger { background: #fee2e2; color: #991b1b; }

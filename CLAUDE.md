@@ -14,6 +14,7 @@ Flat-file CMS built on **Slim 4**, **Twig 3**, **League/CommonMark**, and **Deli
 | Path | Purpose |
 |---|---|
 | `src/` | PHP source (namespace `Station0\`) |
+| `src/Plugin/` | Plugin API (`Plugin`, `Registrar`, `Plugins`); bundled plugins in `src/Plugin/<Name>/` |
 | `admin/templates/` | Admin Twig templates |
 | `bin/console` | CLI binary — exposed via `composer bin`, runs as `php vendor/bin/console` |
 | `config/roles.php` | Role definitions |
@@ -82,14 +83,16 @@ Global, outermost first (Slim runs the last-added first):
 3. `Guard` (CSRF — every POST/PUT/PATCH/DELETE, public routes included)
 4. `VisitorMiddleware` — loads the public-site visitor (pass cookie), `visitor` Twig global, writes pass cookies
 5. `CsrfTwigGlobalMiddleware` — `csrf` Twig global
-6. `TwigMiddleware`
-7. `RoutingMiddleware`
+6. Plugin middleware (`Registrar::middleware()`), first declared outermost;
+   only those whose boot-time `when` returned true
+7. `TwigMiddleware`
+8. `RoutingMiddleware`
 
 Route middleware:
 
 - `AccessMiddleware` — page routes and `/media` + `/thumb`: members-only access (`access` config)
 - `AuthMiddleware` — admin group: redirects to `/admin/setup` (no users) or `/admin/login` (not logged in); 403 for accounts without an `admin.roles` role (members)
-- `RoleMiddleware` — role check (`admin` / `editor`)
+- `RoleMiddleware` — role check (`admin` / `editor`); `admin` always passes
 
 ## Key classes
 
@@ -132,6 +135,12 @@ Route middleware:
 | `MemberAuthController` | `src/Controller/MemberAuthController.php` | Public sign-in routes under `access.loginPath` |
 | `ActionRegistry` | `src/Service/ActionRegistry.php` | Site actions (`site/actions/*.php`): load + validate definitions |
 | `ActionContext` / `ActionState` | `src/Service/Action*.php` | What an action handler gets; session-backed per-action state + flash |
+| `Events` | `src/Support/Events.php` | Content event dispatcher (`page.saved` …); admin controllers dispatch, plugins + `TaskHooks` listen |
+| `Plugins` | `src/Plugin/Plugins.php` | Loads enabled plugins from `plugins` config, aggregates their declarations, notFound chain, target matching |
+| `Registrar` | `src/Plugin/Registrar.php` | What a plugin's `register()` declares; `get()` = container access at runtime |
+| `BasePlugin` | `src/Plugin/BasePlugin.php` | Options merged over `defaults()`, checked in `configure()`, `config()` |
+| `TwigExtension` (plugin) | `src/Plugin/TwigExtension.php` | Plugin Twig functions/filters/globals + `plugin_nav()`, `plugin_panels()`, `plugin_badges()` |
+| `Migrations` | `src/Plugin/Migrations.php` | Plugin SQLite migrations, once each, tracked in `station0_migrations` |
 
 ## Local development
 
@@ -739,6 +748,55 @@ return [
 - `ActionContext`: `input()` (trimmed; read passwords from `request()->getParsedBody()`), `ip()`, `state($ns = action name)` → `ActionState` (`get/set/forget/flash/clear`, session-backed), `visitor()`, `members()`, `throttle()`, `pages()`, `collections()`, `mail()`, `log()`, `config('a.b')`, `redirect()` (local paths only), `back()`, `render()`, `json()`. Returning null = `back()`.
 - Forms post with the `csrf` fields (global `Guard`). An action path shadows a page with the same path.
 - `action_state('<ns>')` in Twig returns the state and consumes flashed values — read it once per render.
+
+## Plugins (`plugins` config) — experimental
+
+Reference: `docs/plugins.md`. Optional features enabled per site; an
+unlisted plugin is never loaded (no classes, routes, middleware, services).
+
+```php
+'plugins' => [
+    'redirects' => ['log404' => true],          // bundled: Station0\Plugin\Redirects\Plugin
+    \Acme\Station0Sitemap\Plugin::class => [],  // Composer package (FQCN)
+],
+```
+
+- **Loading:** `Bootstrap::plugins($config, $logger)` → `Plugins::load()`,
+  shared by `createApp()` and `bin/console`. Short name ⇒
+  `Station0\Plugin\<Studly>\Plugin`, else FQCN. Config order = registration
+  order. Unknown name / missing class / not a `Plugin` / constructor or
+  `register()` throws / `extra.station0.requires` mismatch ⇒ logged
+  (`Plugin '…' skipped`) and left out; a half-registered plugin leaves nothing.
+- **Contract:** `Plugin::name()` (`[a-z][a-z0-9-]*`, not a core admin segment — `Plugins::RESERVED_NAMES`) + `register(Registrar)`,
+  constructed as `new $class($options)` (`BasePlugin` merges over
+  `defaults()`). `register()` only declares (runs every request) — no I/O.
+  Runtime callbacks reach services via `$r->get()` (bound once the container
+  is built). Slim binds route / middleware closures to the container, so
+  `$this` there is not the plugin.
+- **Registrar → Bootstrap:** `service` (container; core ids not replaceable),
+  `publicRoutes` (before actions + catch-all), `adminRoutes(fn, role)` (group
+  `{adminPath}/{name}` in the authed group + `RoleMiddleware`), `middleware(mw,
+  when)` (see stack), `on` (Events), `notFound` (`PageController::notFound()`
+  and the `/media` 404 in `AssetController`; first Response wins),
+  `twigFunction/Filter/Global`, `templates(ns, dir)`, `adminNav` (`plugin_nav()`
+  in `layout.twig`, `data-nav="plugin-{name}"`), `contentPanel` / `contentBadge`,
+  `command` (bin/console default branch, builds `Bootstrap::container()`),
+  `migration` (applied in the `PDO` factory, `station0_migrations`),
+  `translations` (under core keys in `lang`).
+- **Panels:** `@admin/_plugin_panels.twig` after the page / collection-item
+  edit `<form>` (not inside — self-contained, act via the plugin's admin routes
+  with `station0.post()`); `data(?entity, $user)` null ⇒ hidden; new entity ⇒
+  `null`; targets `page`, `page:/path`, `page@template`, `collectionItem[:name]`
+  (`Plugins::targets()`). Badges: `@admin/_plugin_badges.twig` in tree rows,
+  stream records and collection item rows.
+- **Events:** `Station0\Support\Events`; admin controllers take `?Events`
+  (was `?TaskHooks`). Container wires plugin listeners first, then one `*`
+  listener → `TaskHooks::dispatch()`. Matching = `Events::matches()`
+  (`TaskHooks::matches()` delegates).
+- **Tests:** `tests/Plugin/` — `TestSite` builds a temp skeleton;
+  `PluginAppTest` boots `Bootstrap::container()` + `app()` with a fake signed-in
+  user in `$_SESSION` (Auth is final); `PluginConsoleTest` runs `bin/console`
+  with `SITE_PATH`.
 
 ## Common gotchas
 

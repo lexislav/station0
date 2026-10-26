@@ -303,6 +303,7 @@ a.badge-group:hover { background: #f0f2f5; }
                     {% if badge.url %}<a class="badge-group" href="{{ badge.url }}">{{ badge.label }}</a>
                     {% else %}<span class="badge-group">{{ badge.label }}</span>{% endif %}
                 {% endif %}
+                {% include '@admin/_plugin_badges.twig' with {entity: p} %}
                 {% if isStream %}
                     <span class="badge-stream">STREAM</span>
                     <span class="badge-count">{{ item.children|length }}</span>
@@ -448,6 +449,7 @@ a.badge-group:hover { background: #f0f2f5; }
                                 <span class="drag-handle" aria-hidden="true">⋮⋮</span>
                                 <span class="title">
                                     <a href="{{ app.adminPath }}/pages/{{ cEdit }}/edit">{{ cp.title }}</a>
+                                    {% include '@admin/_plugin_badges.twig' with {entity: cp} %}
                                 </span>
                                 <span class="right-meta">
                                     <span class="status">
