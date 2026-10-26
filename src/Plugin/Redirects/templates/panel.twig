@@ -1,0 +1,93 @@
+{# Page edit form panel (contentPanel 'redirects'); acts via {{ pluginUrl }}/rules, not the page save. #}
+{% if data.new %}
+    <p class="muted">{{ t.redirects_panel_new }}</p>
+{% else %}
+<style>.redirects-panel .redirects-inline { display: flex; gap: .5rem; align-items: center; }
+.redirects-panel .redirects-inline input { flex: 1; padding: .45rem .6rem; border: 1px solid var(--border); border-radius: var(--radius); font: inherit; }</style>
+<div class="redirects-panel" data-url="{{ pluginUrl }}" data-target="{{ data.path }}">
+    {% if data.blocking is not empty %}
+        <p class="error">{{ t.redirects_panel_blocking }}
+            {% for r in data.blocking %}<code>{{ r.from }}</code> → <code>{{ r.to ?? r.status }}</code>{% endfor %}</p>
+    {% endif %}
+
+    <p style="margin:.25rem 0 .5rem"><strong>{{ t.redirects_panel_incoming }}</strong></p>
+    <ul class="redirects-incoming" style="margin:0 0 .75rem; padding-left:1.1rem">
+        {% for item in data.incoming %}
+            {% set r = item.rule %}
+            <li data-id="{{ r.id }}">
+                <code>{{ item.via ?? r.from }}</code>
+                {% if item.via %}<span class="muted">{{ t.redirects_panel_via }} <code>{{ r.from }}</code></span>{% endif %}
+                <span class="tag subtle">{{ r.status }}</span>
+                {% if r.auto %}<span class="tag" title="{{ r.note }}">{{ t.redirects_auto }} {{ r.auto }}</span>{% endif %}
+                {% if data.isAdmin or (r.type == 'exact' and not r.force) %}
+                    <button type="button" class="link danger" data-remove="{{ r.id }}">{{ t.redirects_panel_remove }}</button>
+                {% endif %}
+            </li>
+        {% else %}
+            <li class="muted redirects-none">{{ t.redirects_panel_none }}</li>
+        {% endfor %}
+    </ul>
+
+    {% if data.shadowed is not empty %}
+        <p class="muted" style="font-size:.85rem">{{ t.redirects_panel_shadowed }}
+            {% for r in data.shadowed %}<code>{{ r.from }}</code> → <code>{{ r.to ?? r.status }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    {% endif %}
+
+    <div class="redirects-inline">
+        <input type="text" class="redirects-add-from" placeholder="{{ t.redirects_panel_add_hint }}" aria-label="{{ t.redirects_panel_add }}">
+        <button type="button" class="btn redirects-add">{{ t.redirects_panel_add }}</button>
+    </div>
+    <p class="error redirects-error" hidden style="margin-top:.5rem"></p>
+    <p style="margin:.75rem 0 0; font-size:.85rem"><a href="{{ pluginUrl }}">{{ t.redirects_panel_manage }}</a></p>
+</div>
+<script>
+(function () {
+    var root = document.currentScript.previousElementSibling;
+    var list = root.querySelector('.redirects-incoming');
+    var input = root.querySelector('.redirects-add-from');
+    var error = root.querySelector('.redirects-error');
+    function fail(msg) { error.textContent = msg; error.hidden = false; }
+    function send(url, data) {
+        error.hidden = true;
+        return station0.post(url, data).then(function (r) { return r.json(); }).then(function (res) {
+            if (!res.ok) { fail(res.error || 'Error'); return null; }
+            return res;
+        }).catch(function () { fail('Network error'); return null; });
+    }
+    root.querySelector('.redirects-add').addEventListener('click', function () {
+        var from = input.value.trim();
+        if (!from) return;
+        send(root.dataset.url + '/rules', { from: from, to: root.dataset.target, status: 301 }).then(function (res) {
+            if (!res) return;
+            var none = list.querySelector('.redirects-none');
+            if (none) none.remove();
+            var li = document.createElement('li');
+            li.dataset.id = res.rule.id;
+            var code = document.createElement('code');
+            code.textContent = res.rule.from;
+            li.append(code, ' ');
+            var tag = document.createElement('span');
+            tag.className = 'tag subtle';
+            tag.textContent = res.rule.status;
+            li.append(tag, ' ');
+            var btn = document.createElement('button');
+            btn.type = 'button'; btn.className = 'link danger'; btn.dataset.remove = res.rule.id;
+            btn.textContent = {{ t.redirects_panel_remove|json_encode|raw }};
+            li.append(btn);
+            list.append(li);
+            input.value = '';
+        });
+    });
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); root.querySelector('.redirects-add').click(); }
+    });
+    list.addEventListener('click', function (e) {
+        var id = e.target.dataset && e.target.dataset.remove;
+        if (!id) return;
+        send(root.dataset.url + '/rules/' + id + '/delete', {}).then(function (res) {
+            if (res) e.target.closest('li').remove();
+        });
+    });
+})();
+</script>
+{% endif %}

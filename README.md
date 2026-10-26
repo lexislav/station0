@@ -432,6 +432,16 @@ event listeners, 404 handling, Twig functions, console commands, SQLite
 tables, and panels and badges on pages and collection items. See
 [docs/plugins.md](docs/plugins.md).
 
+### Redirects (`'redirects' => []`)
+
+The bundled redirect manager adds a 301 automatically when a page's slug
+changes or the page moves, covering its whole subtree. It also answers
+exact, pattern (`/blog/{year}/{slug}`, `/docs/{path*}`) and regex rules and
+`410 Gone` from `site/content/_redirects.yaml`, and logs 404s. The admin
+gets a Redirects tab, a 404 log, and a panel on each page listing the old
+URLs that lead to it. Rules are consulted only on the 404 path, so pages
+that exist pay nothing. See [docs/redirects.md](docs/redirects.md).
+
 ## CLI (via skeleton)
 
 ```bash
@@ -445,6 +455,7 @@ php vendor/bin/console collections:retitle [name…] [--dry-run]   # recompute c
 php vendor/bin/console task:list                  # site tasks (site/tasks/)
 php vendor/bin/console task:run <name> [--param=value]
 php vendor/bin/console plugins:list               # enabled plugins, their commands and migrations
+php vendor/bin/console redirects:test <url>       # redirects plugin: also list|add|import|compile|404
 ```
 
 ## Package structure
@@ -455,7 +466,7 @@ bin/console        CLI binary (exposed via composer bin)
 config/roles.php   Role definitions
 src/               PHP source (namespace Station0\)
 src/Plugin/        Plugin API and bundled plugins
-docs/              Reference docs (visibility, plugins)
+docs/              Reference docs (visibility, plugins, redirects)
 ```
 
 ## License

@@ -4,63 +4,28 @@ declare(strict_types=1);
 
 namespace Station0\Tests\Plugin;
 
-use Delight\Auth\Auth;
 use Delight\Auth\Role;
-use Delight\Auth\UserManager;
-use Monolog\Handler\TestHandler;
-use Monolog\Logger;
 use PHPUnit\Framework\TestCase;
-use Psr\Http\Message\ResponseInterface;
 use Slim\App;
-use Slim\Psr7\Factory\ServerRequestFactory;
-use Station0\Bootstrap;
 use Station0\Plugin\Plugins;
 use Station0\Support\Events;
 use Station0\Tests\Plugin\Fixtures\FixturePlugin;
 use Station0\Tests\Plugin\Fixtures\ThrowingPlugin;
 
 /**
- * The full app (Bootstrap::container() + app()) with the fixture plugin
- * enabled; the signed-in user is faked in $_SESSION.
+ * The full app with the fixture plugin enabled (see BootsApp).
  */
 final class PluginAppTest extends TestCase
 {
-    private ?TestSite $site = null;
-    private TestHandler $log;
-
-    protected function tearDown(): void
-    {
-        $this->site?->remove();
-        unset($_SESSION);
-    }
+    use BootsApp;
 
     /** @param ?int $role Role::ADMIN / Role::EDITOR, null = signed out */
     private function app(array $plugins, ?int $role = Role::ADMIN): App
     {
-        $this->site = new TestSite($plugins);
-        $config     = $this->site->config();
-        $roles      = require dirname(__DIR__, 2) . '/config/roles.php';
-        $this->log  = new TestHandler();
-        $logger     = new Logger('test', [$this->log]);
-
-        $container = Bootstrap::container($config, $roles, dirname(__DIR__, 2), Bootstrap::plugins($config, $logger), $logger);
-
-        // Auth is final and reads the sign-in from $_SESSION: skip its
-        // constructor (session start, DB) and fake the session fields.
-        $container->set(Auth::class, (new \ReflectionClass(Auth::class))->newInstanceWithoutConstructor());
-        $_SESSION = $role === null ? [] : [
-            UserManager::SESSION_FIELD_LOGGED_IN => true,
-            UserManager::SESSION_FIELD_USER_ID   => 1,
-            UserManager::SESSION_FIELD_EMAIL     => 'ed@example.com',
-            UserManager::SESSION_FIELD_ROLES     => $role,
-        ];
-
-        return Bootstrap::app($container);
-    }
-
-    private function get(App $app, string $path): ResponseInterface
-    {
-        return $app->handle((new ServerRequestFactory())->createServerRequest('GET', $path));
+        // The page template uses the fixture plugin's Twig function, filter and global.
+        return $this->boot($plugins, $role, $plugins === [] || isset($plugins[ThrowingPlugin::class])
+            ? null
+            : '<h1>{{ page.title }}</h1>{{ content|raw }}|{{ fixture_hello() }}|{{ "x"|shout }}|{{ fixture.version ?? "" }}');
     }
 
     public function testPublicRouteTwigAndMiddleware(): void
