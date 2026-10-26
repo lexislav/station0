@@ -11,6 +11,11 @@
             <directory>tests</directory>
         </testsuite>
     </testsuites>
+    <groups>
+        <exclude>
+            <group>bench</group>
+        </exclude>
+    </groups>
     <source restrictDeprecations="true">
         <include>
             <directory>src</directory>

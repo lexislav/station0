@@ -18,7 +18,6 @@ is no marketplace, auto-discovery or on/off switch in the admin.
 'plugins' => [
     'redirects' => ['log404' => true],          // bundled: src/Plugin/Redirects
     \Acme\Station0Sitemap\Plugin::class => [],  // from a Composer package
-    'search',                                   // bundled, no options
     'forms' => false,                           // listed but off
 ],
 ```
@@ -42,7 +41,15 @@ running. A plugin whose `register()` throws halfway leaves nothing behind.
 `php vendor/bin/console plugins:list` shows the enabled plugins, their
 console commands and their migrations.
 
+Bundled plugins:
+
+| Name | What |
+|---|---|
+| `redirects` | Redirect manager: automatic redirects on slug change / move, rules, 404 log ([redirects.md](redirects.md)) |
+
 ## Writing a plugin
+
+`src/Plugin/Redirects/` is a complete example that uses most of the API.
 
 ```php
 <?php // src/Plugin.php in acme/station0-hello

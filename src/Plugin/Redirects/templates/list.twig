@@ -1,0 +1,137 @@
+{% extends '@admin/layout.twig' %}
+{% block title %}{{ t.redirects_title }} · {{ app.name }}{% endblock %}
+
+{% block body %}
+{% include '@redirects/_tabs.twig' with {tab: 'rules'} %}
+
+{% if saved %}<p class="tag ok" style="margin-bottom:1rem">{{ t.redirects_saved }}</p>{% endif %}
+{% if broken %}<p class="error">{{ t.redirects_broken }} {{ broken }}</p>{% endif %}
+
+{# ── Test a URL ── #}
+<form method="get" action="{{ app.adminPath }}/redirects" class="redirects-inline" style="max-width:760px; margin-bottom:1.5rem">
+    <input type="text" name="test" value="{{ test.input ?? '' }}" placeholder="/old-page?utm=x" aria-label="{{ t.redirects_test }}">
+    <button type="submit" class="btn">{{ t.redirects_test_button }}</button>
+</form>
+{% if test %}
+    <p class="redirects-test">
+        <code>{{ test.input }}</code> —
+        {% if test.hit %}
+            {% if test.hit.location %}<strong>{{ test.hit.status }}</strong> → <code>{{ test.hit.location }}</code>
+            {% else %}{{ t.redirects_test_gone }}{% endif %}
+            <span class="muted">({{ test.hit.rule.from }})</span>
+        {% elseif test.page %}{{ t.redirects_test_page }}
+        {% else %}{{ t.redirects_test_404 }}{% endif %}
+    </p>
+{% endif %}
+
+{# ── Rules ── #}
+{% if rows is empty %}
+    <p class="muted">{{ t.redirects_empty }}</p>
+{% else %}
+{% set showHits = rows|filter(r => r.rule.count) is not empty %}
+<table class="data-table redirects-table">
+    <thead>
+        <tr>
+            <th>{{ t.redirects_th_from }}</th>
+            <th>{{ t.redirects_th_to }}</th>
+            <th>{{ t.redirects_th_status }}</th>
+            {% if showHits %}<th>{{ t.redirects_th_hits }}</th>{% endif %}
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+        {% set r = row.rule %}
+        <tr id="rule-{{ r.id }}">
+            <td>
+                <code>{{ r.from }}</code>
+                {% if r.type != 'exact' %}<span class="tag subtle">{{ r.type }}</span>{% endif %}
+                {% if r.auto %}<span class="tag" title="{{ r.auto }}">{{ t.redirects_auto }}</span>{% endif %}
+                {% if r.force %}<span class="tag gone">{{ t.redirects_force }}</span>{% endif %}
+                {% if r.caseless %}<span class="tag subtle">{{ t.redirects_caseless }}</span>{% endif %}
+                {% if r.query == 'drop' %}<span class="tag subtle">{{ t.redirects_drop_query }}</span>{% endif %}
+                {% if r.note %}<div class="note muted">{{ r.note }}{% if r.auto %} · {{ r.auto }}{% endif %}</div>{% endif %}
+                {% for w in row.warnings %}<div class="redirects-warn">⚠ {{ attribute(t, w) }}</div>{% endfor %}
+            </td>
+            <td>{% if r.to %}<code>{{ r.to }}</code>{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td><span class="tag {{ r.status == 410 ? 'gone' : 'subtle' }}">{{ r.status }}</span></td>
+            {% if showHits %}<td class="muted">{{ r.count ? (row.hits.hits ?? 0) : '' }}</td>{% endif %}
+            <td class="text-right" style="white-space:nowrap">
+                {% if row.editable %}
+                    <a href="{{ app.adminPath }}/redirects?edit={{ r.id }}#rule-form">{{ t.redirects_edit }}</a>
+                    &nbsp;
+                    <form method="post" action="{{ app.adminPath }}/redirects/rules/{{ r.id }}/delete" style="display:inline" onsubmit="return confirm({{ t.redirects_delete_confirm|json_encode }})">
+                        <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+                        <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+                        <button type="submit" class="link danger">{{ t.redirects_delete }}</button>
+                    </form>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if invalid is not empty %}
+<div class="redirects-box">
+    <h2>{{ t.redirects_invalid }}</h2>
+    {% for bad in invalid %}
+        <p><code>{{ bad.raw|json_encode(constant('JSON_UNESCAPED_SLASHES') b-or constant('JSON_UNESCAPED_UNICODE')) }}</code><br>
+        <span class="redirects-warn">{{ bad.errors|join(' ') }}</span></p>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# ── Add / edit ── #}
+<form method="post" action="{{ app.adminPath }}/redirects/rules" class="redirects-box" id="rule-form">
+    <h2>{{ form.id ?? false ? t.redirects_form_edit : t.redirects_form_add }}</h2>
+    <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+    <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+    {% if form.id ?? false %}<input type="hidden" name="id" value="{{ form.id }}">{% endif %}
+    {% if error %}<p class="error">{{ error|nl2br }}</p>{% endif %}
+
+    <div class="field">
+        <label for="r-from">{{ t.redirects_th_from }} <small class="muted">{{ t.redirects_form_from_hint }}</small></label>
+        <input type="text" id="r-from" name="from" value="{{ form.from ?? '' }}" required>
+    </div>
+    <div class="field">
+        <label for="r-to">{{ t.redirects_th_to }} <small class="muted">{{ t.redirects_form_to_hint }}</small></label>
+        <input type="text" id="r-to" name="to" value="{{ form.to ?? '' }}">
+    </div>
+    <div class="row">
+        <div class="field">
+            <label for="r-status">{{ t.redirects_th_status }}</label>
+            <select id="r-status" name="status">
+                {% for s in [301, 302, 307, 308, 410] %}
+                    <option value="{{ s }}" {% if (form.status ?? 301) == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% if isAdmin %}
+        <div class="field">
+            <label for="r-type">{{ t.redirects_form_type }}</label>
+            <select id="r-type" name="type">
+                <option value="">{{ t.redirects_form_type_auto }}</option>
+                <option value="regex" {% if (form.type ?? '') == 'regex' %}selected{% endif %}>regex</option>
+            </select>
+        </div>
+        {% endif %}
+        <div class="field">
+            <label for="r-note">{{ t.redirects_form_note }}</label>
+            <input type="text" id="r-note" name="note" value="{{ form.note ?? '' }}">
+        </div>
+    </div>
+    <div class="redirects-flags">
+        {% if isAdmin %}
+        <label><input type="checkbox" name="force" value="1" {% if form.force ?? false %}checked{% endif %}> {{ t.redirects_form_force }}</label>
+        {% endif %}
+        <label><input type="checkbox" name="caseless" value="1" {% if form.caseless ?? false %}checked{% endif %}> {{ t.redirects_form_caseless }}</label>
+        <label><input type="checkbox" name="query" value="drop" {% if (form.query ?? '') == 'drop' %}checked{% endif %}> {{ t.redirects_form_drop }}</label>
+        <label><input type="checkbox" name="count" value="1" {% if form.count ?? false %}checked{% endif %}> {{ t.redirects_form_count }}</label>
+    </div>
+    {% if not isAdmin %}<p class="muted" style="font-size:.85rem">{{ t.redirects_editor_hint }}</p>{% endif %}
+    <button type="submit" class="btn primary">{{ t.redirects_form_save }}</button>
+    {% if form.id ?? false %}<a class="btn" href="{{ app.adminPath }}/redirects">{{ t.redirects_form_cancel }}</a>{% endif %}
+</form>
+{% endblock %}

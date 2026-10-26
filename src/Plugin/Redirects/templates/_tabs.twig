@@ -1,0 +1,20 @@
+<div class="toolbar">
+    <h1>{{ t.redirects_title }}</h1>
+</div>
+<nav class="redirects-tabs">
+    <a href="{{ app.adminPath }}/redirects" {% if tab == 'rules' %}class="active"{% endif %}>{{ t.redirects_rules }}</a>
+    <a href="{{ app.adminPath }}/redirects/404" {% if tab == 'log' %}class="active"{% endif %}>{{ t.redirects_log_title }}</a>
+</nav>
+<style>
+.redirects-tabs { display: flex; gap: .25rem; margin: -.5rem 0 1.25rem; border-bottom: 1px solid var(--border); }
+.redirects-tabs a { padding: .45rem .9rem; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.redirects-tabs a.active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+.redirects-table code { font-size: .85rem; word-break: break-all; }
+.redirects-table .note, .redirects-warn { font-size: .8rem; }
+.redirects-warn { color: #b45309; }
+.redirects-box { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); padding: 1rem 1.25rem; margin: 1.5rem 0; max-width: 760px; }
+.redirects-box h2 { font-size: 1rem; margin: 0 0 .75rem; }
+.redirects-inline { display: flex; gap: .5rem; align-items: center; }
+.redirects-inline input[type=text] { flex: 1; padding: .5rem .65rem; border: 1px solid var(--border); border-radius: var(--radius); font: inherit; background: #fff; }
+.redirects-flags { display: grid; grid-template-columns: 1fr 1fr; gap: .25rem 1rem; margin-bottom: 1rem; }
+</style>

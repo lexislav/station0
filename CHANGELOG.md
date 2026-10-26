@@ -5,6 +5,40 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Redirect manager**, the first bundled plugin. Turn it on with
+  `'plugins' => ['redirects' => []]`.
+  - **Automatic redirects.** Renaming a page's slug or moving it in the
+    Structure tree adds one 301 rule for the whole subtree
+    (`/old/{path*}` → `/new/{path}`). Its media files follow too. Chains are
+    flattened, and renaming a page back removes the rule.
+  - **Rules** in `site/content/_redirects.yaml`: exact paths, patterns
+    (`{name}` = one segment, `{name*}` = several segments), anchored regexes
+    with `$1`, `410 Gone`, and `force` rules that apply even over an
+    existing page. Options per rule: case-insensitive matching, dropping the
+    query string, and hit counting.
+  - **Cost.** Rules are consulted only on the 404/410 path. They are compiled
+    to `writable/cache/redirects.php`: exact rules are a hash lookup, and all
+    patterns share one `(*MARK)` regex. The force middleware exists only
+    while force rules do.
+  - **Validation.** Captures never reach the host of a target, so the rules
+    can't be used as an open redirect. Sources under the admin path,
+    `/thumb`, the member sign-in path or a site action are rejected, and so
+    are bad regexes and redirect loops.
+  - **404 log** (`station0_404`). It ignores noise globs, stores paths
+    without their query string, and keeps a capped number of rows.
+  - **Admin.** A Redirects tab with the rule list, a form, "Test a URL" and
+    the 404 log with "Create redirect". Each page's edit form gets a
+    Redirects panel listing the old URLs that lead to it, with "Add old
+    URL". The Structure tree shows a badge with the number of redirects.
+    Editors manage exact rules; patterns, regexes and force rules need an
+    admin.
+  - **Console:** `redirects:list`, `redirects:test`, `redirects:add`,
+    `redirects:import` (CSV), `redirects:compile` and `redirects:404`.
+  - See `docs/redirects.md`.
+
 ## [0.10.0] - 2026-10-26
 
 ### Added

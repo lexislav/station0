@@ -141,6 +141,7 @@ Route middleware:
 | `BasePlugin` | `src/Plugin/BasePlugin.php` | Options merged over `defaults()`, checked in `configure()`, `config()` |
 | `TwigExtension` (plugin) | `src/Plugin/TwigExtension.php` | Plugin Twig functions/filters/globals + `plugin_nav()`, `plugin_panels()`, `plugin_badges()` |
 | `Migrations` | `src/Plugin/Migrations.php` | Plugin SQLite migrations, once each, tracked in `station0_migrations` |
+| `Redirects\Store` / `Matcher` / `Redirector` | `src/Plugin/Redirects/` | Redirect manager: rules file + compile, lookup, 404/410 + force responses |
 
 ## Local development
 
@@ -797,6 +798,50 @@ unlisted plugin is never loaded (no classes, routes, middleware, services).
   `PluginAppTest` boots `Bootstrap::container()` + `app()` with a fake signed-in
   user in `$_SESSION` (Auth is final); `PluginConsoleTest` runs `bin/console`
   with `SITE_PATH`.
+
+## Redirect manager (bundled plugin `redirects`)
+
+Reference: `docs/redirects.md`. Code: `src/Plugin/Redirects/`. Off unless
+`'plugins' => ['redirects' => [...]]` (options `auto`, `log404`, `ignore404`,
+`maxAge`, `logLimit`).
+
+- **Rules:** `site/content/_redirects.yaml` (list of `from`/`to`/`status`/
+  `type: regex`/`force`/`caseless`/`query: drop`/`count`/`auto`/`note`).
+  `Rules` normalizes + validates (reserved sources: adminPath, `/thumb`,
+  loginPath, action paths; regex anchored, compiles, no named groups;
+  placeholders only in path/query of an absolute `to`; local targets
+  normalized against `//host`), builds targets (`Rules::target()`), detects
+  auto subtree rules (`Rules::subtree()`).
+- **Compiled:** `Compiler` → `writable/cache/redirects.php` (exact hash maps,
+  one combined `(?|…(*MARK:i)|…)` regex delimited by `\x01`, force maps,
+  `byTarget` / `bySubtree` / `byFrom` admin indexes) + `redirects.force.php`
+  (force subset). `Matcher::match($path, $query, $force)`: exact (incl.
+  caseless map, lower index wins) then one `preg_match` with a lowered
+  backtrack limit.
+- **Store:** YAML read / write under `flock` (tmp + rename) then recompile;
+  `matcher()` recompiles when the YAML is newer (stat — 404 path / admin
+  only); `forceMatcher()` reads only the force file, no stat (per-request
+  `when` of `ForceMiddleware`). `recordMove($old, $new)`: drop rules from
+  `$new` (rename back), flatten targets under `$old`, drop self-redirects,
+  add `/old/{path*}` → `/new/{path}` with `auto` date. Broken YAML ⇒ no rules,
+  writes refused (`RuntimeException`). Invalid rules kept, appended at the
+  end. `Store::forConfig($config)` for site tasks.
+- **Runtime:** `Redirector::notFound()` is the plugin's notFound resolver
+  (GET/HEAD; `/media/old/…` follows auto subtree rules), logs misses via
+  `Log` (`station0_404`, ignore globs, cap with pruning, hit counters in
+  `station0_redirect_hits`). 410 renders `410.twig`/`404.twig`. Permanent
+  redirects `Cache-Control: public, max-age={maxAge}`, others `no-store`.
+- **Events:** `page.saved` with `previous_path` and `page.moved` →
+  `recordMove()` (note "Renamed/Moved in admin by {email}") when `auto`.
+- **Admin:** `AdminController` under `/admin/redirects` (role editor; editors
+  only exact non-force rules — `mayEdit()`), `/redirects/404` log, JSON
+  responses for `Accept: application/json` (panel). Panel `@redirects/panel.twig`
+  (incoming / blocking force / shadowed, "Add old URL"), badge `↪ n` / `↪ ✕`.
+  Strings in `src/Plugin/Redirects/lang/{en,cs}.php`.
+- **Console:** `redirects:list|test|add|import|compile|404` (`Console`).
+- **Tests:** `tests/Plugin/Redirects/` (+ `--group bench`, excluded by default
+  in `phpunit.xml`). `BootsApp::reboot()` = next request on the same site
+  (Twig globals freeze after the first render).
 
 ## Common gotchas
 

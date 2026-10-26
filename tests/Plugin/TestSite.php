@@ -13,7 +13,8 @@ final class TestSite
 {
     public readonly string $dir;
 
-    public function __construct(private readonly array $plugins = [])
+    /** @param ?string $pageTemplate site/templates/page.twig (default: title + content) */
+    public function __construct(private readonly array $plugins = [], ?string $pageTemplate = null)
     {
         $this->dir = sys_get_temp_dir() . '/s0-site-' . bin2hex(random_bytes(6));
         foreach (['site/templates', 'site/content/pages/blog/post', 'site/content/pages/about',
@@ -21,7 +22,7 @@ final class TestSite
             'writable/sessions', 'writable/logs', 'writable/uploads'] as $d) {
             @mkdir($this->dir . '/' . $d, 0775, true);
         }
-        $this->write('site/templates/page.twig', '<h1>{{ page.title }}</h1>{{ content|raw }}|{{ fixture_hello() }}|{{ "x"|shout }}|{{ fixture.version ?? "" }}');
+        $this->write('site/templates/page.twig', $pageTemplate ?? '<h1>{{ page.title }}</h1>{{ content|raw }}');
         $this->write('site/templates/404.twig', 'not found {{ urlPath }} {{ status }}');
         $this->write('site/content/pages/page.txt', "Title: Home\nStatus: published\n---\nHome body\n");
         $this->write('site/content/pages/blog/page.txt', "Title: Blog\nStatus: published\n---\nBlog\n");
