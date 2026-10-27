@@ -4,7 +4,7 @@ status: open
 priority: high
 area: content
 created: 2026-10-27
-related: [src/Service/ContentRepository.php, src/Service/CollectionRepository.php, src/Support/FrontMatter.php, src/Service/AccessPolicy.php, src/Plugin/Redirects/]
+related: [content-index.md, content-search.md, src/Service/ContentRepository.php, src/Service/CollectionRepository.php, src/Support/FrontMatter.php, src/Service/AccessPolicy.php, src/Plugin/Redirects/]
 ---
 
 ## Problem
@@ -49,6 +49,9 @@ Design to settle first (write it up in `docs/multilingual.md`):
 - **Everything that knows paths:** AccessPolicy, redirects plugin (rules per
   language prefix, `recordMove`), task hook payloads (`lang`), thumbs warm,
   `options_from: pages`.
+
+Build on `content-index.md` (land it first): the index carries `lang` per
+entry, so translation lookup and fallback are array reads, not file probes.
 
 Ship in stages: (1) storage + routing + Twig for pages, (2) collections,
 (3) admin UX polish, translated slugs.

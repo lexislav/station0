@@ -4,7 +4,7 @@ status: open
 priority: medium
 area: plugin
 created: 2026-10-27
-related: [docs/plugins.md, src/Service/PageFields.php, src/Service/AccessPolicy.php, src/Support/Visibility.php]
+related: [content-index.md, content-search.md, docs/plugins.md, src/Service/PageFields.php, src/Service/AccessPolicy.php, src/Support/Visibility.php]
 ---
 
 ## Problem
@@ -33,6 +33,8 @@ configurable prefix (default `/api`):
 - `GET /api/pages/{path}` — meta, `fields` (via `PageFields`, asset refs as
   absolute URLs), optional `?render=html` body
 - `GET /api/collections/{name}` and `/api/collections/{name}/{slug}`
+- Filtering / sorting / paging go through the query helper of
+  `content-index.md`, so list endpoints never parse files per request.
 - Options: `collections` / `pages` allow-lists (nothing exposed unless listed),
   `cors` origins, `maxAge`, optional bearer `tokens` for members-only content.
 
