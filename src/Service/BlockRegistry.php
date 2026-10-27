@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Station0\Service;
 
+use Psr\Log\LoggerInterface;
 use Slim\Views\Twig;
 use Symfony\Component\Yaml\Yaml;
 
@@ -15,6 +16,9 @@ final class BlockRegistry
     public function __construct(
         private readonly string $blocksPath,
         private readonly Twig $twig,
+        private readonly ?LoggerInterface $logger = null,
+        /** Show the exception message in the error comment (config `debug`). */
+        private readonly bool $debug = false,
     ) {}
 
     /** @return string[] */
@@ -39,13 +43,34 @@ final class BlockRegistry
         return file_exists($this->blocksPath . '/' . $type . '/template.twig');
     }
 
-    /** @param array<string, mixed> $data */
-    public function render(string $type, array $data): string
+    /**
+     * A broken block template must not take the page down: it renders as an
+     * HTML comment and the error goes to the log.
+     *
+     * $pagePath (the page's URL path) is passed to the template as `page_path`,
+     * which the `markdown` filter uses to resolve page-local images.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function render(string $type, array $data, ?string $pagePath = null): string
     {
         try {
-            return $this->twig->fetch('blocks/' . $type . '/template.twig', ['block' => $data]);
-        } catch (\Throwable) {
-            return '<!-- block:' . htmlspecialchars($type) . ' render error -->';
+            return $this->twig->fetch('blocks/' . $type . '/template.twig', [
+                'block'     => $data,
+                'page_path' => $pagePath,
+            ]);
+        } catch (\Throwable $e) {
+            $this->logger?->error(sprintf(
+                "Block '%s' render error%s: %s",
+                $type,
+                $pagePath !== null ? ' on ' . $pagePath : '',
+                $e->getMessage(),
+            ), ['exception' => $e]);
+            $detail = $this->debug
+                // `--` would end the comment early.
+                ? ': ' . str_replace('--', '- -', htmlspecialchars($e->getMessage()))
+                : '';
+            return '<!-- block:' . htmlspecialchars($type) . ' render error' . $detail . ' -->';
         }
     }
 

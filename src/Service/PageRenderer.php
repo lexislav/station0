@@ -102,17 +102,28 @@ final class PageRenderer
         $type = $block['type'] ?? 'text';
 
         if ($type === 'text') {
-            $body = (string) ($block['body'] ?? '');
-            $body = $this->rewriteMarkdownAssets($body, $pageUrlPath);
-            return $this->thumbnailImages($this->converter->convert($body)->getContent());
+            return $this->markdown((string) ($block['body'] ?? ''), $pageUrlPath);
         }
 
         if ($this->blocks->exists($type)) {
             $resolved = $this->resolveBlockAssets($block, $pageUrlPath);
-            return $this->blocks->render($type, $resolved);
+            return $this->blocks->render($type, $resolved, $pageUrlPath);
         }
 
         return '<!-- unknown block type: ' . htmlspecialchars($type) . ' -->';
+    }
+
+    /**
+     * Markdown → HTML the way text blocks get it: bare image filenames resolved
+     * against $pageUrlPath (skipped when null), then thumbnails. Also behind the
+     * `markdown` Twig filter for block templates and page fields.
+     */
+    public function markdown(string $markdown, ?string $pageUrlPath = null): string
+    {
+        if ($pageUrlPath !== null) {
+            $markdown = $this->rewriteMarkdownAssets($markdown, $pageUrlPath);
+        }
+        return $this->thumbnailImages($this->converter->convert($markdown)->getContent());
     }
 
     /**
