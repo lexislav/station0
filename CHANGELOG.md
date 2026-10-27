@@ -5,6 +5,24 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2026-10-27
+
+### Added
+- **`markdown` Twig filter** for block templates and page templates
+  (`{{ block.body|markdown }}`). It works like a text block: the same
+  CommonMark converter (raw HTML escaped), page-local images resolved to
+  `/media/…` and thumbnails. Images resolve against the page being
+  rendered; pass a page, collection item or URL path to resolve against
+  another one (`{{ item.extra.intro|markdown(item) }}`). `markdown_to_html`
+  is an alias, so the skeleton's `text` template no longer breaks when
+  copied (#27).
+
+### Fixed
+- **Broken block templates are logged.** A block whose template throws
+  still renders as `<!-- block:<type> render error -->`, but the error now
+  goes to `app.log` with the page path, and with `debug` on the message is
+  shown in the comment.
+
 ## [0.10.2] - 2026-10-27
 
 ### Added
@@ -483,6 +501,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.10.3]: https://github.com/lexislav/station0/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/lexislav/station0/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/lexislav/station0/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/lexislav/station0/compare/v0.9.3...v0.10.0

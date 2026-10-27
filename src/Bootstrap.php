@@ -361,6 +361,29 @@ final class Bootstrap
                 fn (?string $src, array $widths, ?string $format = null)
                     => $c->get(ThumbService::class)->srcset($src, $widths, $format)
             ));
+            // ── Markdown ──────────────────────────────────────────────────────
+            // {{ block.body|markdown }} — same converter, page-local images and
+            // thumbnails as text blocks. Images resolve against `page_path`
+            // (block templates) or `page` (page templates); pass a page,
+            // collection item or URL path to resolve elsewhere:
+            // {{ item.extra.intro|markdown(item) }}. `markdown_to_html` is an alias.
+            $markdown = function (array $context, ?string $markdown, mixed $base = null) use ($c): string {
+                $base ??= $context['page_path'] ?? $context['page'] ?? null;
+                $path = match (true) {
+                    $base instanceof \Station0\Service\Page           => $base->urlPath ?: null,
+                    $base instanceof \Station0\Service\CollectionItem => CollectionRepository::virtualPath($base->collection, $base->slug),
+                    is_string($base) && $base !== ''                   => $base,
+                    default                                            => null,
+                };
+                return $c->get(PageRenderer::class)->markdown((string) $markdown, $path);
+            };
+            foreach (['markdown', 'markdown_to_html'] as $name) {
+                $twig->getEnvironment()->addFilter(new \Twig\TwigFilter(
+                    $name,
+                    $markdown,
+                    ['needs_context' => true, 'is_safe' => ['html']],
+                ));
+            }
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'has_tasks',
                 // Site tasks (site/tasks/*.php) the current user may run.
@@ -449,6 +472,8 @@ final class Bootstrap
         $container->set(BlockRegistry::class, fn ($c) => new BlockRegistry(
             $config['paths']['templates'] . '/blocks',
             $c->get(Twig::class),
+            $c->get(Logger::class),
+            (bool) $config['debug'],
         ));
 
         $container->set(TemplateBlocks::class, fn ($c) => new TemplateBlocks(

@@ -180,6 +180,13 @@ fields:
 ```
 
 Supported field types: `text`, `textarea`, `image`, `file`, `number`, `select`, `boolean`, `color`, `list`.
+Rich text in a block = a `textarea` rendered with `{{ block.body|markdown }}`
+(alias `markdown_to_html`): `PageRenderer::markdown()`, the text-block path —
+page-local images resolved against `page_path` (passed by
+`BlockRegistry::render()`) or `page`, plus thumbnails; an explicit page /
+collection item / path argument overrides. A template that throws renders as
+`<!-- block:<type> render error -->` and is logged (message in the comment
+with `debug`).
 `number` accepts decimals by default (`step="any"`); optional `step`, `min`, `max`
 keys map to the input attributes.
 Inputs are rendered by the shared `admin/templates/pages/_fields.twig` partial
