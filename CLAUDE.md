@@ -834,7 +834,10 @@ Reference: `docs/redirects.md`. Code: `src/Plugin/Redirects/`. Off unless
 - **Events:** `page.saved` with `previous_path` and `page.moved` →
   `recordMove()` (note "Renamed/Moved in admin by {email}") when `auto`.
 - **Admin:** `AdminController` under `/admin/redirects` (role editor; editors
-  only exact non-force rules — `mayEdit()`), `/redirects/404` log, JSON
+  only exact non-force rules — `mayEdit()`), `/redirects/404` log
+  (`Log::search()` filters / sort / paging, `Log::forgetResolved()` drops
+  paths a rule or live page now answers on each view, `Suggester` target,
+  bulk `paths[]` ignore, `back` = log query kept through the rule form), JSON
   responses for `Accept: application/json` (panel). Panel `@redirects/panel.twig`
   (incoming / blocking force / shadowed, "Add old URL"), badge `↪ n` / `↪ ✕`.
   Strings in `src/Plugin/Redirects/lang/{en,cs}.php`.

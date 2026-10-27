@@ -1,21 +1,63 @@
 {% extends '@admin/layout.twig' %}
 {% block title %}{{ t.redirects_log_title }} · {{ app.name }}{% endblock %}
 
+{% macro th(key, label, filter, params, base) %}
+    {%- set current = filter.sort ?: 'hits' -%}
+    {%- set dir = filter.dir ?: (current == 'path' ? 'asc' : 'desc') -%}
+    {%- set next = key == current ? (dir == 'asc' ? 'desc' : 'asc') : (key == 'path' ? 'asc' : 'desc') -%}
+    <th><a href="{{ base }}?{{ params|merge({sort: key, dir: next})|url_encode }}" class="redirects-sort">{{ label }}{% if key == current %} {{ dir == 'asc' ? '↑' : '↓' }}{% endif %}</a></th>
+{%- endmacro %}
+
 {% block body %}
 {% include '@redirects/_tabs.twig' with {tab: 'log'} %}
+{% set base = app.adminPath ~ '/redirects/404' %}
+{% set back = params|url_encode %}
 
-<div style="display:flex; gap:1rem; align-items:center; margin-bottom:1rem">
+{% if resolved > 0 %}
+    <p class="tag ok" style="margin-bottom:1rem">{{ t.redirects_log_resolved|replace({'{n}': resolved}) }}</p>
+{% endif %}
+
+<form method="get" action="{{ base }}" class="redirects-filter">
+    {% if showIgnored %}<input type="hidden" name="ignored" value="1">{% endif %}
+    {% if filter.sort %}<input type="hidden" name="sort" value="{{ filter.sort }}">{% endif %}
+    {% if filter.dir %}<input type="hidden" name="dir" value="{{ filter.dir }}">{% endif %}
+    <input type="search" name="q" value="{{ filter.q }}" placeholder="{{ t.redirects_log_filter_q }}" aria-label="{{ t.redirects_log_filter_q }}">
+    <input type="search" name="ref" value="{{ filter.ref }}" placeholder="{{ t.redirects_log_filter_ref }}" aria-label="{{ t.redirects_log_filter_ref }}">
+    <input type="number" name="min" min="1" value="{{ filter.min }}" placeholder="{{ t.redirects_log_filter_min }}" aria-label="{{ t.redirects_log_filter_min }}">
+    <select name="days" aria-label="{{ t.redirects_log_th_last }}">
+        <option value="">{{ t.redirects_log_days_any }}</option>
+        {% for d in [1, 7, 30, 90] %}
+            <option value="{{ d }}" {% if filter.days == d %}selected{% endif %}>{{ attribute(t, 'redirects_log_days_' ~ d) }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn">{{ t.redirects_log_filter }}</button>
+    {% if filter.q or filter.ref or filter.min or filter.days %}
+        <a href="{{ base }}{{ showIgnored ? '?ignored=1' : '' }}">{{ t.redirects_log_filter_reset }}</a>
+    {% endif %}
+</form>
+
+<div style="display:flex; gap:1rem; align-items:center; margin-bottom:1rem; flex-wrap:wrap">
+    <span class="muted">{{ t.redirects_log_count|replace({'{n}': total}) }}</span>
     {% if showIgnored %}
-        <a href="{{ app.adminPath }}/redirects/404">{{ t.redirects_log_back }}</a>
+        <a href="{{ base }}">{{ t.redirects_log_back }}</a>
     {% else %}
-        <a href="{{ app.adminPath }}/redirects/404?ignored">{{ t.redirects_log_ignored }}</a>
+        <a href="{{ base }}?ignored=1">{{ t.redirects_log_ignored }}</a>
         {% if isAdmin and entries is not empty %}
-        <form method="post" action="{{ app.adminPath }}/redirects/404/clear" onsubmit="return confirm({{ t.redirects_log_clear_confirm|json_encode }})">
+        <form method="post" action="{{ base }}/clear" onsubmit="return confirm({{ t.redirects_log_clear_confirm|json_encode }})">
             <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
             <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
             <button type="submit" class="link danger">{{ t.redirects_log_clear }}</button>
         </form>
         {% endif %}
+    {% endif %}
+    {% if entries is not empty %}
+    <form method="post" action="{{ base }}/ignore" id="log-bulk" style="margin-left:auto">
+        <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+        <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+        <input type="hidden" name="back" value="{{ back }}">
+        {% if showIgnored %}<input type="hidden" name="undo" value="1">{% endif %}
+        <button type="submit" class="btn" id="log-bulk-submit" disabled>{{ showIgnored ? t.redirects_log_bulk_unignore : t.redirects_log_bulk_ignore }}</button>
+    </form>
     {% endif %}
 </div>
 
@@ -25,29 +67,55 @@
 <table class="data-table redirects-table">
     <thead>
         <tr>
-            <th>{{ t.redirects_log_th_path }}</th>
-            <th>{{ t.redirects_log_th_hits }}</th>
-            <th>{{ t.redirects_log_th_last }}</th>
+            <th style="width:1.5rem"><input type="checkbox" id="log-select-all" aria-label="{{ t.redirects_log_select_all }}"></th>
+            {{ _self.th('path', t.redirects_log_th_path, filter, params, base) }}
+            {{ _self.th('hits', t.redirects_log_th_hits, filter, params, base) }}
+            {{ _self.th('first', t.redirects_log_th_first, filter, params, base) }}
+            {{ _self.th('last', t.redirects_log_th_last, filter, params, base) }}
             <th>{{ t.redirects_log_th_ref }}</th>
+            {% if not showIgnored %}<th>{{ t.redirects_log_th_suggest }}</th>{% endif %}
             <th></th>
         </tr>
     </thead>
     <tbody>
     {% for e in entries %}
         <tr>
+            <td><input type="checkbox" name="paths[]" value="{{ e.path }}" form="log-bulk" class="log-select" aria-label="{{ e.path }}"></td>
             <td><code>{{ e.path }}</code></td>
             <td>{{ e.hits }}</td>
-            <td class="muted">{{ e.last_seen|slice(0, 16)|replace({'T': ' '}) }}</td>
+            <td class="muted" style="white-space:nowrap">{{ e.first_seen|slice(0, 16)|replace({'T': ' '}) }}</td>
+            <td class="muted" style="white-space:nowrap">{{ e.last_seen|slice(0, 16)|replace({'T': ' '}) }}</td>
             <td class="muted" style="font-size:.8rem; word-break:break-all">{{ e.referrer }}</td>
+            {% if not showIgnored %}
+            <td>
+                {% if e.suggest %}
+                    <code>{{ e.suggest.to }}</code><br>
+                    <span class="muted note">{{ attribute(t, 'redirects_log_suggest_' ~ e.suggest.reason) }}</span>
+                {% endif %}
+            </td>
+            {% endif %}
             <td class="text-right" style="white-space:nowrap">
                 {% if not showIgnored %}
-                    <a href="{{ app.adminPath }}/redirects?from={{ e.path|url_encode }}#rule-form">{{ t.redirects_log_create }}</a>
+                    {% if e.suggest %}
+                    <form method="post" action="{{ app.adminPath }}/redirects/rules" style="display:inline">
+                        <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+                        <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+                        <input type="hidden" name="from" value="{{ e.path }}">
+                        <input type="hidden" name="to" value="{{ e.suggest.to }}">
+                        <input type="hidden" name="status" value="301">
+                        <input type="hidden" name="back" value="{{ back }}">
+                        <button type="submit" class="link" title="301 → {{ e.suggest.to }}">{{ t.redirects_log_redirect }}</button>
+                    </form>
+                    &nbsp;
+                    {% endif %}
+                    <a href="{{ app.adminPath }}/redirects?{{ {from: e.path, to: e.suggest.to ?? '', back: back}|url_encode }}#rule-form">{{ t.redirects_log_create }}</a>
                     &nbsp;
                 {% endif %}
-                <form method="post" action="{{ app.adminPath }}/redirects/404/ignore" style="display:inline">
+                <form method="post" action="{{ base }}/ignore" style="display:inline">
                     <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
                     <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
                     <input type="hidden" name="path" value="{{ e.path }}">
+                    <input type="hidden" name="back" value="{{ back }}">
                     {% if showIgnored %}<input type="hidden" name="undo" value="1">{% endif %}
                     <button type="submit" class="link">{{ showIgnored ? t.redirects_log_unignore : t.redirects_log_ignore }}</button>
                 </form>
@@ -56,5 +124,38 @@
     {% endfor %}
     </tbody>
 </table>
+
+{% if pages > 1 %}
+<nav class="redirects-pager">
+    {% if page > 1 %}<a href="{{ base }}?{{ params|merge({page: page - 1})|url_encode }}">{{ t.redirects_log_prev }}</a>{% endif %}
+    <span class="muted">{{ t.redirects_log_page|replace({'{page}': page, '{pages}': pages}) }}</span>
+    {% if page < pages %}<a href="{{ base }}?{{ params|merge({page: page + 1})|url_encode }}">{{ t.redirects_log_next }}</a>{% endif %}
+</nav>
 {% endif %}
+
+<script>
+(() => {
+    const all = document.getElementById('log-select-all');
+    const boxes = [...document.querySelectorAll('.log-select')];
+    const submit = document.getElementById('log-bulk-submit');
+    const sync = () => {
+        const n = boxes.filter(b => b.checked).length;
+        submit.disabled = n === 0;
+        all.checked = n === boxes.length;
+        all.indeterminate = n > 0 && n < boxes.length;
+    };
+    all.addEventListener('change', () => { boxes.forEach(b => { b.checked = all.checked; }); sync(); });
+    boxes.forEach(b => b.addEventListener('change', sync));
+})();
+</script>
+{% endif %}
+
+<style>
+.redirects-filter { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: 1rem; }
+.redirects-filter input, .redirects-filter select { padding: .45rem .6rem; border: 1px solid var(--border); border-radius: var(--radius); font: inherit; background: #fff; }
+.redirects-filter input[type=search] { min-width: 12rem; }
+.redirects-filter input[type=number] { width: 8rem; }
+.redirects-sort { color: inherit; text-decoration: none; white-space: nowrap; }
+.redirects-pager { display: flex; gap: 1rem; align-items: center; justify-content: center; margin: 1rem 0; }
+</style>
 {% endblock %}

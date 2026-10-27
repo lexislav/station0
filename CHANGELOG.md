@@ -5,6 +5,26 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-10-27
+
+### Added
+- **Redirects: a 404 log you can work through.** The log at
+  `/admin/redirects/404` now has:
+  - **Filters:** path contains, referrer contains (`-` = no referrer),
+    minimum hits, seen in the last 24 h / 7 / 30 / 90 days.
+  - **Sortable columns** (path, hits, first seen, last seen) and paging
+    (100 per page). It also shows the first-seen date.
+  - **A suggested target** per path: a live page with the same last segment
+    (`/old/hello-world` → `/blog/hello-world`, `.html` stripped), else a page
+    a few typos away, else the nearest live parent. It never suggests the
+    homepage. **Redirect** creates the 301 in one click; **Create redirect**
+    opens the form with both fields filled. Either way you return to the log
+    with your filters kept.
+  - **Bulk ignore / show again** for the checked rows.
+  - **Resolved paths are dropped.** Opening the log removes the paths that a
+    rule or a live page now answers, wherever the rule came from (admin,
+    YAML, console, automatic).
+
 ## [0.10.1] - 2026-10-26
 
 ### Added
@@ -463,6 +483,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.10.2]: https://github.com/lexislav/station0/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/lexislav/station0/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/lexislav/station0/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/lexislav/station0/compare/v0.9.2...v0.9.3

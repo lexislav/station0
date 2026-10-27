@@ -68,4 +68,45 @@ final class LogTest extends TestCase
         $log->hit('abc');
         self::assertSame(2, $log->hits()['abc']['hits']);
     }
+
+    public function testSearchFiltersSortsAndPages(): void
+    {
+        $log = $this->log();
+        foreach (['/a-one' => 3, '/b_two' => 1, '/c-three' => 2] as $path => $hits) {
+            for ($i = 0; $i < $hits; $i++) {
+                $log->record404($path, $path === '/c-three' ? 'https://news.example/x' : null);
+            }
+        }
+        $paths = fn (array $r) => array_column($r['entries'], 'path');
+
+        self::assertSame(['/a-one', '/c-three', '/b_two'], $paths($log->search()));
+        self::assertSame(['/a-one', '/b_two', '/c-three'], $paths($log->search(['sort' => 'path', 'dir' => 'asc'])));
+        self::assertSame(['/b_two', '/c-three', '/a-one'], $paths($log->search(['sort' => 'hits', 'dir' => 'asc'])));
+        self::assertSame(['/a-one', '/c-three'], $paths($log->search(['q' => '-'])));
+        self::assertSame(['/b_two'], $paths($log->search(['q' => '_'])), '_ is literal, not a LIKE wildcard');
+        self::assertSame(['/c-three'], $paths($log->search(['ref' => 'news'])));
+        self::assertSame(['/a-one', '/b_two'], $paths($log->search(['ref' => '-', 'sort' => 'path', 'dir' => 'asc'])));
+        self::assertSame(['/a-one', '/c-three'], $paths($log->search(['min' => 2])));
+        self::assertCount(3, $log->search(['days' => 1])['entries']);
+        self::assertSame(['/b_two'], $paths($log->search(['sort' => 'nonsense; DROP', 'dir' => 'asc'], 1)), 'unknown sort falls back to hits');
+
+        $page = $log->search(['sort' => 'path', 'dir' => 'asc'], 2, 2);
+        self::assertSame(['/c-three'], $paths($page));
+        self::assertSame(3, $page['total']);
+    }
+
+    public function testBulkIgnoreAndForgetResolved(): void
+    {
+        $log = $this->log();
+        foreach (['/a', '/b', '/c', '/d'] as $path) {
+            $log->record404($path);
+        }
+        $log->ignore(['/a', '/b']);
+        self::assertSame(['/c', '/d'], array_column($log->search(['sort' => 'path', 'dir' => 'asc'])['entries'], 'path'));
+        self::assertSame(2, $log->search(['ignored' => true])['total']);
+
+        self::assertSame(2, $log->forgetResolved(fn (string $path) => in_array($path, ['/a', '/c'], true)));
+        self::assertSame(['/d'], array_column($log->entries(), 'path'));
+        self::assertSame(['/b'], array_column($log->entries(10, true), 'path'));
+    }
 }
