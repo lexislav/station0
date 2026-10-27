@@ -164,10 +164,16 @@ and editors.
   hit counts for counted rules. Rules can be added, edited and deleted here.
 - **Test a URL.** Shows which rule answers a URL and where it leads,
   including the query string.
-- **404 log** (`/redirects/404`). Misses sorted by hits, with the last time
-  seen and the referrer. "Create redirect" opens the form with the path
-  filled in. "Ignore" hides a path, and "Clear" (admins only) empties the
-  log.
+- **404 log** (`/redirects/404`). Misses with hits, first and last time
+  seen and the referrer, 100 per page. Sorted by hits by default; click a
+  column header (path, hits, first / last seen) to sort by it. Filter by
+  path, by referrer (`-` = no referrer), by minimum hits and by how recently
+  the path was seen. Each path gets a **suggested target** when one is
+  likely (see below). **Redirect** adds a 301 to the suggestion right away;
+  **Create redirect** opens the form with the path and the suggestion filled
+  in. Either way you come back to the log with your filters kept. **Ignore**
+  hides a path; tick several rows to ignore them at once (or, in the ignored
+  view, to show them again). **Clear** (admins only) empties the log.
 - **Roles.** Editors can add, edit and delete exact rules. Patterns, regexes
   and force rules redirect broadly or hide pages, so only admins can manage
   them.
@@ -200,6 +206,15 @@ for GET/HEAD requests that end in a 404 and that no rule answered.
 - The path is stored without its query string and cut to 512 characters.
   The referrer is stored without its query string.
 - `ignore404` globs are never logged.
+- Opening the log drops the paths that something now answers: a rule
+  (from the admin, the YAML file, the console or an automatic one) or a
+  live page created at that path. Ignored paths are dropped too.
+- **Suggested target**, in this order: a live page whose last segment is
+  the same (case-insensitive, a legacy `.html` / `.php` / `.aspx` extension
+  stripped), the closest one if there are several; else a live page whose
+  path is a few typos away (edit distance up to about a fifth of the path);
+  else the nearest live ancestor. The homepage is never suggested, since
+  sending misses there is a soft 404.
 - The table keeps the `logLimit` most recently seen paths; older rows are
   pruned.
 
@@ -223,4 +238,4 @@ already has a rule, and invalid rows, are reported and skipped.
 |---|---|
 | `site/content/_redirects.yaml` | the rules |
 | `writable/cache/redirects.php`, `redirects.force.php` | compiled rules (generated) |
-| site database (`paths.db`) → `station0_404`, `station0_redirect_hits` | 404 log, hit counters |
+| site database (`writable/db.sqlite`, set by `paths.db`) → `station0_404`, `station0_redirect_hits` | 404 log, hit counters |

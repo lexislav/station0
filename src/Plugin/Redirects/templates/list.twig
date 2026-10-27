@@ -89,6 +89,7 @@
     <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
     <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
     {% if form.id ?? false %}<input type="hidden" name="id" value="{{ form.id }}">{% endif %}
+    {% if form.back is defined and form.back is not null %}<input type="hidden" name="back" value="{{ form.back }}">{% endif %}
     {% if error %}<p class="error">{{ error|nl2br }}</p>{% endif %}
 
     <div class="field">

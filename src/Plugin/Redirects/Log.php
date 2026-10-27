@@ -74,21 +74,106 @@ final class Log
             SELECT path FROM station0_404 ORDER BY last_seen DESC LIMIT ' . max(1, $this->cap) . ')');
     }
 
+    public const SORTS = ['hits' => 'hits', 'path' => 'path', 'first' => 'first_seen', 'last' => 'last_seen'];
+
     /** @return list<array{path: string, hits: int, first_seen: string, last_seen: string, referrer: ?string}> */
     public function entries(int $limit = 200, bool $ignored = false): array
     {
-        $stmt = $this->pdo->prepare('SELECT path, hits, first_seen, last_seen, referrer FROM station0_404
-            WHERE ignored = :i ORDER BY hits DESC, last_seen DESC LIMIT :l');
-        $stmt->bindValue(':i', $ignored ? 1 : 0, PDO::PARAM_INT);
-        $stmt->bindValue(':l', $limit, PDO::PARAM_INT);
-        $stmt->execute();
-        return array_map(fn (array $r) => ['hits' => (int) $r['hits']] + $r, $stmt->fetchAll(PDO::FETCH_ASSOC));
+        return $this->search(['ignored' => $ignored], $limit)['entries'];
     }
 
-    /** Hide a path from the log (it keeps counting). */
-    public function ignore(string $path, bool $ignored = true): void
+    /**
+     * Filtered, sorted page of the log (admin 404 view).
+     *
+     * Filters: `q` (path contains), `ref` (referrer contains; `-` = none),
+     * `min` (hits at least), `days` (seen within the last n days),
+     * `ignored`. `sort` = a key of SORTS, `dir` = asc|desc.
+     *
+     * @return array{entries: list<array>, total: int}
+     */
+    public function search(array $filter = [], int $limit = 100, int $offset = 0): array
     {
-        $this->pdo->prepare('UPDATE station0_404 SET ignored = ? WHERE path = ?')->execute([$ignored ? 1 : 0, $path]);
+        $where  = ['ignored = :i'];
+        $params = [':i' => !empty($filter['ignored']) ? 1 : 0];
+        if (($q = trim((string) ($filter['q'] ?? ''))) !== '') {
+            $where[] = "path LIKE :q ESCAPE '\\'";
+            $params[':q'] = '%' . self::like($q) . '%';
+        }
+        $ref = trim((string) ($filter['ref'] ?? ''));
+        if ($ref === '-') {
+            $where[] = 'referrer IS NULL';
+        } elseif ($ref !== '') {
+            $where[] = "referrer LIKE :r ESCAPE '\\'";
+            $params[':r'] = '%' . self::like($ref) . '%';
+        }
+        if (($min = (int) ($filter['min'] ?? 0)) > 1) {
+            $where[] = 'hits >= :m';
+            $params[':m'] = $min;
+        }
+        if (($days = (int) ($filter['days'] ?? 0)) > 0) {
+            $where[] = 'last_seen >= :d';
+            $params[':d'] = date('c', time() - $days * 86400);
+        }
+        $where = implode(' AND ', $where);
+
+        $sort = self::SORTS[$filter['sort'] ?? ''] ?? 'hits';
+        $dir  = strtolower((string) ($filter['dir'] ?? '')) === 'asc' ? 'ASC' : 'DESC';
+        $then = $sort === 'last_seen' ? 'path ASC' : 'last_seen DESC';
+
+        $count = $this->pdo->prepare("SELECT COUNT(*) FROM station0_404 WHERE {$where}");
+        $count->execute($params);
+
+        $stmt = $this->pdo->prepare("SELECT path, hits, first_seen, last_seen, referrer FROM station0_404
+            WHERE {$where} ORDER BY {$sort} {$dir}, {$then} LIMIT :l OFFSET :o");
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        $stmt->bindValue(':l', max(1, $limit), PDO::PARAM_INT);
+        $stmt->bindValue(':o', max(0, $offset), PDO::PARAM_INT);
+        $stmt->execute();
+
+        return [
+            'entries' => array_map(fn (array $r) => ['hits' => (int) $r['hits']] + $r, $stmt->fetchAll(PDO::FETCH_ASSOC)),
+            'total'   => (int) $count->fetchColumn(),
+        ];
+    }
+
+    /**
+     * Drop the paths that something now answers (a rule, a new page), ignored
+     * ones included — they are no longer misses.
+     *
+     * @param callable(string): bool $resolved
+     * @return int rows removed
+     */
+    public function forgetResolved(callable $resolved): int
+    {
+        $gone = array_values(array_filter(
+            $this->pdo->query('SELECT path FROM station0_404')->fetchAll(PDO::FETCH_COLUMN),
+            fn ($path) => $resolved((string) $path),
+        ));
+        $stmt = $this->pdo->prepare('DELETE FROM station0_404 WHERE path = ?');
+        foreach ($gone as $path) {
+            $stmt->execute([$path]);
+        }
+        return count($gone);
+    }
+
+    private static function like(string $value): string
+    {
+        return strtr($value, ['\\' => '\\\\', '%' => '\\%', '_' => '\\_']);
+    }
+
+    /**
+     * Hide paths from the log (they keep counting).
+     *
+     * @param string|list<string> $paths
+     */
+    public function ignore(string|array $paths, bool $ignored = true): void
+    {
+        $stmt = $this->pdo->prepare('UPDATE station0_404 SET ignored = ? WHERE path = ?');
+        foreach ((array) $paths as $path) {
+            $stmt->execute([$ignored ? 1 : 0, (string) $path]);
+        }
     }
 
     public function forget(string $path): void

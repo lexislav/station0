@@ -49,8 +49,9 @@ final class AdminController
 
         $editing = isset($query['edit']) ? $this->store->find((string) $query['edit']) : null;
         $form = $form ?: ($editing !== null && $this->mayEdit($editing) ? $editing : [
-            'from' => (string) ($query['from'] ?? ''), 'to' => '', 'status' => 301,
+            'from' => (string) ($query['from'] ?? ''), 'to' => (string) ($query['to'] ?? ''), 'status' => 301,
         ]);
+        $form['back'] ??= isset($query['back']) ? self::logQuery((string) $query['back']) : null;
 
         $test = null;
         if (isset($query['test']) && trim((string) $query['test']) !== '') {
@@ -104,11 +105,15 @@ final class AdminController
             if ($this->wantsJson($request)) {
                 return $this->json($response, ['ok' => false, 'error' => $e->getMessage()], 422);
             }
-            return $this->index($request, $response, [], ['id' => $replaceId] + $raw, $e->getMessage());
+            $back = isset($data['back']) ? self::logQuery((string) $data['back']) : null;
+            return $this->index($request, $response, [], ['id' => $replaceId, 'back' => $back] + $raw, $e->getMessage());
         }
 
         if ($this->wantsJson($request)) {
             return $this->json($response, ['ok' => true, 'rule' => $rule]);
+        }
+        if (isset($data['back'])) {
+            return $this->redirect($response, self::logUrl(self::logQuery((string) $data['back'])));
         }
         return $this->redirect($response, '/redirects?saved=1');
     }
@@ -131,22 +136,52 @@ final class AdminController
             : $this->redirect($response, '/redirects?saved=1');
     }
 
+    public const LOG_PER_PAGE = 100;
+
+    /**
+     * 404 log: drops the misses a rule or a live page now answers, then lists
+     * a filtered, sorted page with a suggested target per path.
+     */
     public function log(Request $request, Response $response): Response
     {
-        $showIgnored = isset($request->getQueryParams()['ignored']);
+        $query  = $request->getQueryParams();
+        $filter = self::logFilter($query);
+        $page   = max(1, (int) ($query['page'] ?? 1));
+        $log    = ($this->log)();
+
+        $live    = array_map(fn ($p) => $p->urlPath, $this->pages->all(false));
+        $isLive  = array_flip($live);
+        $matcher = $this->store->matcher();
+        $resolved = $log->forgetResolved(fn (string $path): bool => isset($isLive[$path]) || $matcher->test($path) !== null);
+
+        $result    = $log->search($filter, self::LOG_PER_PAGE, ($page - 1) * self::LOG_PER_PAGE);
+        $suggester = new Suggester($live);
+        foreach ($result['entries'] as &$entry) {
+            $entry['suggest'] = $filter['ignored'] ? null : $suggester->suggest($entry['path']);
+        }
+        unset($entry);
+
         return $this->twig->render($response, '@redirects/log.twig', [
-            'entries'     => ($this->log)()->entries(500, $showIgnored),
-            'showIgnored' => $showIgnored,
+            'entries'     => $result['entries'],
+            'total'       => $result['total'],
+            'page'        => $page,
+            'pages'       => max(1, (int) ceil($result['total'] / self::LOG_PER_PAGE)),
+            'filter'      => $filter,
+            'params'      => array_filter($filter, fn ($v) => $v !== '' && $v !== false),
+            'resolved'    => $resolved,
+            'showIgnored' => $filter['ignored'],
             'isAdmin'     => $this->isAdmin(),
             'activeNav'   => 'plugin-redirects',
         ]);
     }
 
+    /** Ignore (or with `undo` show again) one `path` or the checked `paths[]`. */
     public function ignore(Request $request, Response $response): Response
     {
-        $data = (array) $request->getParsedBody();
-        ($this->log)()->ignore((string) ($data['path'] ?? ''), empty($data['undo']));
-        return $this->redirect($response, '/redirects/404' . (!empty($data['undo']) ? '?ignored' : ''));
+        $data  = (array) $request->getParsedBody();
+        $paths = array_map('strval', array_filter((array) ($data['paths'] ?? [$data['path'] ?? '']), 'is_scalar'));
+        ($this->log)()->ignore(array_values(array_filter($paths, fn ($p) => $p !== '')), empty($data['undo']));
+        return $this->redirect($response, self::logUrl(self::logQuery((string) ($data['back'] ?? ''))));
     }
 
     public function clear(Request $request, Response $response): Response
@@ -159,6 +194,35 @@ final class AdminController
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    /** @return array{q: string, ref: string, min: string, days: string, sort: string, dir: string, ignored: bool} */
+    private static function logFilter(array $query): array
+    {
+        $sort = (string) ($query['sort'] ?? '');
+        return [
+            'q'       => trim((string) ($query['q'] ?? '')),
+            'ref'     => trim((string) ($query['ref'] ?? '')),
+            'min'     => (int) ($query['min'] ?? 0) > 1 ? (string) (int) $query['min'] : '',
+            'days'    => (int) ($query['days'] ?? 0) > 0 ? (string) (int) $query['days'] : '',
+            'sort'    => isset(Log::SORTS[$sort]) && $sort !== 'hits' ? $sort : '',
+            'dir'     => in_array($query['dir'] ?? '', ['asc', 'desc'], true) ? (string) $query['dir'] : '',
+            'ignored' => isset($query['ignored']) && $query['ignored'] !== '0',
+        ];
+    }
+
+    /** A posted / linked log query string, reduced to the known filters. */
+    private static function logQuery(string $back): string
+    {
+        parse_str(ltrim($back, '?'), $query);
+        $filter = self::logFilter($query);
+        $filter['ignored'] = $filter['ignored'] ? '1' : '';
+        return http_build_query(array_filter($filter, fn ($v) => $v !== ''));
+    }
+
+    private static function logUrl(string $query): string
+    {
+        return '/redirects/404' . ($query !== '' ? '?' . $query : '');
+    }
 
     /** @return list<string> translation keys */
     private function warnings(array $rule): array

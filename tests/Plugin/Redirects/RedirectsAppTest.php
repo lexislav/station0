@@ -158,6 +158,46 @@ final class RedirectsAppTest extends TestCase
         self::assertSame([], $off->getContainer()->get(Log::class)->entries());
     }
 
+    public function testNotFoundLogFiltersSuggestsAndResolves(): void
+    {
+        $app = $this->app();
+        foreach (['/old/post', '/old/post', '/abuot', '/blog/gone/very/deep', '/nothing-like-it', '/noise-1', '/noise-2'] as $path) {
+            $this->get($app, $path);
+        }
+        $log = $app->getContainer()->get(Log::class);
+        self::assertCount(6, $log->entries());
+
+        $html = (string) $this->get($this->reboot(), '/admin/redirects/404')->getBody();
+        self::assertStringContainsString('<code>/blog/post</code>', $html);
+        self::assertStringContainsString('page with the same name', $html);
+        self::assertStringContainsString('<code>/about</code>', $html);
+        self::assertStringContainsString('nearest live parent', $html);
+        self::assertStringContainsString('sort=path&amp;dir=asc', $html);
+        self::assertStringContainsString('6 paths', $html);
+
+        $filtered = (string) $this->get($this->reboot(), '/admin/redirects/404?q=noise&sort=path&dir=desc')->getBody();
+        self::assertStringContainsString('2 paths', $filtered);
+        self::assertLessThan(strpos($filtered, '<code>/noise-1</code>'), strpos($filtered, '<code>/noise-2</code>'));
+
+        // One-click redirect to the suggestion returns to the filtered log.
+        $res = $this->post($this->reboot(), '/admin/redirects/rules', ['from' => '/old/post', 'to' => '/blog/post', 'status' => '301', 'back' => 'q=old'], '/admin/redirects');
+        self::assertSame(303, $res->getStatusCode());
+        self::assertSame('/admin/redirects/404?q=old', $res->getHeaderLine('Location'));
+
+        // Bulk ignore, preserving the filter.
+        $res = $this->post($this->reboot(), '/admin/redirects/404/ignore', ['paths' => ['/noise-1', '/noise-2'], 'back' => 'q=noise&evil=1'], '/admin/redirects');
+        self::assertSame('/admin/redirects/404?q=noise', $res->getHeaderLine('Location'));
+
+        // A page created at a logged path answers it: dropped as well.
+        $this->site->write('site/content/pages/nothing-like-it/page.txt', "Title: Now it exists\nStatus: published\n---\n");
+        $html = (string) $this->get($this->reboot(), '/admin/redirects/404')->getBody();
+        self::assertStringContainsString('now answered by a redirect or a page: 2', $html);
+        self::assertStringNotContainsString('<code>/old/post</code>', $html);
+        self::assertStringNotContainsString('<code>/noise-1</code>', $html);
+        self::assertSame(['/abuot', '/blog/gone/very/deep'], array_column($this->reboot()->getContainer()->get(Log::class)->search(['sort' => 'path', 'dir' => 'asc'])['entries'], 'path'));
+        self::assertSame(2, $log->search(['ignored' => true])['total']);
+    }
+
     public function testAdminListFormAndTest(): void
     {
         $app  = $this->app();
