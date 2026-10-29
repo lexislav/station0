@@ -106,6 +106,14 @@ collisions resolve as `team-photo-2.jpg`, `-3`, … Allowed types: jpg, png,
 gif, webp, svg (max 8 MB). Pages do not accept `.txt` uploads, because a
 page's content file is the `.txt` in its folder; use `.md` or `.pdf` instead.
 
+SVG uploads are **sanitized**: scripts, `on*` handlers, `<foreignObject>` and
+other embeds, links that are not `#fragment` or a raster `data:image/…`, and
+external `url()` / `@import` are removed before the file is stored. A file
+that is not a valid SVG, or declares entities in a DOCTYPE, is rejected.
+`/media` serves SVG inline under a sandbox CSP. To clean SVGs stored before
+this (or copied in by hand), run `php vendor/bin/console assets:sanitize-svg
+[--dry-run]`.
+
 In stored content, asset references are **page-relative** — bare filenames:
 
 ```yaml
@@ -449,6 +457,7 @@ php vendor/bin/console user:create <username> <email> [role]   # role: admin | e
 php vendor/bin/console user:reset-password <email>
 php vendor/bin/console cache:clear
 php vendor/bin/console assets:relink [--dry-run]
+php vendor/bin/console assets:sanitize-svg [--dry-run]   # clean stored SVGs
 php vendor/bin/console thumbs:warm [baseUrl]      # pre-generate thumbnails (server must run)
 php vendor/bin/console thumbs:clear
 php vendor/bin/console collections:retitle [name…] [--dry-run]   # recompute computed titles

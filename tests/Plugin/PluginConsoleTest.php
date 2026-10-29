@@ -56,4 +56,26 @@ final class PluginConsoleTest extends TestCase
         self::assertStringContainsString('migrace 001-things', $list);
         self::assertStringNotContainsString('neaplikována', $list);
     }
+
+    public function testSanitizeSvgCleansStoredFiles(): void
+    {
+        $clean = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>';
+        $this->site->write('site/content/pages/about/evil.svg', '<svg xmlns="http://www.w3.org/2000/svg" onload="x()"><script>x()</script><circle r="1"/></svg>');
+        $this->site->write('site/content/pages/about/ok.svg', $clean);
+        $this->site->write('site/content/collections/products/chair/bad.svg', '<html>not svg</html>');
+        $evil = $this->site->dir . '/site/content/pages/about/evil.svg';
+
+        [$code, $out] = $this->console('assets:sanitize-svg', '--dry-run');
+        self::assertSame(1, $code, $out);
+        self::assertStringContainsString('[dry] pages/about/evil.svg: @onload, <script>', $out);
+        self::assertStringContainsString('collections/products/chair/bad.svg: NEPLATNÉ', $out);
+        self::assertStringNotContainsString('ok.svg', $out);
+        self::assertStringContainsString('<script>', (string) file_get_contents($evil));
+
+        [, $out] = $this->console('assets:sanitize-svg');
+        self::assertStringContainsString('vyčištěno 1 SVG, neplatných 1', $out);
+        self::assertStringNotContainsString('script', (string) file_get_contents($evil));
+        self::assertSame($clean, file_get_contents($this->site->dir . '/site/content/pages/about/ok.svg'));
+        self::assertSame('<html>not svg</html>', file_get_contents($this->site->dir . '/site/content/collections/products/chair/bad.svg'));
+    }
 }

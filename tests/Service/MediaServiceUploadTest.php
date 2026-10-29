@@ -125,4 +125,44 @@ final class MediaServiceUploadTest extends TestCase
         $result = $this->make()->storeForPage('/about', $this->upload('report.docx', "PK\x03\x04" . str_repeat("\0", 64)));
         self::assertSame('report.docx', $result['filename']);
     }
+
+    private const EVIL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script>'
+        . '<a href="javascript:alert(3)"><circle r="4"/></a></svg>';
+
+    public function testPageSvgUploadIsSanitized(): void
+    {
+        $result = $this->make()->storeForPage('/about', $this->upload('logo.svg', self::EVIL_SVG));
+
+        self::assertSame('logo.svg', $result['filename']);
+        $stored = (string) file_get_contents($this->pagesDir . '/about/logo.svg');
+        self::assertStringNotContainsString('alert', $stored);
+        self::assertStringContainsString('<a><circle r="4"/></a>', $stored);
+    }
+
+    public function testCollectionSvgUploadIsSanitized(): void
+    {
+        $this->make()->storeForCollection('banners', 'sale', $this->upload('logo.svg', self::EVIL_SVG));
+
+        self::assertStringNotContainsString('alert', (string) file_get_contents($this->collectionsDir . '/banners/sale/logo.svg'));
+    }
+
+    public function testCleanSvgUploadIsStoredUnchanged(): void
+    {
+        $svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 4 4\">\n  <circle r=\"2\"/>\n</svg>\n";
+        $this->make()->storeForPage('/about', $this->upload('dot.svg', $svg));
+
+        self::assertSame($svg, file_get_contents($this->pagesDir . '/about/dot.svg'));
+    }
+
+    public function testSvgThatIsNotAnSvgIsRejected(): void
+    {
+        // Extension fallback: `.svg` is detected as SVG whatever the content.
+        try {
+            $this->make()->storeForPage('/about', $this->upload('x.svg', "<html><script>alert(1)</script></html>"));
+            self::fail('Upload was accepted');
+        } catch (\RuntimeException $e) {
+            self::assertStringStartsWith('SVG rejected', $e->getMessage());
+        }
+        self::assertSame(['page.txt'], array_values(array_diff(scandir($this->pagesDir . '/about'), ['.', '..'])));
+    }
 }

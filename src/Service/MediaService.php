@@ -6,6 +6,7 @@ namespace Station0\Service;
 
 use Psr\Http\Message\UploadedFileInterface;
 use Station0\Support\Slug;
+use Station0\Support\SvgSanitizer;
 
 /**
  * Stores page-local assets next to the page's content file.
@@ -113,6 +114,7 @@ final class MediaService
             if ($file->getSize() === null || $file->getSize() > $maxBytes) {
                 throw new \RuntimeException('File too large (max ' . ($maxBytes / 1024 / 1024) . ' MB for images)');
             }
+            $this->sanitizeSvgUpload($tmpPath, $mime);
             $targetDir = $this->resolvePageDir($pageUrlPath);
             // Force extension to match detected MIME — prevents extension spoofing.
             $name = $this->resolveFilename($targetDir, $clientName, self::ALLOWED_MIME[$mime]);
@@ -247,6 +249,7 @@ final class MediaService
             if ($file->getSize() === null || $file->getSize() > $maxBytes) {
                 throw new \RuntimeException('File too large (max ' . ($maxBytes / 1024 / 1024) . ' MB for images)');
             }
+            $this->sanitizeSvgUpload($tmpPath, $mime);
             $targetDir = rtrim($this->collectionsDir, '/') . '/' . $collectionName . '/' . $itemSlug;
             if (!is_dir($targetDir)) {
                 @mkdir($targetDir, 0775, true);
@@ -498,6 +501,23 @@ final class MediaService
             UPLOAD_ERR_EXTENSION  => 'A PHP extension stopped the upload',
             default               => 'Upload failed (error ' . $code . ')',
         };
+    }
+
+    /**
+     * Rewrite an uploaded SVG in place with its script, event handlers and
+     * external references removed (`SvgSanitizer`). Not an SVG ⇒ no-op.
+     *
+     * @throws \RuntimeException when the SVG is unusable (does not parse, entities)
+     */
+    private function sanitizeSvgUpload(string $tmpPath, string $mime): void
+    {
+        if ($mime !== 'image/svg+xml') {
+            return;
+        }
+        $clean = SvgSanitizer::sanitize((string) file_get_contents($tmpPath));
+        if ($clean['removed'] !== []) {
+            file_put_contents($tmpPath, $clean['svg']);
+        }
     }
 
     private function detectMime(string $path, string $clientName): string
