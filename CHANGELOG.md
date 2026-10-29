@@ -5,6 +5,27 @@ All notable changes to `lexislav/station0` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- **SVG uploads are sanitized.** Page and collection uploads of an SVG are
+  cleaned before they are stored: scripts, `on*` event handlers,
+  `<foreignObject>` / `<iframe>` / `<embed>` / `<object>`, editor metadata in
+  other namespaces, links that are not a `#fragment` or a raster
+  `data:image/…`, external `url()` / `@import` in CSS, and animations that
+  rewrite a link or a handler are removed. A file that is not a valid SVG
+  (e.g. HTML named `.svg`), or that declares entities in a DOCTYPE, is
+  rejected with an error in the admin. Clean files are stored unchanged.
+  Until now `/media` was the only protection, so a stored script could run
+  wherever the raw file was opened.
+- **`assets:sanitize-svg [--dry-run]`** cleans SVGs that were stored earlier
+  (pages and collections) and lists files it cannot use.
+
+### Changed
+- **SVGs open in the browser.** A direct link to `/media/…/x.svg` shows the
+  image instead of downloading it. It is still served under the sandbox CSP
+  (now with `img-src data:`, so embedded raster images show).
+
 ## [0.10.3] - 2026-10-27
 
 ### Added

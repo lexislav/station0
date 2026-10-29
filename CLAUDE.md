@@ -385,6 +385,22 @@ site/content/pages/about/
 that delegates to it. Uploads accept: **jpg, png, gif, webp, svg** (max 8 MB).
 SVG detection sniffs file content for `<svg xmlns` because `mime_content_type()`
 misidentifies SVGs as `text/plain`/`text/html`.
+**SVG uploads are sanitized** (page + collection, `MediaService::sanitizeSvgUpload()`
+→ `Station0\Support\SvgSanitizer`): DOM allow-list of SVG elements (others
+dropped with their content — `script`, `foreignObject`, `iframe`, editor
+namespaces), `on*` / foreign-namespace attributes dropped, `href` /
+`xlink:href` kept only for `#fragment` / raster `data:image/…;base64`,
+attributes and `<style>` with external `url()`, `@import`, CSS hex escapes or
+`javascript:` dropped, animations targeting `href` / `on*` dropped, PIs
+dropped. A plain `<!DOCTYPE svg PUBLIC …>` is removed; one with an internal
+subset / `<!ENTITY>`, or a file that is not an `<svg>` root in the SVG
+namespace → `RuntimeException` (`SVG rejected: …`, 422). Unchanged files keep
+their bytes. `/media` serves SVG **inline** with `Content-Security-Policy:
+default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox` (for
+files not uploaded through the admin); documents are `attachment`; every
+asset gets `nosniff` (`tests/Plugin/MediaHeadersAppTest.php`). Existing files:
+`php vendor/bin/console assets:sanitize-svg [--dry-run]` (pages + collections;
+rejected files are listed, left alone, exit 1).
 `.txt` documents are rejected for pages (collection items keep them): the
 content file is the `*.txt` in the page dir. When a dir still holds several,
 `ContentRepository::contentFileIn()` picks the one named after a template

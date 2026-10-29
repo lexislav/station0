@@ -38,6 +38,7 @@ use Station0\Service\TaskLauncher;
 use Station0\Service\TaskRegistry;
 use Station0\Service\ThumbService;
 use Station0\Service\UserRepository;
+use Station0\Support\SvgSanitizer;
 use Symfony\Component\Yaml\Yaml;
 
 $siteRoot = rtrim(getenv('SITE_PATH') ?: ($projectRoot . '/site'), '/');
@@ -228,6 +229,43 @@ switch ($command) {
         }
         break;
 
+    case 'assets:sanitize-svg':
+        // Clean SVGs stored before uploads were sanitized (or copied in by
+        // hand): the same SvgSanitizer as the upload. Files it rejects are
+        // listed and left as they are.
+        $dryRun   = in_array('--dry-run', $args, true);
+        $cleaned  = 0;
+        $rejected = 0;
+        foreach ([$config['paths']['content'] . '/pages', $config['paths']['content'] . '/collections'] as $root) {
+            if (!is_dir($root)) {
+                continue;
+            }
+            $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
+            foreach ($files as $file) {
+                if (!$file->isFile() || strtolower($file->getExtension()) !== 'svg') {
+                    continue;
+                }
+                $rel = substr($file->getPathname(), strlen($config['paths']['content']) + 1);
+                try {
+                    $clean = SvgSanitizer::sanitize((string) file_get_contents($file->getPathname()));
+                } catch (\RuntimeException $e) {
+                    $rejected++;
+                    echo "{$rel}: NEPLATNÉ — {$e->getMessage()}\n";
+                    continue;
+                }
+                if ($clean['removed'] === []) {
+                    continue;
+                }
+                $cleaned++;
+                echo ($dryRun ? '[dry] ' : '') . "{$rel}: " . implode(', ', array_unique($clean['removed'])) . "\n";
+                if (!$dryRun) {
+                    file_put_contents($file->getPathname(), $clean['svg']);
+                }
+            }
+        }
+        echo ($dryRun ? '[dry] ' : '') . "Hotovo: vyčištěno {$cleaned} SVG, neplatných {$rejected}.\n";
+        exit($rejected > 0 ? 1 : 0);
+
     case 'collections:retitle':
         // Recompute the titles of existing items after adding or changing a
         // `title` pattern in _collection.yaml (items otherwise update when
@@ -379,6 +417,7 @@ switch ($command) {
         echo "  thumbs:clear                  Smaže vygenerované náhledy obrázků\n";
         echo "  thumbs:warm [baseUrl]         Předgeneruje náhledy všech publikovaných stránek (běžící server)\n";
         echo "  assets:relink [--dry-run]     Převede absolutní /media/... odkazy na page-local názvy\n";
+        echo "  assets:sanitize-svg [--dry-run]  Vyčistí uložená SVG (skripty, on* atributy, externí odkazy)\n";
         echo "  collections:retitle [name…] [--dry-run]  Přepočítá titulky položek podle vzoru title v _collection.yaml\n";
         echo "  task:list                     Vypíše úlohy webu (site/tasks/*.php)\n";
         echo "  task:run <name> [--param=value]  Spustí úlohu webu\n";

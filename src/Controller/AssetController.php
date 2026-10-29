@@ -58,19 +58,18 @@ final class AssetController
             return $response;
         }
 
-        // SVGs can carry embedded <script>. They still render fine via <img>/CSS,
-        // but a sandbox CSP neutralizes script execution if one is opened directly,
-        // and we force-download rather than render as a top-level document.
-        $isSvg = $asset['mime'] === 'image/svg+xml';
-        if ($isSvg) {
+        // Uploaded SVGs are sanitized (SvgSanitizer), but files placed by other
+        // means are not: a sandbox CSP keeps script from running when one is
+        // opened directly, so a direct link can still show it inline.
+        if ($asset['mime'] === 'image/svg+xml') {
             $response = $response->withHeader(
                 'Content-Security-Policy',
-                "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+                "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox",
             );
         }
 
-        // Documents and SVGs are downloaded; raster images are rendered inline.
-        if ($asset['download'] || $isSvg) {
+        // Documents are downloaded; images (raster and SVG) are rendered inline.
+        if ($asset['download']) {
             $filename = rawurlencode(basename($asset['path']));
             $response = $response->withHeader(
                 'Content-Disposition',
