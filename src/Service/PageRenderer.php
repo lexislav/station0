@@ -58,7 +58,9 @@ final class PageRenderer
     {
         // Drop cached HTML once a scheduled PublishAt / ExpireAt has passed.
         $this->horizon?->check();
+        // $sourceMtime covers the translation file too (ContentRepository::mtime()).
         $key = 'page:' . sha1($page->filePath) . ':' . $sourceMtime
+            . ($page->lang !== '' ? ':' . $page->lang : '')
             . ($this->variant !== null ? ':' . ($this->variant)() : '');
         $hit = $this->cache->get($key);
         if ($hit !== null) {

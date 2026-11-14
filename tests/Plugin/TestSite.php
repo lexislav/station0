@@ -13,6 +13,9 @@ final class TestSite
 {
     public readonly string $dir;
 
+    /** Config merged over the defaults (e.g. `languages`); set with configure(). */
+    private array $extra = [];
+
     /** @param ?string $pageTemplate site/templates/page.twig (default: title + content) */
     public function __construct(private readonly array $plugins = [], ?string $pageTemplate = null)
     {
@@ -30,19 +33,32 @@ final class TestSite
         $this->write('site/content/pages/about/page.txt', "Title: About\nStatus: published\n---\nAbout\n");
         $this->write('site/content/pages/quiet/page.txt', "Title: Quiet\nStatus: published\n---\nQuiet\n");
         $this->write('site/content/collections/products/chair/item.txt', "Title: Chair\nStatus: published\n---\n");
+        $this->writeConfig();
+    }
+
+    /** Merge $config over the site's config (also for bin/console runs). */
+    public function configure(array $config): void
+    {
+        $this->extra = array_replace($this->extra, $config);
+        $this->writeConfig();
+    }
+
+    private function writeConfig(): void
+    {
         $this->write('site/config.php', '<?php return fn (string $station0Root, string $siteRoot, string $projectRoot) => '
-            . '\Station0\Tests\Plugin\TestSite::configFor(' . var_export($this->dir, true) . ', ' . var_export($this->plugins, true) . ');');
+            . '\Station0\Tests\Plugin\TestSite::configFor(' . var_export($this->dir, true) . ', ' . var_export($this->plugins, true)
+            . ', ' . var_export($this->extra, true) . ');');
     }
 
     public function config(): array
     {
-        return self::configFor($this->dir, $this->plugins);
+        return self::configFor($this->dir, $this->plugins, $this->extra);
     }
 
-    public static function configFor(string $dir, array $plugins): array
+    public static function configFor(string $dir, array $plugins, array $extra = []): array
     {
         $station0Root = dirname(__DIR__, 2);
-        return [
+        return $extra + [
             'name'         => 'Test site',
             'baseUrl'      => 'http://localhost',
             'adminPath'    => '/admin',

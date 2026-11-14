@@ -32,6 +32,7 @@ final class VisibilityHorizon
         private readonly FileCache $cache,
         private readonly ContentRepository $pages,
         private readonly ?CollectionRepository $collections = null,
+        private readonly ?Languages $languages = null,
     ) {}
 
     /**
@@ -64,10 +65,19 @@ final class VisibilityHorizon
     public function next(int $now): ?int
     {
         $next = null;
-        foreach ($this->pages->all() as $page) {
-            $next = self::min($next, Visibility::nextTransition(
-                $page->status, $page->publishAt, $page->expireAt, $page->publishedAt, $now,
-            ));
+        // One cache for every language: each translation schedules on its own.
+        $views = [$this->pages->in('')];
+        foreach ($this->languages?->codes() ?? [] as $code) {
+            if (!$this->languages->isDefault($code)) {
+                $views[] = $this->pages->in($code);
+            }
+        }
+        foreach ($views as $pages) {
+            foreach ($pages->all() as $page) {
+                $next = self::min($next, Visibility::nextTransition(
+                    $page->status, $page->publishAt, $page->expireAt, $page->publishedAt, $now,
+                ));
+            }
         }
         if ($this->collections !== null) {
             foreach ($this->collections->names() as $name) {

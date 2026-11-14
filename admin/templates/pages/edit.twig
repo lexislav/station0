@@ -256,11 +256,12 @@
 {% endblock %}
 
 {% block body %}
+{% set editLang = editLang ?? null %}
 {% if mode == 'new' %}
     {% set formAction = app.adminPath ~ '/pages/create' %}
 {% else %}
     {% set editKey = page.urlPath == '/' ? '~' : page.urlPath|trim('/') %}
-    {% set formAction = app.adminPath ~ '/pages/' ~ editKey ~ '/update' %}
+    {% set formAction = app.adminPath ~ '/pages/' ~ editKey ~ '/update' ~ (editLang ? '?lang=' ~ editLang : '') %}
 {% endif %}
 
 <form method="post" action="{{ formAction }}" class="page-edit" id="page-edit-form">
@@ -282,6 +283,7 @@
                 {% endif %}
             {% endfor %}
         </p>
+        {% include '@admin/pages/_language_tabs.twig' with {page: page, editKey: editKey, editLang: editLang, languages: editLanguages ?? []} only %}
     {% endif %}
 
     <div class="field">
@@ -289,6 +291,7 @@
         <input type="text" name="title" value="{{ page.title }}" required autofocus>
     </div>
 
+    {% if not editLang %}
     <div class="row">
         {% if mode == 'new' %}
         <div class="field">
@@ -323,13 +326,14 @@
             {% endif %}
         </div>
     </div>
+    {% endif %}{# slug / template: default language only #}
 
     <div class="field">
         <label>{{ t.page_field_metatitle }} <small>{{ t.page_field_metatitle_hint|raw }}</small></label>
         <input type="text" name="metatitle" value="{{ page.metatitle }}" placeholder="{{ page.title }}">
     </div>
 
-    {% include '@admin/_visibility_fields.twig' with {entry: page, isPage: true, isNew: mode == 'new'} only %}
+    {% include '@admin/_visibility_fields.twig' with {entry: page, isPage: true, isNew: mode == 'new' or (editLang and not page.translated), translation: editLang} only %}
 
     {# ── Page fields – declared by the template's manifest (`fields:`) ── #}
     {% if pageFields is not empty %}
@@ -380,9 +384,20 @@
 
     <div class="toolbar sticky">
         <a class="btn" href="{{ cancelUrl|default(app.adminPath ~ '/pages') }}">{{ t.page_cancel }}</a>
-        <button type="submit" class="btn primary" id="save-btn" disabled>{{ t.page_save }}</button>
+        <button type="submit" class="btn primary" id="save-btn" {% if not (editLang and not page.translated) %}disabled{% endif %}>{{ t.page_save }}</button>
+        {% if editLang and page.translated %}
+            <button type="submit" class="btn danger" form="delete-translation-form">{{ t.lang_delete_translation }}</button>
+        {% endif %}
     </div>
 </form>
+{% if editLang and page.translated %}
+<form method="post" id="delete-translation-form" hidden
+      action="{{ app.adminPath }}/pages/{{ editKey }}/delete?lang={{ editLang }}"
+      onsubmit="return confirm({{ t.lang_delete_translation_confirm|json_encode }})">
+    <input type="hidden" name="{{ csrf.nameKey }}" value="{{ csrf.name }}">
+    <input type="hidden" name="{{ csrf.valueKey }}" value="{{ csrf.value }}">
+</form>
+{% endif %}
 
 {% include '@admin/_plugin_panels.twig' with {kind: 'page', entity: mode == 'edit' ? page : null} %}
 

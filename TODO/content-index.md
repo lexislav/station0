@@ -4,7 +4,7 @@ status: open
 priority: high
 area: content
 created: 2026-10-27
-related: [content-search.md, content-multilingual.md, plugin-content-api.md, src/Service/ContentRepository.php, src/Service/CollectionRepository.php, src/Plugin/Redirects/Compiler.php]
+related: [content-search.md, content-multilingual-collections.md, plugin-content-api.md, src/Service/ContentRepository.php, src/Service/CollectionRepository.php, src/Plugin/Redirects/Compiler.php]
 ---
 
 ## Problem
@@ -19,10 +19,11 @@ reverse relations) other than loading everything.
 
 ## Why it matters / why deferred
 It is the foundation for the gaps against Bolt: search (`content-search.md`),
-multilingual lookups (`content-multilingual.md`) and the API
+multilingual lookups (`docs/multilingual.md`, `content-multilingual-slugs.md`) and the API
 (`plugin-content-api.md`) all need fast metadata access, and it keeps
 Station0's speed advantage as sites grow. Not urgent for today's small sites,
-so it waits for a design pass; do it before the multilingual work.
+so it waits for a design pass. Multilingual pages shipped without it (one
+`is_file` per language per page); the index should carry `lang` per entry.
 
 ## Proposed fix
 Files stay the single source of truth; the index is derived and disposable.

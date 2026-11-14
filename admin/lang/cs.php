@@ -252,4 +252,11 @@ return [
     'member_link_subject' => 'Přihlašovací odkaz – %s',
     'member_link_intro'   => 'Kliknutím na odkaz níže se přihlásíš na %s. Funguje jednou a platí %d minut.',
     'member_link_ignore'  => 'Pokud jsi o něj nežádal, e-mail ignoruj.',
+    // Vícejazyčný obsah
+    'lang_tabs'                       => 'Jazyky',
+    'lang_not_translated'             => '%s — zatím nepřeloženo',
+    'lang_untranslated_notice'        => 'Stránka zatím není přeložena (%s). Formulář ukazuje text ve výchozím jazyce; uložením vznikne překlad.',
+    'lang_translation_hint'           => 'Slug, šablona, zařazení v menu a sdílená pole se upravují ve výchozím jazyce.',
+    'lang_delete_translation'         => 'Smazat překlad',
+    'lang_delete_translation_confirm' => 'Smazat tento překlad? Stránka sama zůstane.',
 ];

@@ -398,6 +398,11 @@ final class MediaService
             && realpath($full) === realpath($page->filePath)) {
             return null;
         }
+        // …nor one of its translations (`page.en.txt`, see Languages) — same leak.
+        if ($page !== null && $page->filePath !== ''
+            && preg_match('/^' . preg_quote(basename($page->filePath, '.txt'), '/') . '\.[a-z0-9-]+\.txt$/i', $file)) {
+            return null;
+        }
 
         // Ensure the resolved file actually lives inside the content tree.
         $real = realpath($full);

@@ -27,6 +27,18 @@ final class Page
      */
     public ?Page $parent = null;
 
+    /** Language this page was read in ('' = site not multilingual), see Languages. */
+    public string $lang = '';
+
+    /** False when read in a language the page has no translation file for (default text). */
+    public bool $translated = true;
+
+    /** The translation file merged over $filePath, when there is one. */
+    public ?string $translationFile = null;
+
+    /** @var list<string> Languages the page exists in: the default one + each translation file. */
+    public array $translations = [];
+
     /** Editorial status: draft | published | archived (see Visibility) */
     public string $status;
 

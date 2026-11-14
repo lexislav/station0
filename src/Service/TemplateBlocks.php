@@ -99,6 +99,24 @@ final class TemplateBlocks
     }
 
     /**
+     * Lower-cased names of $template's page fields shared by every language
+     * (`translate: false`, e.g. a price or an image) — on multilingual sites
+     * they are stored in the default-language file only.
+     *
+     * @return list<string>
+     */
+    public function sharedFields(string $template): array
+    {
+        $out = [];
+        foreach ($this->fields($template) as $field) {
+            if (($field['translate'] ?? true) === false) {
+                $out[] = strtolower((string) $field['name']);
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Whether pages of $template use the block page builder. `blocks: false`
      * in the manifest turns it off (a fields-only template); default true.
      */
