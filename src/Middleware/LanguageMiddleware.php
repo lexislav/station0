@@ -25,6 +25,21 @@ final class LanguageMiddleware implements MiddlewareInterface
 {
     public const ATTR_LANG   = 'station0.lang';
     public const ATTR_PREFIX = 'station0.langPrefix';
+    /** Closure(string): string — see localize(). */
+    public const ATTR_LOCALIZE = 'station0.localize';
+
+    /**
+     * A local path in the request's language: `/contact` → `/en/contact` on
+     * an English request. Left alone: the default language, external URLs,
+     * paths that already carry a language prefix, and admin / `/media` /
+     * `/thumb`. Without LanguageMiddleware (not multilingual) $path as is.
+     * For redirects built after routing (access, actions, redirect rules).
+     */
+    public static function localize(Request $request, string $path): string
+    {
+        $localize = $request->getAttribute(self::ATTR_LOCALIZE);
+        return $localize instanceof \Closure ? $localize($path) : $path;
+    }
 
     public function __construct(
         private readonly Languages $languages,
@@ -72,7 +87,23 @@ final class LanguageMiddleware implements MiddlewareInterface
 
         return $handler->handle($request
             ->withAttribute(self::ATTR_LANG, $lang)
-            ->withAttribute(self::ATTR_PREFIX, $this->languages->prefix($lang)));
+            ->withAttribute(self::ATTR_PREFIX, $this->languages->prefix($lang))
+            ->withAttribute(self::ATTR_LOCALIZE, fn (string $path): string => $this->localizePath($path, $lang)));
+    }
+
+    private function localizePath(string $path, string $lang): string
+    {
+        $prefix = $this->languages->prefix($lang);
+        if ($prefix === '' || !str_starts_with($path, '/') || str_starts_with($path, '//')) {
+            return $path;
+        }
+        $cut  = strcspn($path, '?#');
+        $only = substr($path, 0, $cut);
+        $rest = substr($path, $cut);
+        if ($this->languages->split($only)[1] !== $only || $this->unprefixable($only)) {
+            return $path; // already in a language, or never prefixed
+        }
+        return ($only === '/' ? $prefix : $prefix . $only) . $rest;
     }
 
     private function unprefixable(string $path): bool

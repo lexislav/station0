@@ -169,8 +169,14 @@ the key itself. A one-language site reads `site/lang/default.yaml`.
   (and `translation_created`). Deleting a translation fires
   `page.translation.deleted` with `lang`.
 - **Site actions** can be posted to under a prefix (`/en/contact/send`).
-  The language is then current for the handler. The request attributes are
-  `station0.lang` and `station0.langPrefix`.
+  The language is then current for the handler. `$ctx->redirect('/contact')`
+  goes to `/en/contact`, and `back()` keeps the referring URL. The request
+  attributes are `station0.lang` and `station0.langPrefix`.
+- **Members-only redirect.** An anonymous visitor of a gated `/en/…` page is
+  sent to `access.redirect` in English (`/` → `/en`).
+- All of these use `LanguageMiddleware::localize($request, $path)`. It leaves
+  alone external URLs, paths that already carry a language prefix, and
+  admin, `/media` and `/thumb`.
 
 ## Limits of this release
 

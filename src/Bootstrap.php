@@ -281,18 +281,25 @@ final class Bootstrap
                     return $languages->url($path === '' ? '/' : $path, $lang);
                 }
             ));
+            $translationsMemo = [];
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'translations',
                 // Language switcher / hreflang: [{code, label, locale, url, current, default}]
-                // for each language the page is live in (members-only rules apply).
-                function (?\Station0\Service\Page $page = null) use ($c, $languages): array {
+                // for each language the page is live in. Members-only pages are left
+                // out for anonymous visitors, as in the listings. Memoized per request.
+                function (?\Station0\Service\Page $page = null) use ($c, $languages, &$visible, &$translationsMemo): array {
+                    $memo = &$translationsMemo;
                     if ($page === null || !$languages->enabled()) {
                         return [];
+                    }
+                    $key = $page->urlPath . '|' . $languages->current();
+                    if (isset($memo[$key])) {
+                        return $memo[$key];
                     }
                     $out = [];
                     foreach ($languages->all() as $l) {
                         $found = $c->get(ContentRepository::class)->in($l['code'])->find($page->urlPath);
-                        if ($found === null || !$found->isLive()) {
+                        if ($found === null || !$found->isLive() || $visible([$found]) === []) {
                             continue;
                         }
                         $out[] = $l + [
@@ -300,7 +307,7 @@ final class Bootstrap
                             'current' => $l['code'] === $languages->current(),
                         ];
                     }
-                    return $out;
+                    return $memo[$key] = $out;
                 }
             ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(

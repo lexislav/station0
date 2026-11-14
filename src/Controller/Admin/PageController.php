@@ -510,6 +510,15 @@ final class PageController
             return $response->withStatus(404);
         }
 
+        return $this->renderEditForm($request, $response, $page, $lang);
+    }
+
+    /**
+     * The edit form of an existing page — in the default language or as the
+     * translation $lang (no template choice there); $extra = error variables.
+     */
+    private function renderEditForm(Request $request, Response $response, Page $page, ?string $lang, array $extra = []): Response
+    {
         $parentPage = $this->parentPageOf($page->urlPath);
 
         return $this->twig->render($response, '@admin/pages/edit.twig', [
@@ -518,10 +527,11 @@ final class PageController
             'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
             'blocks'             => $this->renderer->parseBlocks($page->body),
             ...$this->editorData($page, $lang),
-            'availableTemplates' => $this->availablePageTemplates($parentPage),
+            'availableTemplates' => $lang === null ? $this->availablePageTemplates($parentPage) : [],
             'csrf'               => $this->csrfFields($request),
             ...$this->navContext($parentPage, $page->urlPath),
             ...$this->languageData($lang),
+            ...$extra,
         ]);
     }
 
@@ -577,11 +587,9 @@ final class PageController
         $this->applyVisibility($page, Visibility::fromForm($data, $page->status));
         $errorKey = Visibility::validate($page->publishAt, $page->expireAt);
 
-        $error      = null;
-        $parentPage = null;
+        $error = null;
         if ($page->urlPath !== '/') {
-            $parentUrl  = rtrim(dirname($page->urlPath), '/') ?: '/';
-            $parentPage = $this->content->find($parentUrl);
+            $parentUrl = rtrim(dirname($page->urlPath), '/') ?: '/';
             try {
                 $this->content->assertChildTemplateAllowed($parentUrl, $page->template);
             } catch (\RuntimeException $e) {
@@ -589,17 +597,9 @@ final class PageController
             }
         }
         if ($error !== null || $errorKey !== null) {
-            return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
-                'mode'               => 'edit',
-                'page'               => $page,
-                'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
-                'blocks'             => $this->renderer->parseBlocks($page->body),
-                ...$this->editorData($page),
-                'availableTemplates' => $this->availablePageTemplates($parentPage),
-                'error'              => $error,
-                'errorKey'           => $errorKey,
-                'csrf'               => $this->csrfFields($request),
-                ...$this->navContext($parentPage, $urlPath),
+            return $this->renderEditForm($request, $response->withStatus(422), $page, null, [
+                'error'    => $error,
+                'errorKey' => $errorKey,
             ]);
         }
 
@@ -648,19 +648,7 @@ final class PageController
         $errorKey = Visibility::validate($page->publishAt, $page->expireAt);
 
         if ($errorKey !== null) {
-            $parentPage = $this->parentPageOf($page->urlPath);
-            return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
-                'mode'               => 'edit',
-                'page'               => $page,
-                'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
-                'blocks'             => $this->renderer->parseBlocks($page->body),
-                ...$this->editorData($page, $lang),
-                'availableTemplates' => [],
-                'errorKey'           => $errorKey,
-                'csrf'               => $this->csrfFields($request),
-                ...$this->navContext($parentPage, $urlPath),
-                ...$this->languageData($lang),
-            ]);
+            return $this->renderEditForm($request, $response->withStatus(422), $page, $lang, ['errorKey' => $errorKey]);
         }
 
         $this->content->saveTranslation($page);

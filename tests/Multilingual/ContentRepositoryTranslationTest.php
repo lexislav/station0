@@ -171,6 +171,28 @@ final class ContentRepositoryTranslationTest extends TestCase
         self::assertSame('About us', $this->repo()->in('en')->find('/company')->title);
     }
 
+    public function testLanguageViewsShareTheParseCache(): void
+    {
+        $repo = $this->repo();
+        $en   = $repo->in('en');
+        self::assertSame('100', $en->find('/about')->extra['price']);
+
+        $about = $repo->find('/about');
+        $about->extra['price'] = '150';
+        $repo->save($about);
+        self::assertSame('150', $en->find('/about')->extra['price'], 'a write through the base is seen by the view');
+
+        $quiet = $repo->in('en', true)->find('/quiet');
+        $quiet->title = 'Quiet';
+        $repo->saveTranslation($quiet);
+        self::assertSame('Quiet', $en->find('/quiet')?->title, 'new translation is seen by the 404-mode view');
+        self::assertContains('en', $repo->find('/quiet')->translations);
+
+        self::assertTrue($repo->deleteTranslation($repo->find('/quiet'), 'en'));
+        self::assertNull($en->find('/quiet'));
+        self::assertSame(['cs'], $repo->find('/quiet')->translations);
+    }
+
     public function testDeleteTranslationKeepsPage(): void
     {
         $repo  = $this->repo();

@@ -78,6 +78,14 @@ final class ContentRepository
     /** @var array<string, self> */
     private array $languageViews = [];
 
+    /**
+     * Languages each content file exists in (default + translation files),
+     * probed once per request. Shared with the in() views, like $parsedCache.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $translationsOf = [];
+
     /** @var array<string, true> directories already reported as ambiguous */
     private array $warnedDirs = [];
 
@@ -123,6 +131,11 @@ final class ContentRepository
             $view->lang          = $lang;
             $view->forceFallback = $withFallback;
             $view->languageViews = [];
+            // One parse cache for every view: a write through any of them
+            // (or the base) is seen by all.
+            $view->parsedCache    = &$this->parsedCache;
+            $view->warnedDirs     = &$this->warnedDirs;
+            $view->translationsOf = &$this->translationsOf;
             $this->languageViews[$key] = $view;
         }
         return $this->languageViews[$key];
@@ -299,7 +312,7 @@ final class ContentRepository
         $tmp = $file . '.tmp.' . bin2hex(random_bytes(4));
         file_put_contents($tmp, FrontMatter::serialize($fields, $page->body));
         rename($tmp, $file);
-        unset($this->parsedCache[$file]);
+        unset($this->parsedCache[$file], $this->translationsOf[$page->filePath]);
 
         $page->translationFile = $file;
         $page->translated      = true;
@@ -316,7 +329,7 @@ final class ContentRepository
             return false;
         }
         $file = Languages::translationFile($page->filePath, $lang);
-        unset($this->parsedCache[$file]);
+        unset($this->parsedCache[$file], $this->translationsOf[$page->filePath]);
         return is_file($file) && @unlink($file);
     }
 
@@ -355,12 +368,7 @@ final class ContentRepository
         $page->childrenDir = $newDir . '/';
         $page->urlPath     = rtrim(dirname($page->urlPath), '/') . '/' . $newSlug;
 
-        // Drop any cached parse for the old path.
-        foreach (array_keys($this->parsedCache) as $key) {
-            if (str_starts_with($key, $oldDir . '/')) {
-                unset($this->parsedCache[$key]);
-            }
-        }
+        $this->forgetDir($oldDir);
     }
 
     /**
@@ -410,11 +418,7 @@ final class ContentRepository
         $page->childrenDir = $newDir . '/';
         $page->urlPath     = ($newParentUrl === '/' ? '' : $newParentUrl) . '/' . $page->slug;
 
-        foreach (array_keys($this->parsedCache) as $key) {
-            if (str_starts_with($key, $oldDir . '/')) {
-                unset($this->parsedCache[$key]);
-            }
-        }
+        $this->forgetDir($oldDir);
     }
 
     /** Delete page by URL path. Returns true on success. */
@@ -426,7 +430,7 @@ final class ContentRepository
         }
 
         $deleted = @unlink($page->filePath);
-        unset($this->parsedCache[$page->filePath]);
+        $this->forgetDir(dirname($page->filePath));
 
         if ($deleted) {
             $dir = dirname($page->filePath);
@@ -767,18 +771,10 @@ final class ContentRepository
     {
         [$meta, $body] = $this->parseFrontMatterFromFile($filePath);
 
-        $lang        = $this->language();
-        $translated  = true;
-        $translation = null;
-        $translations = [];
-        if ($lang !== '') {
-            $translations[] = $this->languages->default();
-            foreach ($this->languages->codes() as $code) {
-                if (!$this->languages->isDefault($code) && is_file(Languages::translationFile($filePath, $code))) {
-                    $translations[] = $code;
-                }
-            }
-        }
+        $lang         = $this->language();
+        $translated   = true;
+        $translation  = null;
+        $translations = $lang !== '' ? $this->translationsOf($filePath) : [];
         if ($this->translating()) {
             $translation = Languages::translationFile($filePath, $lang);
             $translated  = in_array($lang, $translations, true);
@@ -845,6 +841,33 @@ final class ContentRepository
             }
         }
         return [$meta, trim($tBody) !== '' ? $tBody : $body];
+    }
+
+    /** Drop cached parses / translation lists of everything under $dir (renamed, moved, deleted). */
+    private function forgetDir(string $dir): void
+    {
+        foreach ([&$this->parsedCache, &$this->translationsOf] as &$cache) {
+            foreach (array_keys($cache) as $key) {
+                if (str_starts_with($key, $dir . '/')) {
+                    unset($cache[$key]);
+                }
+            }
+        }
+    }
+
+    /** @return list<string> the default language + every language with a translation file */
+    private function translationsOf(string $filePath): array
+    {
+        if (!isset($this->translationsOf[$filePath])) {
+            $found = [$this->languages->default()];
+            foreach ($this->languages->codes() as $code) {
+                if (!$this->languages->isDefault($code) && is_file(Languages::translationFile($filePath, $code))) {
+                    $found[] = $code;
+                }
+            }
+            $this->translationsOf[$filePath] = $found;
+        }
+        return $this->translationsOf[$filePath];
     }
 
     /** @return list<string> lower-cased `translate: false` field names of $template */

@@ -8,6 +8,7 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Log\LoggerInterface;
 use Slim\Views\Twig;
+use Station0\Middleware\LanguageMiddleware;
 
 /**
  * Answers requests from the rules: the 404/410 fallback (notFound resolver)
@@ -46,7 +47,7 @@ final class Redirector
             }
         }
         if ($hit !== null) {
-            return $this->respond($response, $hit, $path, self::prefix($request));
+            return $this->respond($response, $hit, $path, $request);
         }
 
         if ($status === 404 && $this->log404) {
@@ -59,11 +60,6 @@ final class Redirector
         return null;
     }
 
-    private static function prefix(Request $request): string
-    {
-        return (string) $request->getAttribute(\Station0\Middleware\LanguageMiddleware::ATTR_PREFIX, '');
-    }
-
     /** A `force` rule for this request (GET / HEAD only), else null. */
     public function force(Request $request, Response $response): ?Response
     {
@@ -72,15 +68,15 @@ final class Redirector
         }
         $path = rawurldecode($request->getUri()->getPath());
         $hit  = $this->store->forceMatcher()->match($path, $request->getUri()->getQuery(), true);
-        return $hit !== null ? $this->respond($response, $hit, $path, self::prefix($request)) : null;
+        return $hit !== null ? $this->respond($response, $hit, $path, $request) : null;
     }
 
     /**
      * @param array{rule: array, status: int, location: ?string} $hit
-     * @param string $prefix  language prefix of the request (`/en`, see LanguageMiddleware):
-     *                        rules are language-neutral, local targets stay in the visitor's language
+     * @param ?Request $request  rules are language-neutral; with a request, local targets
+     *                           stay in the visitor's language (LanguageMiddleware::localize())
      */
-    public function respond(Response $response, array $hit, string $path, string $prefix = ''): Response
+    public function respond(Response $response, array $hit, string $path, ?Request $request = null): Response
     {
         if ($hit['rule']['count']) {
             try {
@@ -95,11 +91,8 @@ final class Redirector
             return $twig->render($response->withStatus(410), $template, ['urlPath' => $path, 'status' => 410]);
         }
         $location = (string) $hit['location'];
-        if ($prefix !== '' && str_starts_with($location, '/') && !str_starts_with($location, '//')
-            && !str_starts_with($location, '/media/')) {
-            $location = $location === '/' || str_starts_with($location, '/?') || str_starts_with($location, '/#')
-                ? $prefix . substr($location, 1)
-                : $prefix . $location;
+        if ($request !== null) {
+            $location = LanguageMiddleware::localize($request, $location);
         }
         $permanent = in_array($hit['status'], [301, 308], true);
         return $response

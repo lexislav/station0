@@ -77,6 +77,7 @@ final class MultilingualAppTest extends TestCase
         $res = $this->get($this->app(Role::EDITOR), '/en/blog/post');
         self::assertSame(200, $res->getStatusCode());
         self::assertStringContainsString('station0-preview-bar', (string) $res->getBody());
+        self::assertStringContainsString('/admin/pages/blog/post/edit?lang=en"', (string) $res->getBody(), 'edit link opens the translation');
     }
 
     public function testContentFallbackMode(): void
@@ -126,8 +127,11 @@ final class MultilingualAppTest extends TestCase
             $site->write('site/content/pages/quiet/inner/photo.jpg', 'jpg');
         });
         $res = $this->get($app, '/en/quiet/inner');
-        self::assertNotSame(200, $res->getStatusCode());
-        self::assertNotSame(200, $this->get($this->reboot(null), '/quiet/inner')->getStatusCode());
+        self::assertSame(302, $res->getStatusCode());
+        self::assertSame('/en', $res->getHeaderLine('Location'), 'redirect stays in the language');
+        $res = $this->get($this->reboot(null), '/quiet/inner');
+        self::assertSame(302, $res->getStatusCode());
+        self::assertSame('/', $res->getHeaderLine('Location'));
         self::assertSame(200, $this->get($this->reboot(Role::ADMIN), '/en/quiet/inner')->getStatusCode());
     }
 
@@ -146,11 +150,31 @@ final class MultilingualAppTest extends TestCase
     public function testRedirectRulesKeepTheLanguage(): void
     {
         $app = $this->app(null, [], ['redirects' => []], function (TestSite $site): void {
-            $site->write('site/content/_redirects.yaml', "- from: /old\n  to: /about\n- from: /ext\n  to: https://example.com/x\n");
+            $site->write('site/content/_redirects.yaml', "- from: /old\n  to: /about\n- from: /ext\n  to: https://example.com/x\n"
+                . "- from: /edit\n  to: /admin/pages\n- from: /deutsch\n  to: /en/about?x=1\n");
         });
         self::assertSame('/en/about', $this->get($app, '/en/old')->getHeaderLine('Location'));
         self::assertSame('/about', $this->get($this->reboot(null), '/old')->getHeaderLine('Location'));
         self::assertSame('https://example.com/x', $this->get($this->reboot(null), '/en/ext')->getHeaderLine('Location'));
+        self::assertSame('/admin/pages', $this->get($this->reboot(null), '/en/edit')->getHeaderLine('Location'), 'admin is never prefixed');
+        self::assertSame('/en/about?x=1', $this->get($this->reboot(null), '/en/deutsch')->getHeaderLine('Location'), 'already prefixed');
+    }
+
+    public function testActionRedirectsStayInTheLanguage(): void
+    {
+        $app = $this->app(Role::ADMIN, [], [], function (TestSite $site): void {
+            $site->write('site/actions/send.php', "<?php return ['path' => '/contact/send', 'handler' => fn (\\Station0\\Service\\ActionContext \$ctx) => \$ctx->redirect('/about?sent=1')];");
+            $site->write('site/actions/back.php', "<?php return ['path' => '/contact/back', 'handler' => fn (\\Station0\\Service\\ActionContext \$ctx) => \$ctx->back()];");
+        });
+        $res = $this->post($app, '/en/contact/send', [], '/admin/pages/about/edit');
+        self::assertSame('/en/about?sent=1', $res->getHeaderLine('Location'));
+
+        $app = $this->reboot(Role::ADMIN);
+        self::assertSame('/about?sent=1', $this->post($app, '/contact/send', [], '/admin/pages/about/edit')->getHeaderLine('Location'));
+
+        $app = $this->reboot(Role::ADMIN);
+        $res = $this->post($app, '/en/contact/back', [], '/admin/pages/about/edit', ['Referer' => '/en/about']);
+        self::assertSame('/en/about', $res->getHeaderLine('Location'), 'back() keeps an already prefixed referer');
     }
 
     public function testAdminEditsTranslation(): void

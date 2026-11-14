@@ -262,8 +262,16 @@ two or more; first = default, no prefix; others under `/{code}`.
 - **Twig:** globals `lang`, `languages`; functions `url()`, `translations(page)`,
   `t(key, params, default)` (function — the admin `t.key` global is separate).
 - **Cache:** `PageRenderer` key + `:{lang}`; `VisibilityHorizon` scans every language.
-- **Redirects:** rules language-neutral; `Redirector::respond(..., $prefix)`
-  prefixes local targets from `station0.langPrefix`.
+  `in()` views share `$parsedCache`, `$warnedDirs` and `$translationsOf`
+  (per-file language list) with the base by reference; `forgetDir()` on
+  rename / move / delete. `translations()` is memoized per request and
+  filtered by AccessPolicy like the listings.
+- **Redirects after routing:** `LanguageMiddleware::localize($request, $path)`
+  (request attribute closure) keeps a local path in the request's language;
+  used by `Redirector::respond()` (rules stay language-neutral),
+  `AccessMiddleware` (`access.redirect`), `ActionContext::redirect()` / `back()`.
+  Skips already prefixed paths, external URLs, admin / `/media` / `/thumb`.
+  The preview bar's edit link carries `?lang=`.
 - **Admin:** `?lang=en` on `/pages/{path}/edit|update|delete` (delete = the
   translation only, event `page.translation.deleted`); `page.saved` gets
   `lang`. Partials `pages/_language_tabs.twig`, `_language_badges.twig`;
