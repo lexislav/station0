@@ -1,0 +1,10 @@
+{# Translation status of a page in admin lists: one code per non-default language,
+   muted when the page has no translation. Needs the `languages` Twig global. #}
+{% if languages|length > 1 %}
+    {% set key = entry.urlPath == '/' ? '~' : entry.urlPath|trim('/') %}
+    {% for l in languages|filter(l => not l.default) %}
+        {% set has = l.code in entry.translations %}
+        <a class="badge-lang{{ has ? '' : ' missing' }}" href="{{ app.adminPath }}/pages/{{ key }}/edit?lang={{ l.code }}"
+           title="{{ has ? l.label : t.lang_not_translated|format(l.label) }}">{{ l.code|upper }}</a>
+    {% endfor %}
+{% endif %}

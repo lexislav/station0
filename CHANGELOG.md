@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Multilingual pages.** Add `'languages' => ['cs' => […], 'en' => […]]` to
+  `site/config.php`. The first language is the default and has no URL
+  prefix. The others are served under `/en/…` from the same content tree.
+  A translation is a file next to the page (`page.en.txt`). It holds the
+  translated title, fields and body, and anything it leaves out falls back
+  to the default file. Assets and sub-pages are shared. Page fields marked
+  `translate: false` (price, image) keep one value for every language.
+  Status and publish dates can differ per translation. By default an
+  untranslated page returns 404 in that language;
+  `'languageFallback' => 'content'` serves the default text instead.
+- Twig: `lang` and `languages` globals, plus the `url(page)`,
+  `translations(page)` (language switcher, `hreflang`) and `t('key')`
+  functions. `t()` reads site strings from `site/lang/<lang>.yaml`. Listings
+  (`nav_pages()`, `child_pages()`, `page()`) return pages in the current language.
+- Admin: language tabs on the page edit form, translation badges in the page
+  tree, and a "Delete translation" button.
+- Redirect rules apply in every language and keep the visitor's language
+  prefix on local targets.
+
+Sites without `languages` are unchanged. See `docs/multilingual.md`.
+
 ### Security
 - **SVG uploads are sanitized.** Page and collection uploads of an SVG are
   cleaned before they are stored: scripts, `on*` event handlers,

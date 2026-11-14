@@ -268,4 +268,11 @@ return [
     'member_link_subject' => 'Sign-in link – %s',
     'member_link_intro'   => 'Click the link below to sign in to %s. It works once and is valid for %d minutes.',
     'member_link_ignore'  => 'If you did not ask for it, ignore this e-mail.',
+    // Multilingual content
+    'lang_tabs'                       => 'Languages',
+    'lang_not_translated'             => '%s — not translated yet',
+    'lang_untranslated_notice'        => 'Not translated into %s yet. The form shows the default-language text; saving creates the translation.',
+    'lang_translation_hint'           => 'Slug, template, listing and shared fields are edited in the default language.',
+    'lang_delete_translation'         => 'Delete translation',
+    'lang_delete_translation_confirm' => 'Delete this translation? The page itself stays.',
 ];

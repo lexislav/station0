@@ -78,7 +78,11 @@ final class PageController
         ]);
 
         if ($preview) {
-            $out = $this->injectPreviewBar($out, $page);
+            // A translation's preview opens its own tab in the editor.
+            $editLang = (string) $request->getAttribute(\Station0\Middleware\LanguageMiddleware::ATTR_PREFIX, '') !== ''
+                ? $page->lang
+                : null;
+            $out = $this->injectPreviewBar($out, $page, $editLang);
             $response = $response
                 ->withHeader('Cache-Control', 'private, no-store')
                 ->withHeader('X-Robots-Tag', 'noindex, nofollow');
@@ -109,7 +113,7 @@ final class PageController
      * A fixed "not public" bar right after <body> — no site template changes
      * needed. Templates can also check the `preview` variable themselves.
      */
-    private function injectPreviewBar(string $html, Page $page): string
+    private function injectPreviewBar(string $html, Page $page, ?string $editLang = null): string
     {
         $t     = fn (string $key): string => $this->lang[$key] ?? $key;
         $esc   = fn (string $v): string => htmlspecialchars($v, ENT_QUOTES | ENT_HTML5);
@@ -129,7 +133,7 @@ final class PageController
             . 'display:flex;gap:1rem;align-items:center;justify-content:space-between;padding:.5rem 1rem;'
             . 'background:#7c2d12;color:#fff;font:14px/1.4 system-ui,sans-serif">'
             . '<span>' . $esc(sprintf($t('preview_bar_text'), $label)) . '</span>'
-            . '<a href="' . $esc($this->adminPath . '/pages/' . $editKey . '/edit') . '" style="color:#fff;font-weight:600">'
+            . '<a href="' . $esc($this->adminPath . '/pages/' . $editKey . '/edit' . ($editLang ? '?lang=' . rawurlencode($editLang) : '')) . '" style="color:#fff;font-weight:600">'
             . $esc($t('preview_bar_edit')) . '</a></div>';
 
         $count = 0;

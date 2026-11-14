@@ -80,13 +80,17 @@ Global, outermost first (Slim runs the last-added first):
    `X-Content-Type-Options: nosniff` (outermost, so error pages get them too;
    headers a controller set are kept)
 2. `ErrorMiddleware`
-3. `Guard` (CSRF — every POST/PUT/PATCH/DELETE, public routes included)
-4. `VisitorMiddleware` — loads the public-site visitor (pass cookie), `visitor` Twig global, writes pass cookies
-5. `CsrfTwigGlobalMiddleware` — `csrf` Twig global
-6. Plugin middleware (`Registrar::middleware()`), first declared outermost;
+3. `LanguageMiddleware` — multilingual sites only: strips `/{lang}` from the
+   path (not admin / `/media` / `/thumb`), `Languages::setCurrent()`,
+   refreshes the `lang` / `languages` Twig globals, request attributes
+   `station0.lang` / `station0.langPrefix`
+4. `Guard` (CSRF — every POST/PUT/PATCH/DELETE, public routes included)
+5. `VisitorMiddleware` — loads the public-site visitor (pass cookie), `visitor` Twig global, writes pass cookies
+6. `CsrfTwigGlobalMiddleware` — `csrf` Twig global
+7. Plugin middleware (`Registrar::middleware()`), first declared outermost;
    only those whose boot-time `when` returned true
-7. `TwigMiddleware`
-8. `RoutingMiddleware`
+8. `TwigMiddleware`
+9. `RoutingMiddleware`
 
 Route middleware:
 
@@ -106,6 +110,9 @@ Route middleware:
 | `BlockRegistry` | `src/Service/BlockRegistry.php` | Block schema/template loading; `defaults()` builds a seeded block from schema defaults |
 | `TemplateBlocks` | `src/Service/TemplateBlocks.php` | Resolves per-template `allowedBlocks` / `defaultBlocks` / `fields` / `blocks` from `<template>.blocks.yaml` |
 | `PageFields` | `src/Service/PageFields.php` | Page-level fields: typed read, sanitized write into `Page::$extra`, asset-resolved values for templates |
+| `Languages` | `src/Service/Languages.php` | `languages` config: codes, default, current request language, prefixes / `url()`, translation file names |
+| `LanguageMiddleware` | `src/Middleware/LanguageMiddleware.php` | Strips the language prefix before routing, sets the current language + Twig globals |
+| `SiteStrings` | `src/Service/SiteStrings.php` | `t('key')` site strings from `site/lang/<lang>.yaml` (fallback default language) |
 | `Visibility` | `src/Support/Visibility.php` | Status / PublishAt / ExpireAt / Listing rules shared by pages and collection items: state, next transition, 404 vs 410, admin form input |
 | `VisibilityHorizon` | `src/Service/VisibilityHorizon.php` | Stores the next scheduled transition as a cache entry; flushes `FileCache` when it passes (checked once per request in `PageRenderer::render()`) |
 | `FrontMatter` | `src/Support/FrontMatter.php` | Front-matter codec (pages + collection items); single-line values verbatim, YAML blocks for multi-line / arrays |
@@ -224,6 +231,52 @@ renders them through `admin/templates/_select_options.twig` (server) and
   `BlockRegistry::fieldDefault()`: explicit `default`, else `''` for
   data-source/placeholder selects, else the first static option.
 - A stored value missing from the options is kept as a "(not found)" option.
+
+## Multilingual content (`languages`)
+
+Reference: `docs/multilingual.md`. Pages only (collections single-language
+for now). Off unless `'languages' => ['cs' => [...], 'en' => [...]]` lists
+two or more; first = default, no prefix; others under `/{code}`.
+`languageFallback`: `404` (default) | `content`.
+
+- **Storage:** `page.en.txt` next to `page.txt` (`Languages::translationFile()`),
+  never a content file of its own (`contentFileIn()` skips it); `/media`
+  refuses it. `ContentRepository::buildPage()` merges it over the default
+  file (`mergeTranslation()`): translated keys win, `SHARED_KEYS` (template,
+  sort, allowedchildtemplates, group, listing, cascade, access) and
+  `translate: false` page fields (`TemplateBlocks::sharedFields()`, closure
+  wired in Bootstrap) always from the default; empty body → default body.
+  Status / dates per translation (inherited when absent).
+- **Language of a repository:** `ContentRepository::language()` = fixed by
+  `in($lang, $withFallback)` (memoized clone) or `Languages::current()`.
+  `in('')` = default. `'404'` mode: untranslated pages are null in `find()`
+  and left out of `all()` / listings (translated sub-pages stay; the parent
+  is structure). Admin uses `in($lang, true)` (default text, `translated`
+  false). `AccessPolicy` reads `Access:` via `in('')`.
+- **Page:** `lang`, `translated`, `translationFile`, `translations` (codes).
+  `urlPath` stays unprefixed — templates link with `url(page)`.
+  `save()` of a page read in another language → `saveTranslation()`
+  (title, metatitle, status/dates, author, updated, body, extra minus shared).
+  `deleteTranslation()`; `delete()` removes translations with the dir;
+  `rename()` / `move()` carry them; `mtime()` = max of both files.
+- **Twig:** globals `lang`, `languages`; functions `url()`, `translations(page)`,
+  `t(key, params, default)` (function — the admin `t.key` global is separate).
+- **Cache:** `PageRenderer` key + `:{lang}`; `VisibilityHorizon` scans every language.
+  `in()` views share `$parsedCache`, `$warnedDirs` and `$translationsOf`
+  (per-file language list) with the base by reference; `forgetDir()` on
+  rename / move / delete. `translations()` is memoized per request and
+  filtered by AccessPolicy like the listings.
+- **Redirects after routing:** `LanguageMiddleware::localize($request, $path)`
+  (request attribute closure) keeps a local path in the request's language;
+  used by `Redirector::respond()` (rules stay language-neutral),
+  `AccessMiddleware` (`access.redirect`), `ActionContext::redirect()` / `back()`.
+  Skips already prefixed paths, external URLs, admin / `/media` / `/thumb`.
+  The preview bar's edit link carries `?lang=`.
+- **Admin:** `?lang=en` on `/pages/{path}/edit|update|delete` (delete = the
+  translation only, event `page.translation.deleted`); `page.saved` gets
+  `lang`. Partials `pages/_language_tabs.twig`, `_language_badges.twig`;
+  `_visibility_fields.twig` hides listing / cascade with `translation`.
+- **Tests:** `tests/Multilingual/` (`TestSite::configure()` sets config).
 
 ## Page visibility
 

@@ -12,6 +12,7 @@ use Station0\Service\BlockRegistry;
 use Station0\Service\ContentRepository;
 use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
+use Station0\Service\Languages;
 use Station0\Service\NavGroups;
 use Station0\Service\Page;
 use Station0\Service\PageFields;
@@ -40,7 +41,37 @@ final class PageController
         private readonly FieldOptions $fieldOptions = new FieldOptions(),
         private readonly ?Events $events = null,
         private readonly ?NavGroups $groups = null,
+        private readonly ?Languages $languages = null,
     ) {}
+
+    // ─── Languages ───
+
+    /**
+     * Translation being edited (`?lang=en`): a non-default site language, or
+     * null for the default one / a site that is not multilingual.
+     */
+    private function editLang(Request $request): ?string
+    {
+        $lang = (string) ($request->getQueryParams()['lang'] ?? '');
+        return $this->languages !== null && $this->languages->has($lang) && !$this->languages->isDefault($lang)
+            ? $lang
+            : null;
+    }
+
+    /** The page as the editor sees it: in $lang with the default text as fallback. */
+    private function findFor(string $urlPath, ?string $lang): ?Page
+    {
+        return $lang === null ? $this->content->find($urlPath) : $this->content->in($lang, true)->find($urlPath);
+    }
+
+    /** View data for the language tabs of the edit form. */
+    private function languageData(?string $lang): array
+    {
+        return [
+            'editLang'      => $lang,
+            'editLanguages' => $this->languages?->all() ?? [],
+        ];
+    }
 
     // ─── List ───
 
@@ -472,12 +503,22 @@ final class PageController
     public function editForm(Request $request, Response $response, array $args): Response
     {
         $urlPath = $this->argsToUrlPath($args);
-        $page    = $this->content->find($urlPath);
+        $lang    = $this->editLang($request);
+        $page    = $this->findFor($urlPath, $lang);
 
         if ($page === null) {
             return $response->withStatus(404);
         }
 
+        return $this->renderEditForm($request, $response, $page, $lang);
+    }
+
+    /**
+     * The edit form of an existing page — in the default language or as the
+     * translation $lang (no template choice there); $extra = error variables.
+     */
+    private function renderEditForm(Request $request, Response $response, Page $page, ?string $lang, array $extra = []): Response
+    {
         $parentPage = $this->parentPageOf($page->urlPath);
 
         return $this->twig->render($response, '@admin/pages/edit.twig', [
@@ -485,10 +526,12 @@ final class PageController
             'page'               => $page,
             'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
             'blocks'             => $this->renderer->parseBlocks($page->body),
-            ...$this->editorData($page),
-            'availableTemplates' => $this->availablePageTemplates($parentPage),
+            ...$this->editorData($page, $lang),
+            'availableTemplates' => $lang === null ? $this->availablePageTemplates($parentPage) : [],
             'csrf'               => $this->csrfFields($request),
             ...$this->navContext($parentPage, $page->urlPath),
+            ...$this->languageData($lang),
+            ...$extra,
         ]);
     }
 
@@ -515,6 +558,10 @@ final class PageController
     public function update(Request $request, Response $response, array $args): Response
     {
         $urlPath = $this->argsToUrlPath($args);
+        $lang    = $this->editLang($request);
+        if ($lang !== null) {
+            return $this->updateTranslation($request, $response, $urlPath, $lang);
+        }
         $page    = $this->content->find($urlPath);
 
         if ($page === null) {
@@ -540,11 +587,9 @@ final class PageController
         $this->applyVisibility($page, Visibility::fromForm($data, $page->status));
         $errorKey = Visibility::validate($page->publishAt, $page->expireAt);
 
-        $error      = null;
-        $parentPage = null;
+        $error = null;
         if ($page->urlPath !== '/') {
-            $parentUrl  = rtrim(dirname($page->urlPath), '/') ?: '/';
-            $parentPage = $this->content->find($parentUrl);
+            $parentUrl = rtrim(dirname($page->urlPath), '/') ?: '/';
             try {
                 $this->content->assertChildTemplateAllowed($parentUrl, $page->template);
             } catch (\RuntimeException $e) {
@@ -552,17 +597,9 @@ final class PageController
             }
         }
         if ($error !== null || $errorKey !== null) {
-            return $this->twig->render($response->withStatus(422), '@admin/pages/edit.twig', [
-                'mode'               => 'edit',
-                'page'               => $page,
-                'breadcrumb'         => $this->breadcrumbFor($page->urlPath),
-                'blocks'             => $this->renderer->parseBlocks($page->body),
-                ...$this->editorData($page),
-                'availableTemplates' => $this->availablePageTemplates($parentPage),
-                'error'              => $error,
-                'errorKey'           => $errorKey,
-                'csrf'               => $this->csrfFields($request),
-                ...$this->navContext($parentPage, $urlPath),
+            return $this->renderEditForm($request, $response->withStatus(422), $page, null, [
+                'error'    => $error,
+                'errorKey' => $errorKey,
             ]);
         }
 
@@ -584,11 +621,75 @@ final class PageController
         return $response->withStatus(302)->withHeader('Location', $this->adminPath . '/pages/' . $editKey . '/edit');
     }
 
+    /**
+     * Save a translation (`?lang=en`): the text — title, metatitle, body,
+     * translatable page fields, display date and the translation's own
+     * visibility. Slug, template, listing and cascade belong to the page and
+     * are edited in the default language.
+     */
+    private function updateTranslation(Request $request, Response $response, string $urlPath, string $lang): Response
+    {
+        $page = $this->findFor($urlPath, $lang);
+        if ($page === null) {
+            return $response->withStatus(404);
+        }
+        $created = !$page->translated;
+
+        $data = (array) $request->getParsedBody();
+        $page->title     = trim((string) ($data['title'] ?? $page->title));
+        $page->body      = (string) ($data['body'] ?? $page->body);
+        $page->metatitle = trim((string) ($data['metatitle'] ?? '')) ?: null;
+        $this->pageFields->apply($page, $this->postedFields($data), $this->translatableFields($page->template));
+        $page->publishedAt = Visibility::normalizeInput((string) ($data['published_at'] ?? ''));
+
+        $visibility = Visibility::fromForm($data, $page->status);
+        unset($visibility['listing'], $visibility['cascade']);
+        $this->applyVisibility($page, $visibility);
+        $errorKey = Visibility::validate($page->publishAt, $page->expireAt);
+
+        if ($errorKey !== null) {
+            return $this->renderEditForm($request, $response->withStatus(422), $page, $lang, ['errorKey' => $errorKey]);
+        }
+
+        $this->content->saveTranslation($page);
+        $this->cache->flush();
+        $this->events?->dispatch('page.saved', $this->pagePayload($page, $page->urlPath)
+            + ['created' => false, 'lang' => $lang, 'translation_created' => $created]);
+
+        $editKey = $page->urlPath === '/' ? '~' : ltrim($page->urlPath, '/');
+        return $response->withStatus(302)->withHeader(
+            'Location',
+            $this->adminPath . '/pages/' . $editKey . '/edit?lang=' . rawurlencode($lang),
+        );
+    }
+
+    /** Page-field definitions edited per language (without `translate: false`). */
+    private function translatableFields(string $template): array
+    {
+        return array_values(array_filter(
+            $this->pageFields->definitions($template),
+            static fn (array $f): bool => ($f['translate'] ?? true) !== false,
+        ));
+    }
+
     // ─── Delete ───
 
     public function delete(Request $request, Response $response, array $args): Response
     {
         $urlPath = $this->argsToUrlPath($args);
+        // `?lang=en` deletes that translation only; the page stays.
+        if (($lang = $this->editLang($request)) !== null) {
+            $page = $this->content->find($urlPath);
+            if ($page === null) {
+                return $response->withStatus(404);
+            }
+            if ($this->content->deleteTranslation($page, $lang)) {
+                $this->cache->flush();
+                $this->events?->dispatch('page.translation.deleted', $this->pagePayload($page, $urlPath) + ['lang' => $lang]);
+            }
+            $editKey = $page->urlPath === '/' ? '~' : ltrim($page->urlPath, '/');
+            return $response->withStatus(302)->withHeader('Location', $this->adminPath . '/pages/' . $editKey . '/edit');
+        }
         $page    = $this->content->find($urlPath);
         // Deleting inside a group returns to the group's tab (a deleted group
         // root may have been the group's only member, so its parent decides).
@@ -609,7 +710,8 @@ final class PageController
     /** Payload of a page event (see Events). */
     private function pagePayload(Page $page, string $urlPath): array
     {
-        return ['path' => $urlPath, 'title' => $page->title, 'template' => $page->template, 'status' => $page->status];
+        return ['path' => $urlPath, 'title' => $page->title, 'template' => $page->template, 'status' => $page->status]
+            + ($page->lang !== '' ? ['lang' => $page->lang] : []);
     }
 
     /** Apply the visibility values from Visibility::fromForm() to a page. */
@@ -667,10 +769,11 @@ final class PageController
      *
      * @return array<string, mixed>
      */
-    private function editorData(Page $page): array
+    private function editorData(Page $page, ?string $lang = null): array
     {
         [$blockTypes, $blockTypesMap] = $this->blockTypeData($page->template);
-        $fields = $this->pageFields->definitions($page->template);
+        // A translation edits only the fields that differ per language.
+        $fields = $lang === null ? $this->pageFields->definitions($page->template) : $this->translatableFields($page->template);
 
         return [
             'blockTypes'    => $blockTypes,

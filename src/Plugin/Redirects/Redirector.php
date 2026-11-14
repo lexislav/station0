@@ -8,6 +8,7 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Log\LoggerInterface;
 use Slim\Views\Twig;
+use Station0\Middleware\LanguageMiddleware;
 
 /**
  * Answers requests from the rules: the 404/410 fallback (notFound resolver)
@@ -46,7 +47,7 @@ final class Redirector
             }
         }
         if ($hit !== null) {
-            return $this->respond($response, $hit, $path);
+            return $this->respond($response, $hit, $path, $request);
         }
 
         if ($status === 404 && $this->log404) {
@@ -67,11 +68,15 @@ final class Redirector
         }
         $path = rawurldecode($request->getUri()->getPath());
         $hit  = $this->store->forceMatcher()->match($path, $request->getUri()->getQuery(), true);
-        return $hit !== null ? $this->respond($response, $hit, $path) : null;
+        return $hit !== null ? $this->respond($response, $hit, $path, $request) : null;
     }
 
-    /** @param array{rule: array, status: int, location: ?string} $hit */
-    public function respond(Response $response, array $hit, string $path): Response
+    /**
+     * @param array{rule: array, status: int, location: ?string} $hit
+     * @param ?Request $request  rules are language-neutral; with a request, local targets
+     *                           stay in the visitor's language (LanguageMiddleware::localize())
+     */
+    public function respond(Response $response, array $hit, string $path, ?Request $request = null): Response
     {
         if ($hit['rule']['count']) {
             try {
@@ -85,10 +90,14 @@ final class Redirector
             $template = $twig->getLoader()->exists('410.twig') ? '410.twig' : '404.twig';
             return $twig->render($response->withStatus(410), $template, ['urlPath' => $path, 'status' => 410]);
         }
+        $location = (string) $hit['location'];
+        if ($request !== null) {
+            $location = LanguageMiddleware::localize($request, $location);
+        }
         $permanent = in_array($hit['status'], [301, 308], true);
         return $response
             ->withStatus($hit['status'])
-            ->withHeader('Location', $hit['location'])
+            ->withHeader('Location', $location)
             ->withHeader('Cache-Control', $permanent ? 'public, max-age=' . max(0, $this->maxAge) : 'no-store');
     }
 }

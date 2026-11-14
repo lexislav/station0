@@ -1,0 +1,30 @@
+{# Language tabs on the page edit form (multilingual sites, see Station0\Service\Languages).
+   Usage: {% include '@admin/pages/_language_tabs.twig' with {page, editKey, editLang, languages} only %} #}
+{% if languages|length > 1 %}
+<nav class="lang-tabs" aria-label="{{ t.lang_tabs }}">
+    {% for l in languages %}
+        {% set active = l.default ? not editLang : editLang == l.code %}
+        {% set exists = l.default or l.code in page.translations %}
+        <a href="{{ app.adminPath }}/pages/{{ editKey }}/edit{{ l.default ? '' : '?lang=' ~ l.code }}"
+           class="lang-tab{{ active ? ' active' : '' }}{{ exists ? '' : ' missing' }}"
+           {% if active %}aria-current="page"{% endif %}
+           title="{{ exists ? l.label : t.lang_not_translated|format(l.label) }}">
+            {{ l.code|upper }}<span class="lang-tab-label"> · {{ l.label }}</span>
+        </a>
+    {% endfor %}
+</nav>
+{% if editLang and not page.translated %}
+    <p class="notice lang-untranslated">{% set current = languages|filter(l => l.code == editLang)|first %}{{ t.lang_untranslated_notice|format(current ? current.label : editLang) }}</p>
+{% elseif editLang %}
+    <p class="hint">{{ t.lang_translation_hint }}</p>
+{% endif %}
+<style>
+.lang-tabs { display: flex; gap: .25rem; margin: 0 0 1rem; border-bottom: 1px solid #dde1e6; }
+.lang-tab { padding: .4rem .8rem; border: 1px solid transparent; border-bottom: none; border-radius: 4px 4px 0 0;
+            text-decoration: none; color: #2c3e50; font-size: .9rem; margin-bottom: -1px; }
+.lang-tab.active { background: #fff; border-color: #dde1e6; font-weight: 600; }
+.lang-tab.missing { color: #8a94a0; font-style: italic; }
+.lang-tab-label { font-weight: normal; }
+.lang-untranslated { background: #fff7e6; border: 1px solid #f0c36d; padding: .5rem .75rem; border-radius: 4px; }
+</style>
+{% endif %}
