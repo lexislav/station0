@@ -145,8 +145,9 @@ switch ($command) {
         // Renders every published page over HTTP (the server must be running)
         // and pre-generates each /thumb/... URL found in it, so the first
         // visitor does not wait for them.
-        $baseUrl = rtrim($args[0] ?? $config['baseUrl'], '/');
-        $repo    = new ContentRepository($config['paths']['content'] . '/pages', $config['paths']['templates']);
+        $baseUrl   = rtrim($args[0] ?? $config['baseUrl'], '/');
+        $languages = \Station0\Service\Languages::fromConfig($config);
+        $repo      = new ContentRepository($config['paths']['content'] . '/pages', $config['paths']['templates'], null, $languages);
         $thumbs  = \Station0\Bootstrap::thumbService(
             $config,
             new MediaService($repo, $config['paths']['content'] . '/pages', $config['paths']['content'] . '/collections'),
@@ -156,11 +157,18 @@ switch ($command) {
         );
         $done = 0;
         $failed = 0;
-        foreach ($repo->all(false) as $page) {
-            $url  = $baseUrl . implode('/', array_map('rawurlencode', explode('/', $page->urlPath)));
+        // Every language: translated pages render their own content (and thumbnails).
+        $targets = [];
+        foreach ($languages->enabled() ? $languages->codes() : [''] as $code) {
+            foreach ($repo->in($code)->all(false) as $page) {
+                $targets[] = $languages->url($code === '' || $languages->isDefault($code) ? $page->urlPath : $page->publicPath, $code === '' ? null : $code);
+            }
+        }
+        foreach ($targets as $target) {
+            $url  = $baseUrl . implode('/', array_map('rawurlencode', explode('/', $target)));
             $html = @file_get_contents($url);
             if ($html === false) {
-                fwrite(STDERR, "  {$page->urlPath}: stránku nelze načíst ({$url})\n");
+                fwrite(STDERR, "  {$target}: stránku nelze načíst ({$url})\n");
                 continue;
             }
             preg_match_all('#/thumb/(\d+x\d+(?:-c)?)/([a-f0-9]{12})/([^"\'\s<>,]+)#u', $html, $m, PREG_SET_ORDER);
@@ -174,7 +182,7 @@ switch ($command) {
                 ($res === null || $res['fallback']) ? $failed++ : $done++;
             }
             if ($seen) {
-                echo "  {$page->urlPath}: " . count($seen) . " náhled(ů)\n";
+                echo "  {$target}: " . count($seen) . " náhled(ů)\n";
             }
         }
         echo "Hotovo: {$done} náhledů připraveno" . ($failed ? ", {$failed} selhalo" : '') . ".\n";

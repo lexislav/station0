@@ -328,6 +328,13 @@
     </div>
     {% endif %}{# slug / template: default language only #}
 
+    {% if editLang and page.slug != '' %}
+    <div class="field">
+        <label>{{ t.page_field_slug }} <small class="muted">– {{ t.lang_slug_hint|format(page.slug) }}</small></label>
+        <input type="text" name="slug" value="{{ page.translatedSlug }}" placeholder="{{ page.slug }}">
+    </div>
+    {% endif %}
+
     <div class="field">
         <label>{{ t.page_field_metatitle }} <small>{{ t.page_field_metatitle_hint|raw }}</small></label>
         <input type="text" name="metatitle" value="{{ page.metatitle }}" placeholder="{{ page.title }}">

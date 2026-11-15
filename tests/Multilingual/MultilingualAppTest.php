@@ -184,7 +184,8 @@ final class MultilingualAppTest extends TestCase
         self::assertStringContainsString('class="lang-tabs"', $html);
         self::assertStringContainsString('lang-untranslated', $html);
         self::assertStringContainsString('/admin/pages/quiet/update?lang=en', $html);
-        self::assertStringNotContainsString('<input type="text" name="slug"', $html, 'slug is edited in the default language');
+        self::assertStringContainsString('<input type="text" name="slug" value="" placeholder="quiet">', $html, 'translated slug, empty = folder slug');
+        self::assertStringNotContainsString('name="template"', $html);
         self::assertStringNotContainsString('name="visibility_listing"', $html);
 
         $res = $this->post($app, '/admin/pages/quiet/update?lang=en', [

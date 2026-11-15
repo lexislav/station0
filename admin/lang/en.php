@@ -272,7 +272,9 @@ return [
     'lang_tabs'                       => 'Languages',
     'lang_not_translated'             => '%s — not translated yet',
     'lang_untranslated_notice'        => 'Not translated into %s yet. The form shows the default-language text; saving creates the translation.',
-    'lang_translation_hint'           => 'Slug, template, listing and shared fields are edited in the default language.',
+    'lang_translation_hint'           => 'Template, listing and shared fields are edited in the default language.',
     'lang_delete_translation'         => 'Delete translation',
     'lang_delete_translation_confirm' => 'Delete this translation? The page itself stays.',
+    'lang_slug_hint'                  => 'empty = the folder slug (%s)',
+    'lang_slug_taken'                 => 'Another page at this level already uses this slug in this language.',
 ];

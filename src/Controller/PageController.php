@@ -67,6 +67,19 @@ final class PageController
             return $this->notFound($request, $response, $urlPath, $page->httpStatus());
         }
 
+        // Asked by a folder slug that has a translated one (`/en/o-nas`):
+        // the page's URL in this language is its public path.
+        $asked = $request->getAttribute(\Station0\Middleware\LanguageMiddleware::ATTR_PUBLIC_PATH);
+        $prefix = (string) $request->getAttribute(\Station0\Middleware\LanguageMiddleware::ATTR_PREFIX, '');
+        if ($prefix !== '' && is_string($asked) && $page->publicPath !== ''
+            && (rtrim($asked, '/') ?: '/') !== $page->publicPath
+            && in_array($request->getMethod(), ['GET', 'HEAD'], true)) {
+            $query  = $request->getUri()->getQuery();
+            $target = ($page->publicPath === '/' && $prefix !== '' ? $prefix : $prefix . $page->publicPath)
+                . ($query !== '' ? '?' . $query : '');
+            return $response->withStatus(301)->withHeader('Location', $target);
+        }
+
         $html     = $this->renderer->render($page, $this->content->mtime($page->urlPath));
         $template = $page->template ?: 'page';
 

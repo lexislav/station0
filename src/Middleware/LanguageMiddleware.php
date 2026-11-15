@@ -9,14 +9,18 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface as Handler;
 use Slim\Views\Twig;
+use Station0\Service\ContentRepository;
 use Station0\Service\Languages;
 
 /**
  * Multilingual sites: `/en/about` is routed as `/about` with English as the
  * current language (Languages::setCurrent()); the default language has no
- * prefix. Everything after this middleware — routes, AccessPolicy, actions,
- * redirect rules — sees the unprefixed path; the request attributes
- * `station0.lang` / `station0.langPrefix` keep what was stripped.
+ * prefix. Translated slugs are resolved too: `/en/about-us` (a translation
+ * with `Slug: about-us` of the folder `o-nas`) is routed as `/o-nas`.
+ * Everything after this middleware — routes, AccessPolicy, actions,
+ * neutral redirect rules — sees the folder path; the request attributes
+ * `station0.lang` / `station0.langPrefix` keep what was stripped and
+ * `station0.publicPath` the unprefixed path as requested.
  *
  * Admin, `/media` and `/thumb` never take a prefix: `/en/admin/…` and
  * `/en/media/…` are left alone (and end as 404).
@@ -27,13 +31,17 @@ final class LanguageMiddleware implements MiddlewareInterface
     public const ATTR_PREFIX = 'station0.langPrefix';
     /** Closure(string): string — see localize(). */
     public const ATTR_LOCALIZE = 'station0.localize';
+    /** The unprefixed path as requested, before translated slugs were resolved. */
+    public const ATTR_PUBLIC_PATH = 'station0.publicPath';
 
     /**
      * A local path in the request's language: `/contact` → `/en/contact` on
-     * an English request. Left alone: the default language, external URLs,
-     * paths that already carry a language prefix, and admin / `/media` /
-     * `/thumb`. Without LanguageMiddleware (not multilingual) $path as is.
-     * For redirects built after routing (access, actions, redirect rules).
+     * an English request; the folder path of a page with translated slugs
+     * becomes its public path (`/o-nas` → `/en/about-us`). Left alone: the
+     * default language, external URLs, paths that already carry a language
+     * prefix, and admin / `/media` / `/thumb`. Without LanguageMiddleware
+     * (not multilingual) $path as is. For redirects built after routing
+     * (access, actions, redirect rules).
      */
     public static function localize(Request $request, string $path): string
     {
@@ -45,6 +53,8 @@ final class LanguageMiddleware implements MiddlewareInterface
         private readonly Languages $languages,
         private readonly string $adminPath = '/admin',
         private readonly ?Twig $twig = null,
+        /** Resolves translated slugs; null = slugs are folder names in every language. */
+        private readonly ?ContentRepository $pages = null,
     ) {}
 
     /**
@@ -72,10 +82,20 @@ final class LanguageMiddleware implements MiddlewareInterface
         $path = $uri->getPath();
         [$lang, $inner] = $this->languages->split($path);
 
-        if ($inner !== $path && !$this->unprefixable($inner)) {
+        if ($inner === $path || $this->unprefixable($inner)) {
+            $lang  = $this->languages->default();
+            $inner = $path;
+        }
+        $public = $inner;
+        // Translated slugs ⇒ the folder path routes and access rules know.
+        $folder = $this->pages !== null && !$this->languages->isDefault($lang)
+            ? $this->pages->in($lang, true)->resolvePublicPath(rawurldecode($inner))
+            : null;
+        if ($folder !== null && $folder !== rawurldecode($inner)) {
+            $inner = implode('/', array_map('rawurlencode', explode('/', $folder)));
+        }
+        if ($inner !== $path) {
             $request = $request->withUri($uri->withPath($inner));
-        } else {
-            $lang = $this->languages->default();
         }
 
         $this->languages->setCurrent($lang);
@@ -88,6 +108,7 @@ final class LanguageMiddleware implements MiddlewareInterface
         return $handler->handle($request
             ->withAttribute(self::ATTR_LANG, $lang)
             ->withAttribute(self::ATTR_PREFIX, $this->languages->prefix($lang))
+            ->withAttribute(self::ATTR_PUBLIC_PATH, rawurldecode($public))
             ->withAttribute(self::ATTR_LOCALIZE, fn (string $path): string => $this->localizePath($path, $lang)));
     }
 
@@ -103,6 +124,7 @@ final class LanguageMiddleware implements MiddlewareInterface
         if ($this->languages->split($only)[1] !== $only || $this->unprefixable($only)) {
             return $path; // already in a language, or never prefixed
         }
+        $only = $this->pages?->in($lang)->publicPathOf($only) ?? $only;
         return ($only === '/' ? $prefix : $prefix . $only) . $rest;
     }
 

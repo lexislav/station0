@@ -29,6 +29,8 @@ return [
     'redirects_form_count'     => 'Počítat přístupy',
     'redirects_form_drop'      => 'Zahodit query string',
     'redirects_form_note'      => 'Poznámka',
+    'redirects_form_lang'      => 'Jazyk',
+    'redirects_form_lang_all'  => 'Všechny jazyky (cesty složek)',
     'redirects_form_save'      => 'Uložit pravidlo',
     'redirects_form_cancel'    => 'Zrušit',
     'redirects_editor_hint'    => 'Redaktoři přidávají přesné cesty; vzory, regexy a vynucená pravidla smí jen admin.',

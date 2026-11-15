@@ -202,18 +202,25 @@ final class Store
      * A page moved from $old to $new (slug change or drag & drop): one
      * subtree rule `/old/{path*}` → `/new/{path}`, chains flattened, and rules
      * redirecting away from the page's new location removed (renaming back).
+     *
+     * With $lang: a translated slug changed — $old / $new are public paths in
+     * that language, and only that language's rules are touched or added.
      */
-    public function recordMove(string $old, string $new, string $note = ''): void
+    public function recordMove(string $old, string $new, string $note = '', ?string $lang = null): void
     {
         $old = Rules::normalizePath($old);
         $new = Rules::normalizePath($new);
         if ($old === $new || $old === '/' || $new === '/') {
             return;
         }
-        $this->mutate(function (array $rules) use ($old, $new, $note): array {
+        $this->mutate(function (array $rules) use ($old, $new, $note, $lang): array {
             $under = fn (string $path, string $prefix): bool => $path === $prefix || str_starts_with($path, $prefix . '/');
             $out = [];
             foreach ($rules as $rule) {
+                if (($rule['lang'] ?? null) !== $lang) {
+                    $out[] = $rule;   // another language's rules (public paths there)
+                    continue;
+                }
                 // The page lives at $new now: rules away from it are dead.
                 if (($rule['type'] === 'exact' && $rule['from'] === $new && !$rule['force'])
                     || ($rule['auto'] !== null && (Rules::subtree($rule)[0] ?? null) === $new)) {
@@ -235,6 +242,7 @@ final class Store
                 'to'   => $new . '/{path}',
                 'auto' => date('Y-m-d'),
                 'note' => $note,
+                'lang' => $lang,
             ]);
             $out = array_values(array_filter($out, fn (array $r) => $r['id'] !== $auto['id']));
             $out[] = $auto;
@@ -292,10 +300,11 @@ final class Store
     {
         $matcher = new Matcher(Compiler::compile($rules));
         $path    = Rules::sampleSource($rule);
+        $lang    = (string) ($rule['lang'] ?? '');
         $visited = [$path => true];
         $chain   = [$path];
         for ($hop = 0; $hop < Rules::MAX_HOPS; $hop++) {
-            $hit = $matcher->test((string) $path);
+            $hit = $matcher->test((string) $path, '', $lang);
             if ($hit === null || $hit['location'] === null || !str_starts_with($hit['location'], '/')) {
                 return null;
             }
