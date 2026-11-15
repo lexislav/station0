@@ -116,11 +116,13 @@ final class Bootstrap
         $app->add(VisitorMiddleware::class);
         $app->add($container->get(Guard::class));
 
-        // `/en/about` → `/about` + current language; first, so everything inside sees unprefixed paths.
+        // `/en/about` → `/about` + current language (translated slugs → folder
+        // path); first, so everything inside sees unprefixed folder paths.
         $app->add(new \Station0\Middleware\LanguageMiddleware(
             $container->get(Languages::class),
             $config['adminPath'],
             $container->get(Twig::class),
+            $container->get(ContentRepository::class),
         ));
 
         $app->addErrorMiddleware($config['debug'], true, true, $container->get(Logger::class));
@@ -272,13 +274,26 @@ final class Bootstrap
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'url',
                 // Public URL of a page or path in a language (current by default):
-                // url(page), url('/contact'), url(page, 'en').
-                function (mixed $target, ?string $lang = null) use ($languages): string {
-                    $path = $target instanceof \Station0\Service\Page ? $target->urlPath : (string) $target;
+                // url(page), url('/contact'), url(page, 'en'). Folder paths get
+                // the translated slugs of that language (`/o-nas` → `/en/about-us`).
+                function (mixed $target, ?string $lang = null) use ($c, $languages): string {
+                    $lang ??= $languages->current();
+                    if ($target instanceof \Station0\Service\Page) {
+                        $path = $target->lang === $lang && $target->publicPath !== ''
+                            ? $target->publicPath
+                            : $c->get(ContentRepository::class)->in($lang)->publicPathOf($target->urlPath);
+                        return $languages->url($path, $lang);
+                    }
+                    $path = (string) $target;
                     if (preg_match('#^([a-z][a-z0-9+.-]*:|//|\#|\?)#i', $path)) {
                         return $path;
                     }
-                    return $languages->url($path === '' ? '/' : $path, $lang);
+                    $cut  = strcspn($path, '?#');
+                    $only = substr($path, 0, $cut);
+                    if ($languages->enabled() && !$languages->isDefault($lang)) {
+                        $only = $c->get(ContentRepository::class)->in($lang)->publicPathOf($only === '' ? '/' : $only);
+                    }
+                    return $languages->url($only === '' ? '/' : $only, $lang) . substr($path, $cut);
                 }
             ));
             $translationsMemo = [];
@@ -303,7 +318,7 @@ final class Bootstrap
                             continue;
                         }
                         $out[] = $l + [
-                            'url'     => $languages->url($page->urlPath, $l['code']),
+                            'url'     => $languages->url($found->publicPath, $l['code']),
                             'current' => $l['code'] === $languages->current(),
                         ];
                     }

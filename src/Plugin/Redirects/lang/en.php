@@ -30,6 +30,8 @@ return [
     'redirects_form_count'     => 'Count hits',
     'redirects_form_drop'      => 'Drop the query string',
     'redirects_form_note'      => 'Note',
+    'redirects_form_lang'      => 'Language',
+    'redirects_form_lang_all'  => 'All languages (folder paths)',
     'redirects_form_save'      => 'Save rule',
     'redirects_form_cancel'    => 'Cancel',
     'redirects_editor_hint'    => 'Editors can add exact rules; patterns, regexes and force rules need an admin.',

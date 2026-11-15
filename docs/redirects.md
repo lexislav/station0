@@ -87,6 +87,7 @@ admin.
 | `caseless` | `true`: match regardless of letter case. Matching is case-sensitive by default. |
 | `query` | `drop`: don't append the request's query string to the target. By default it is appended. |
 | `count` | `true`: count hits (shown in the admin). This writes to SQLite once per redirect, so it is opt-in. |
+| `lang` | Multilingual sites: the rule applies only to requests in this language. `from` and `to` are then public paths in that language (translated slugs, no prefix). Can't be combined with `force`. See `docs/multilingual.md`. |
 | `auto`, `note` | Information only. `auto` is the date of an automatic rule. |
 
 **Matching.** The query string is ignored when matching, so `/index.php?id=12`
@@ -152,6 +153,9 @@ The plugin listens to the admin's `page.saved` event when it carries
   \Station0\Plugin\Redirects\Store::forConfig($task->config())
       ->recordMove('/old-path', '/new-path', 'Renamed by the import task');
   ```
+- **Translated slugs** (multilingual sites): changing a page's slug on a
+  translation tab adds the same kind of subtree rule with `lang`, between the
+  old and new public paths in that language.
 - `'auto' => false` turns this off.
 
 ## Admin
@@ -206,6 +210,7 @@ for GET/HEAD requests that end in a 404 and that no rule answered.
 - The path is stored without its query string and cut to 512 characters.
   The referrer is stored without its query string.
 - `ignore404` globs are never logged.
+- On a multilingual site the path keeps its language prefix (`/en/x`).
 - Opening the log drops the paths that something now answers: a rule
   (from the admin, the YAML file, the console or an automatic one) or a
   live page created at that path. Ignored paths are dropped too.

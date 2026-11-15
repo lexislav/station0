@@ -14,6 +14,7 @@ use Station0\Plugin\Registrar;
 use Station0\Service\AccessPolicy;
 use Station0\Service\ActionRegistry;
 use Station0\Service\ContentRepository;
+use Station0\Service\Languages;
 use Station0\Service\Page;
 
 /**
@@ -89,6 +90,7 @@ final class Plugin extends BasePlugin
             $c->get(ContentRepository::class),
             $c->get('admin.user'),
             $c->get('config')['adminPath'],
+            $c->has(Languages::class) ? $c->get(Languages::class) : null,
         ));
         foreach (Log::migrations() as $id => $sql) {
             $r->migration($id, $sql);
@@ -111,6 +113,16 @@ final class Plugin extends BasePlugin
                 $r->get(Store::class)->recordMove($event['previous_path'], $event['path'], trim($how . ($email !== '' ? ' by ' . $email : '')));
             };
             $r->on('page.saved', fn (array $event) => $move($event, 'Renamed in admin'));
+            // A translated slug changed: the old public path in that language follows.
+            $r->on('page.saved', function (array $event) use ($r): void {
+                if (!is_string($event['lang'] ?? null) || !is_string($event['previous_public_path'] ?? null)
+                    || !is_string($event['public_path'] ?? null)) {
+                    return;
+                }
+                $email = ($r->get('admin.user'))()['email'] ?? '';
+                $r->get(Store::class)->recordMove($event['previous_public_path'], $event['public_path'],
+                    trim('Slug (' . $event['lang'] . ') renamed in admin' . ($email !== '' ? ' by ' . $email : '')), $event['lang']);
+            });
             $r->on('page.moved', fn (array $event) => $move($event, 'Moved in admin'));
         }
 

@@ -90,6 +90,15 @@ final class ContentRepository
     private array $warnedDirs = [];
 
     /**
+     * Translated slugs per directory and language: "<lang>\0<dir>" ⇒
+     * [translated slug ⇒ folder name]. Shared with the in() views; cleared on
+     * every write (a sibling set or a slug may have changed).
+     *
+     * @var array<string, array<string, string>>
+     */
+    private array $slugMaps = [];
+
+    /**
      * @param ?string $templatesDir site templates; lets contentFileIn() tell the
      *                              content file (`<template>.txt`) from other `.txt` files
      */
@@ -136,6 +145,7 @@ final class ContentRepository
             $view->parsedCache    = &$this->parsedCache;
             $view->warnedDirs     = &$this->warnedDirs;
             $view->translationsOf = &$this->translationsOf;
+            $view->slugMaps       = &$this->slugMaps;
             $this->languageViews[$key] = $view;
         }
         return $this->languageViews[$key];
@@ -190,6 +200,75 @@ final class ContentRepository
         }
         $page = $this->findBySegments($this->pagesDir, $segments, '');
         return $page !== null && $this->hidesUntranslated() && !$page->translated ? null : $page;
+    }
+
+    /**
+     * The folder path ($urlPath, the page's identity) of a public path in this
+     * repository's language: segment by segment a translated slug wins, else
+     * the folder of that name. `/about-us/team` ⇒ `/o-nas/team` in English.
+     * Null when no page answers. In the default language every path is its
+     * own folder path.
+     *
+     * The result can be a different public path than asked for (the folder
+     * slug of a page that has a translated one) — PageController redirects
+     * such requests to Page::$publicPath.
+     */
+    public function resolvePublicPath(string $publicPath): ?string
+    {
+        $publicPath = $this->normalizePath($publicPath);
+        if (!$this->translating() || $publicPath === '/') {
+            return $publicPath;
+        }
+        $dir    = rtrim($this->pagesDir, '/');
+        $folder = '';
+        foreach (array_values(array_filter(explode('/', $publicPath), 'strlen')) as $segment) {
+            if ($segment === '.' || $segment === '..' || str_contains($segment, '\\')
+                || preg_match('/[\x00-\x1F]/', $segment)) {
+                return null;
+            }
+            $name = $this->slugMap($dir)[$segment] ?? $segment;
+            if ($this->findFileBySlug($dir, $name) === null) {
+                return null;
+            }
+            $dir    .= '/' . $name;
+            $folder .= '/' . $name;
+        }
+        return $folder === '' ? '/' : $folder;
+    }
+
+    /**
+     * Public path (unprefixed, translated slugs) of the page at the folder
+     * path $urlPath in this language; $urlPath itself when no page is there.
+     */
+    public function publicPathOf(string $urlPath): string
+    {
+        $urlPath = $this->normalizePath($urlPath);
+        if (!$this->translating() || $urlPath === '/') {
+            return $urlPath;
+        }
+        return $this->find($urlPath)?->publicPath ?? $urlPath;
+    }
+
+    /**
+     * Whether $slug is free as a translated slug of the page at $urlPath in
+     * this language: no sibling folder (other than the page's own) and no
+     * sibling's translated slug uses it. A top-level slug may not be a
+     * language code either (the prefix would shadow it).
+     */
+    public function translatedSlugAvailable(Page $page, string $slug): bool
+    {
+        if ($page->urlPath === '/' || !$this->translating()) {
+            return false;
+        }
+        $parentDir = dirname(rtrim(dirname($page->filePath), '/'));
+        $own       = $page->slug;
+        if ($slug !== $own && $this->findFileBySlug($parentDir, $slug) !== null) {
+            return false;
+        }
+        if (($this->slugMap($parentDir)[$slug] ?? $own) !== $own) {
+            return false;
+        }
+        return !(rtrim($parentDir, '/') === rtrim($this->pagesDir, '/') && $this->languages->has($slug));
     }
 
     /**
@@ -274,6 +353,7 @@ final class ContentRepository
         rename($tmp, $filePath);
 
         unset($this->parsedCache[$filePath]);
+        $this->slugMaps = [];
     }
 
     /**
@@ -294,6 +374,7 @@ final class ContentRepository
         $shared = array_flip([...self::SHARED_KEYS, ...$this->sharedFieldsOf($page->template)]);
         $fields = [
             'Title'       => $page->title,
+            'Slug'        => $page->translatedSlug,
             'Metatitle'   => $page->metatitle,
             'Status'      => $page->status,
             'Published'   => $page->isPublished() ? 'true' : 'false',
@@ -313,8 +394,10 @@ final class ContentRepository
         file_put_contents($tmp, FrontMatter::serialize($fields, $page->body));
         rename($tmp, $file);
         unset($this->parsedCache[$file], $this->translationsOf[$page->filePath]);
+        $this->slugMaps = [];
 
         $page->translationFile = $file;
+        $page->publicPath      = $this->publicPathFor($page->parent, $page->translatedSlug ?? $page->slug);
         $page->translated      = true;
         if (!in_array($page->lang, $page->translations, true)) {
             $page->translations[] = $page->lang;
@@ -330,6 +413,7 @@ final class ContentRepository
         }
         $file = Languages::translationFile($page->filePath, $lang);
         unset($this->parsedCache[$file], $this->translationsOf[$page->filePath]);
+        $this->slugMaps = [];
         return is_file($file) && @unlink($file);
     }
 
@@ -367,6 +451,7 @@ final class ContentRepository
         $page->translationFile = $page->translationFile !== null ? $newDir . '/' . basename($page->translationFile) : null;
         $page->childrenDir = $newDir . '/';
         $page->urlPath     = rtrim(dirname($page->urlPath), '/') . '/' . $newSlug;
+        $page->publicPath  = $this->translating() ? $page->publicPath : $page->urlPath;
 
         $this->forgetDir($oldDir);
     }
@@ -417,6 +502,7 @@ final class ContentRepository
         $page->translationFile = $page->translationFile !== null ? $newDir . '/' . basename($page->translationFile) : null;
         $page->childrenDir = $newDir . '/';
         $page->urlPath     = ($newParentUrl === '/' ? '' : $newParentUrl) . '/' . $page->slug;
+        $page->publicPath  = $this->translating() ? $page->publicPath : $page->urlPath;
 
         $this->forgetDir($oldDir);
     }
@@ -775,11 +861,12 @@ final class ContentRepository
         $translated   = true;
         $translation  = null;
         $translations = $lang !== '' ? $this->translationsOf($filePath) : [];
+        $translatedSlug = null;
         if ($this->translating()) {
             $translation = Languages::translationFile($filePath, $lang);
             $translated  = in_array($lang, $translations, true);
             if ($translated) {
-                [$meta, $body] = $this->mergeTranslation($meta, $body, $translation, (string) ($meta['template'] ?? basename($filePath, '.txt')));
+                [$meta, $body, $translatedSlug] = $this->mergeTranslation($meta, $body, $translation, (string) ($meta['template'] ?? basename($filePath, '.txt')));
             }
         }
 
@@ -815,6 +902,8 @@ final class ContentRepository
         $page->translated   = $translated;
         $page->translationFile = $translated ? $translation : null;
         $page->translations = $translations;
+        $page->translatedSlug = $isRoot ? null : $translatedSlug;
+        $page->publicPath   = $isRoot ? '/' : $this->publicPathFor($parent, $page->translatedSlug ?? $slug);
         $page->childrenDir = rtrim($fileDir, '/') . '/';
 
         return $page;
@@ -823,13 +912,16 @@ final class ContentRepository
     /**
      * Translation over the default file: its keys win except SHARED_KEYS and
      * `translate: false` fields; an empty translated body keeps the default one.
+     * `Slug:` is not merged; it is returned as the third element.
      *
-     * @return array{array<string, mixed>, string}
+     * @return array{array<string, mixed>, string, ?string}
      */
     private function mergeTranslation(array $meta, string $body, string $translationFile, string $template): array
     {
         [$tMeta, $tBody] = $this->parseFrontMatterFromFile($translationFile);
         $shared   = array_flip([...self::SHARED_KEYS, ...$this->sharedFieldsOf($template)]);
+        $slug     = self::translatedSlugIn($tMeta);
+        unset($tMeta['slug']);
 
         // Status and its legacy mirror travel together.
         if (array_key_exists('status', $tMeta) || array_key_exists('published', $tMeta)) {
@@ -840,12 +932,55 @@ final class ContentRepository
                 $meta[$key] = $value;
             }
         }
-        return [$meta, trim($tBody) !== '' ? $tBody : $body];
+        return [$meta, trim($tBody) !== '' ? $tBody : $body, $slug];
+    }
+
+    /** A translation's `Slug:`, sanitized; null when absent or empty. */
+    private static function translatedSlugIn(array $meta): ?string
+    {
+        $slug = is_scalar($meta['slug'] ?? null) ? Slug::sanitize((string) $meta['slug']) : '';
+        return $slug !== '' ? $slug : null;
+    }
+
+    /** Public path of a page with the (translated) slug $slug under $parent. */
+    private function publicPathFor(?Page $parent, string $slug): string
+    {
+        return ($parent !== null ? rtrim($parent->publicPath, '/') : '') . '/' . $slug;
+    }
+
+    /**
+     * Translated slug ⇒ folder name for the pages directly in $dir, in this
+     * language. A slug two siblings claim goes to the first in folder order
+     * (the admin refuses such a slug); a folder name never maps here.
+     *
+     * @return array<string, string>
+     */
+    private function slugMap(string $dir): array
+    {
+        $dir = rtrim($dir, '/');
+        $key = $this->language() . "\0" . $dir;
+        if (!isset($this->slugMaps[$key])) {
+            $map  = [];
+            $lang = $this->language();
+            foreach (glob($dir . '/*', GLOB_ONLYDIR) ?: [] as $subDir) {
+                $file = $this->contentFileIn($subDir);
+                if ($file === null || !in_array($lang, $this->translationsOf($file), true)) {
+                    continue;
+                }
+                $slug = self::translatedSlugIn($this->parseFrontMatterFromFile(Languages::translationFile($file, $lang))[0]);
+                if ($slug !== null && $slug !== basename($subDir)) {
+                    $map[$slug] ??= basename($subDir);
+                }
+            }
+            $this->slugMaps[$key] = $map;
+        }
+        return $this->slugMaps[$key];
     }
 
     /** Drop cached parses / translation lists of everything under $dir (renamed, moved, deleted). */
     private function forgetDir(string $dir): void
     {
+        $this->slugMaps = [];
         foreach ([&$this->parsedCache, &$this->translationsOf] as &$cache) {
             foreach (array_keys($cache) as $key) {
                 if (str_starts_with($key, $dir . '/')) {

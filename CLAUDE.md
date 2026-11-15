@@ -81,9 +81,11 @@ Global, outermost first (Slim runs the last-added first):
    headers a controller set are kept)
 2. `ErrorMiddleware`
 3. `LanguageMiddleware` — multilingual sites only: strips `/{lang}` from the
-   path (not admin / `/media` / `/thumb`), `Languages::setCurrent()`,
-   refreshes the `lang` / `languages` Twig globals, request attributes
-   `station0.lang` / `station0.langPrefix`
+   path (not admin / `/media` / `/thumb`), resolves translated slugs to the
+   folder path (`ContentRepository::resolvePublicPath()`),
+   `Languages::setCurrent()`, refreshes the `lang` / `languages` Twig
+   globals, request attributes `station0.lang` / `station0.langPrefix` /
+   `station0.publicPath` (unprefixed path as requested)
 4. `Guard` (CSRF — every POST/PUT/PATCH/DELETE, public routes included)
 5. `VisitorMiddleware` — loads the public-site visitor (pass cookie), `visitor` Twig global, writes pass cookies
 6. `CsrfTwigGlobalMiddleware` — `csrf` Twig global
@@ -253,8 +255,20 @@ two or more; first = default, no prefix; others under `/{code}`.
   and left out of `all()` / listings (translated sub-pages stay; the parent
   is structure). Admin uses `in($lang, true)` (default text, `translated`
   false). `AccessPolicy` reads `Access:` via `in('')`.
-- **Page:** `lang`, `translated`, `translationFile`, `translations` (codes).
-  `urlPath` stays unprefixed — templates link with `url(page)`.
+- **Translated slugs:** `Slug:` in a translation (not merged into `extra`)
+  → `Page::$translatedSlug`; `Page::$publicPath` = parent's publicPath +
+  translated-or-folder slug (= `urlPath` in the default language).
+  `resolvePublicPath()` (public → folder, segment by segment, `slugMap()`
+  per dir + lang in the shared `$slugMaps`, cleared on every write),
+  `publicPathOf()` (folder → public), `translatedSlugAvailable()` (admin
+  422 `lang_slug_taken`). `PageController` 301s a live page asked by a
+  non-canonical public path (`station0.publicPath` ≠ `publicPath`, prefixed
+  languages only). `url()` / `translations()` / `localize()` map folder
+  paths to public ones. `page.saved` from a translation carries
+  `public_path` (+ `previous_public_path` when the slug changed).
+- **Page:** `lang`, `translated`, `translationFile`, `translations` (codes),
+  `translatedSlug`, `publicPath`. `urlPath` = folder path (identity) —
+  templates link with `url(page)`.
   `save()` of a page read in another language → `saveTranslation()`
   (title, metatitle, status/dates, author, updated, body, extra minus shared).
   `deleteTranslation()`; `delete()` removes translations with the dir;
@@ -268,7 +282,11 @@ two or more; first = default, no prefix; others under `/{code}`.
   filtered by AccessPolicy like the listings.
 - **Redirects after routing:** `LanguageMiddleware::localize($request, $path)`
   (request attribute closure) keeps a local path in the request's language;
-  used by `Redirector::respond()` (rules stay language-neutral),
+  used by `Redirector::respond()` for neutral rules (folder-path targets;
+  `lang:` rules match `station0.publicPath` and get the prefix only —
+  `Compiler` puts them in `lang[code]` maps, `Matcher::match(..., $lang,
+  $publicPath)` tries them first; auto rules via `recordMove(..., $lang)`;
+  404 log stores the prefixed path),
   `AccessMiddleware` (`access.redirect`), `ActionContext::redirect()` / `back()`.
   Skips already prefixed paths, external URLs, admin / `/media` / `/thumb`.
   The preview bar's edit link carries `?lang=`.

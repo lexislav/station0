@@ -4,7 +4,7 @@ status: open
 priority: high
 area: content
 created: 2026-11-14
-related: [content-multilingual-slugs.md, docs/multilingual.md, src/Service/CollectionRepository.php, src/Controller/Admin/CollectionController.php]
+related: [content-multilingual-extras.md, docs/multilingual.md, src/Service/CollectionRepository.php, src/Controller/Admin/CollectionController.php]
 ---
 
 ## Problem
