@@ -237,8 +237,11 @@ final class ContentRepository
     }
 
     /**
-     * Public path (unprefixed, translated slugs) of the page at the folder
-     * path $urlPath in this language; $urlPath itself when no page is there.
+     * Public path (unprefixed, translated slugs) of the folder path $urlPath
+     * in this language. Segment by segment: a folder whose translation has a
+     * `Slug:` gets it, every other segment is kept. So a page without a
+     * translation, or a path that is no page at all (`/blog/categories`,
+     * `/contact/send`), still gets its ancestors' slugs (`/clanky-co/categories`).
      */
     public function publicPathOf(string $urlPath): string
     {
@@ -246,7 +249,17 @@ final class ContentRepository
         if (!$this->translating() || $urlPath === '/') {
             return $urlPath;
         }
-        return $this->find($urlPath)?->publicPath ?? $urlPath;
+        $dir    = rtrim($this->pagesDir, '/');
+        $public = '';
+        foreach (array_values(array_filter(explode('/', $urlPath), 'strlen')) as $segment) {
+            $safe = $dir !== '' && $segment !== '.' && $segment !== '..'
+                && !str_contains($segment, '\\') && !preg_match('/[\x00-\x1F]/', $segment);
+            $slug = $safe ? array_search($segment, $this->slugMap($dir), true) : false;
+            $public .= '/' . ($slug !== false ? $slug : $segment);
+            // Below a segment that is no folder nothing can be translated.
+            $dir = $safe && is_dir($dir . '/' . $segment) ? $dir . '/' . $segment : '';
+        }
+        return $public === '' ? '/' : $public;
     }
 
     /**

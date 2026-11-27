@@ -114,23 +114,42 @@ final class LanguageMiddleware implements MiddlewareInterface
 
     private function localizePath(string $path, string $lang): string
     {
-        $prefix = $this->languages->prefix($lang);
+        return self::localizeTo($this->languages, $this->pages, $this->adminPath, $path, $lang);
+    }
+
+    /**
+     * $path in language $lang — the one rule behind localize() and the Twig
+     * `url()`: a local path gets the language prefix and that language's
+     * translated slugs (`/o-nas?x#y` → `/en/about-us?x#y`). Returned as is:
+     * the default language, external URLs (`https:`, `//`, `mailto:`),
+     * relative paths and bare `?…` / `#…`, paths that already carry a
+     * language prefix, and the admin, `/media` and `/thumb`, which are never
+     * prefixed.
+     */
+    public static function localizeTo(Languages $languages, ?ContentRepository $pages, string $adminPath, string $path, string $lang): string
+    {
+        $prefix = $languages->prefix($lang);
         if ($prefix === '' || !str_starts_with($path, '/') || str_starts_with($path, '//')) {
             return $path;
         }
         $cut  = strcspn($path, '?#');
         $only = substr($path, 0, $cut);
         $rest = substr($path, $cut);
-        if ($this->languages->split($only)[1] !== $only || $this->unprefixable($only)) {
+        if ($languages->split($only)[1] !== $only || self::isUnprefixable($only, $adminPath)) {
             return $path; // already in a language, or never prefixed
         }
-        $only = $this->pages?->in($lang)->publicPathOf($only) ?? $only;
+        $only = $pages?->in($lang)->publicPathOf($only) ?? $only;
         return ($only === '/' ? $prefix : $prefix . $only) . $rest;
     }
 
     private function unprefixable(string $path): bool
     {
-        foreach ([rtrim($this->adminPath, '/'), '/media', '/thumb'] as $root) {
+        return self::isUnprefixable($path, $this->adminPath);
+    }
+
+    private static function isUnprefixable(string $path, string $adminPath): bool
+    {
+        foreach ([rtrim($adminPath, '/'), '/media', '/thumb'] as $root) {
             if ($root !== '' && ($path === $root || str_starts_with($path, $root . '/'))) {
                 return true;
             }

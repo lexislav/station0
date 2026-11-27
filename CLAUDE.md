@@ -260,11 +260,14 @@ two or more; first = default, no prefix; others under `/{code}`.
   translated-or-folder slug (= `urlPath` in the default language).
   `resolvePublicPath()` (public → folder, segment by segment, `slugMap()`
   per dir + lang in the shared `$slugMaps`, cleared on every write),
-  `publicPathOf()` (folder → public), `translatedSlugAvailable()` (admin
+  `publicPathOf()` (folder → public, per segment, so untranslated pages
+  and non-page paths keep their ancestors' slugs), `translatedSlugAvailable()` (admin
   422 `lang_slug_taken`). `PageController` 301s a live page asked by a
   non-canonical public path (`station0.publicPath` ≠ `publicPath`, prefixed
   languages only). `url()` / `translations()` / `localize()` map folder
-  paths to public ones. `page.saved` from a translation carries
+  paths to public ones; `url()` and `localize()` share
+  `LanguageMiddleware::localizeTo()` (external, relative, prefixed, admin,
+  `/media`, `/thumb` left alone). `page.saved` from a translation carries
   `public_path` (+ `previous_public_path` when the slug changed).
 - **Page:** `lang`, `translated`, `translationFile`, `translations` (codes),
   `translatedSlug`, `publicPath`. `urlPath` = folder path (identity) —

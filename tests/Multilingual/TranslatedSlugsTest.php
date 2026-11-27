@@ -35,6 +35,7 @@ final class TranslatedSlugsTest extends TestCase
             $site->write('site/content/pages/o-nas/tym/page.en.txt', "Title: Team\nSlug: team\n---\n");
             $site->write('site/content/pages/o-nas/historie/page.txt', "Title: Historie\nStatus: published\n---\n");
             $site->write('site/content/pages/o-nas/historie/page.en.txt', "Title: History\n---\n");
+            $site->write('site/content/pages/o-nas/archiv/page.txt', "Title: Archiv\nStatus: published\n---\n");
             $prepare?->__invoke($site);
         });
     }
@@ -62,6 +63,13 @@ final class TranslatedSlugsTest extends TestCase
         self::assertSame('/about-us', $repo->in('cs')->resolvePublicPath('/about-us'), 'default language: paths are folder paths');
         self::assertSame('/about-us/team', $en->publicPathOf('/o-nas/tym'));
         self::assertSame('/contact/send', $en->publicPathOf('/contact/send'));
+        // A page without a translation, and a path that is no page, keep their
+        // ancestors' slugs instead of falling back to the whole folder path.
+        self::assertSame('/about-us/archiv', $en->publicPathOf('/o-nas/archiv'), 'untranslated page under a translated parent');
+        self::assertSame('/about-us/team/nope', $en->publicPathOf('/o-nas/tym/nope'), 'no page there');
+        self::assertSame('/nope/tym', $en->publicPathOf('/nope/tym'), 'nothing below a missing folder is translated');
+        self::assertSame('/about-us/../o-nas', $en->publicPathOf('/o-nas/../o-nas'), 'traversal segments are kept, never looked up');
+        self::assertSame('/o-nas/archiv', $repo->in('cs')->publicPathOf('/o-nas/archiv'));
 
         $page = $en->find('/o-nas/historie');
         self::assertTrue($en->translatedSlugAvailable($page, 'history'));
@@ -103,6 +111,31 @@ final class TranslatedSlugsTest extends TestCase
         $html = (string) $this->get($this->reboot(null), '/en/about-us/team')->getBody();
         self::assertStringContainsString('<h1>Team</h1>', $html);
         self::assertStringContainsString('[cs /o-nas/tym][en /en/about-us/team]', $html);
+    }
+
+    public function testUrlLeavesAssetsAdminAndRelativeLinksAlone(): void
+    {
+        $tpl = '<h1>{{ page.title }}</h1>|u:'
+            . '{{ url("/media/o-nas/doc.pdf") }} {{ url("/thumb/400x0/abc/o-nas/a.jpg") }} {{ url("/admin/pages") }}'
+            . ' {{ url("foo/bar") }} {{ url("#top") }} {{ url("?page=2") }} {{ url("mailto:a@b.cz") }}'
+            . ' {{ url("https://example.com/x") }} {{ url("//cdn.example.com/x") }} {{ url("/en/o-nas") }}'
+            . ' {{ url("/o-nas/archiv") }} {{ url("/o-nas/tym#a") }} {{ url("") }} {{ url("/media", "cs") }}|';
+        $app = $this->boot([], null, $tpl, function (TestSite $site): void {
+            $site->configure(['languages' => ['cs' => [], 'en' => []]]);
+            $site->write('site/content/pages/o-nas/page.txt', "Title: O nás\nStatus: published\n---\n");
+            $site->write('site/content/pages/o-nas/page.en.txt', "Title: About us\nSlug: about-us\n---\n");
+            $site->write('site/content/pages/o-nas/tym/page.txt', "Title: Tým\nStatus: published\n---\n");
+            $site->write('site/content/pages/o-nas/tym/page.en.txt', "Title: Team\nSlug: team\n---\n");
+            $site->write('site/content/pages/o-nas/archiv/page.txt', "Title: Archiv\nStatus: published\n---\n");
+        });
+        $html = (string) $this->get($app, '/en/about-us')->getBody();
+        self::assertStringContainsString(
+            '|u:/media/o-nas/doc.pdf /thumb/400x0/abc/o-nas/a.jpg /admin/pages'
+            . ' foo/bar #top ?page=2 mailto:a@b.cz'
+            . ' https://example.com/x //cdn.example.com/x /en/o-nas'
+            . ' /en/about-us/archiv /en/about-us/team#a /en /media|',
+            $html,
+        );
     }
 
     public function testDefaultLanguageIsUnchanged(): void

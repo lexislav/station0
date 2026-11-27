@@ -275,8 +275,10 @@ final class Bootstrap
                 'url',
                 // Public URL of a page or path in a language (current by default):
                 // url(page), url('/contact'), url(page, 'en'). Folder paths get
-                // the translated slugs of that language (`/o-nas` → `/en/about-us`).
-                function (mixed $target, ?string $lang = null) use ($c, $languages): string {
+                // the translated slugs of that language (`/o-nas` → `/en/about-us`);
+                // external and relative URLs, /media, /thumb and the admin are
+                // left alone (LanguageMiddleware::localizeTo()).
+                function (mixed $target, ?string $lang = null) use ($c, $languages, $config): string {
                     $lang ??= $languages->current();
                     if ($target instanceof \Station0\Service\Page) {
                         $path = $target->lang === $lang && $target->publicPath !== ''
@@ -285,15 +287,13 @@ final class Bootstrap
                         return $languages->url($path, $lang);
                     }
                     $path = (string) $target;
-                    if (preg_match('#^([a-z][a-z0-9+.-]*:|//|\#|\?)#i', $path)) {
-                        return $path;
-                    }
-                    $cut  = strcspn($path, '?#');
-                    $only = substr($path, 0, $cut);
-                    if ($languages->enabled() && !$languages->isDefault($lang)) {
-                        $only = $c->get(ContentRepository::class)->in($lang)->publicPathOf($only === '' ? '/' : $only);
-                    }
-                    return $languages->url($only === '' ? '/' : $only, $lang) . substr($path, $cut);
+                    return \Station0\Middleware\LanguageMiddleware::localizeTo(
+                        $languages,
+                        $c->get(ContentRepository::class),
+                        $config['adminPath'],
+                        $path === '' ? '/' : $path,
+                        $lang,
+                    );
                 }
             ));
             $translationsMemo = [];
