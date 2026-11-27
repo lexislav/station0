@@ -94,6 +94,14 @@
 .row-actions .menu .danger:hover { background: #ffe4e4; }
 
 /* ── Stream badges ─────────────────────────────────────────────────────── */
+.right-meta .langs { white-space: nowrap; }
+/* Multilingual sites: one more column for the translation badges. */
+.page-row .right-meta:has(.langs),
+.stream-preview-row .right-meta:has(.langs),
+.stream-record-row .right-meta:has(.langs) { grid-template-columns: 7rem auto 6rem 2.2rem; }
+.badge-lang { display: inline-block; font-size: .7rem; font-weight: 600; padding: 0 .3rem; margin-left: .25rem;
+              border-radius: 3px; background: #e6f0fa; color: #1f5f99; text-decoration: none; }
+.badge-lang.missing { background: transparent; color: #a0a8b2; border: 1px dashed #c8ced6; }
 .badge-stream {
     display: inline-flex; align-items: center;
     padding: .1rem .45rem;
@@ -317,6 +325,7 @@ a.badge-group:hover { background: #f0f2f5; }
                 <span class="status">
                     {% include '@admin/_visibility_status.twig' with {entry: p} only %}
                 </span>
+                {% if (languages ?? [])|length > 1 %}<span class="langs">{% include '@admin/_language_badges.twig' with {entry: p, languages: languages, app: app, t: t} only %}</span>{% endif %}
                 <span class="updated">{{ p.updated ? p.updated|slice(0, 10) : '' }}</span>
                 <span class="actions">
                     <details class="row-actions">
@@ -354,6 +363,7 @@ a.badge-group:hover { background: #f0f2f5; }
                             <span class="status">
                                 {% include '@admin/_visibility_status.twig' with {entry: cp} only %}
                             </span>
+                            {% if (languages ?? [])|length > 1 %}<span class="langs">{% include '@admin/_language_badges.twig' with {entry: cp, languages: languages, app: app, t: t} only %}</span>{% endif %}
                             <span class="updated">{{ cp.updated ? cp.updated|slice(0, 10) : '' }}</span>
                             <span></span>{# keeps right-meta grid aligned #}
                         </span>
@@ -455,6 +465,7 @@ a.badge-group:hover { background: #f0f2f5; }
                                     <span class="status">
                                         {% include '@admin/_visibility_status.twig' with {entry: cp} only %}
                                     </span>
+                                    {% if (languages ?? [])|length > 1 %}<span class="langs">{% include '@admin/_language_badges.twig' with {entry: cp, languages: languages, app: app, t: t} only %}</span>{% endif %}
                                     <span class="updated">{{ cp.updated ? cp.updated|slice(0, 10) : '' }}</span>
                                     <span class="actions">
                                         <details class="row-actions">

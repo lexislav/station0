@@ -126,11 +126,15 @@ final class ActionContext
         return $value;
     }
 
-    /** Redirect to a path on this site (anything else falls back to "/"). */
+    /**
+     * Redirect to a path on this site (anything else falls back to "/"). On a
+     * multilingual site the path stays in the request's language
+     * (`/contact` → `/en/contact`; already prefixed paths are kept).
+     */
     public function redirect(string $path, int $status = 303): Response
     {
         return (new ResponseFactory())->createResponse($status)
-            ->withHeader('Location', self::localPath($path) ?? '/')
+            ->withHeader('Location', \Station0\Middleware\LanguageMiddleware::localize($this->request, self::localPath($path) ?? '/'))
             ->withHeader('Cache-Control', 'no-store');
     }
 

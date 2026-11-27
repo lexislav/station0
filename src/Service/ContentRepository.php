@@ -44,6 +44,12 @@ use Station0\Support\Visibility;
  *
  * A directory should hold one content file. When it holds several `*.txt`
  * (e.g. a stray upload), contentFileIn() picks the one named after a template.
+ *
+ * Translations (multilingual sites, see Languages): `page.en.txt` next to
+ * `page.txt` holds the English version of the page's text. It is never a
+ * content file of its own; buildPage() merges it over the default file for
+ * the repository's language — translated keys win, the rest falls back,
+ * SHARED_KEYS (structure) always come from the default file.
  */
 final class ContentRepository
 {
@@ -53,7 +59,32 @@ final class ContentRepository
         'allowedchildtemplates', 'group', 'status', 'publishat', 'expireat', 'listing', 'cascade',
     ];
 
+    /**
+     * Keys that describe the page's place in the tree, not its text: always
+     * read from the default-language file, never from a translation.
+     */
+    public const SHARED_KEYS = [
+        'template', 'sort', 'allowedchildtemplates', 'group', 'listing', 'cascade', 'access',
+    ];
+
     private array $parsedCache = [];
+
+    /** Fixed language of this instance (see in()); null = the request's current language. */
+    private ?string $lang = null;
+
+    /** Untranslated pages serve the default text even in '404' fallback mode (admin editing). */
+    private bool $forceFallback = false;
+
+    /** @var array<string, self> */
+    private array $languageViews = [];
+
+    /**
+     * Languages each content file exists in (default + translation files),
+     * probed once per request. Shared with the in() views, like $parsedCache.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $translationsOf = [];
 
     /** @var array<string, true> directories already reported as ambiguous */
     private array $warnedDirs = [];
@@ -66,10 +97,71 @@ final class ContentRepository
         private readonly string $pagesDir,
         private readonly ?string $templatesDir = null,
         private readonly ?LoggerInterface $logger = null,
+        private readonly ?Languages $languages = null,
+        /**
+         * Page fields of a template that are shared across languages
+         * (`translate: false`), lower-cased; never read from a translation.
+         *
+         * @var (\Closure(string): list<string>)|null
+         */
+        private readonly ?\Closure $sharedFields = null,
     ) {
         if (!is_dir($this->pagesDir)) {
             @mkdir($this->pagesDir, 0775, true);
         }
+    }
+
+    // ─────────────────── Languages ───────────────────
+
+    /**
+     * This repository in a fixed language ('' = the default one). With
+     * $withFallback, pages without a translation are returned with the
+     * default text (Page::$translated false) instead of being left out —
+     * what the admin edits. Not multilingual ⇒ $this.
+     */
+    public function in(string $lang, bool $withFallback = false): self
+    {
+        if ($this->languages === null || !$this->languages->enabled()) {
+            return $this;
+        }
+        $lang = $this->languages->has($lang) ? $lang : $this->languages->default();
+        $key  = $lang . ($withFallback ? '+' : '');
+        if (!isset($this->languageViews[$key])) {
+            $view = clone $this;
+            $view->lang          = $lang;
+            $view->forceFallback = $withFallback;
+            $view->languageViews = [];
+            // One parse cache for every view: a write through any of them
+            // (or the base) is seen by all.
+            $view->parsedCache    = &$this->parsedCache;
+            $view->warnedDirs     = &$this->warnedDirs;
+            $view->translationsOf = &$this->translationsOf;
+            $this->languageViews[$key] = $view;
+        }
+        return $this->languageViews[$key];
+    }
+
+    /** Language this repository reads in; '' when the site is not multilingual. */
+    public function language(): string
+    {
+        if ($this->languages === null || !$this->languages->enabled()) {
+            return '';
+        }
+        return $this->lang ?? $this->languages->current();
+    }
+
+    /** True when reading a non-default language. */
+    private function translating(): bool
+    {
+        $lang = $this->language();
+        return $lang !== '' && !$this->languages->isDefault($lang);
+    }
+
+    /** Untranslated pages are left out (404, not listed) in this language. */
+    private function hidesUntranslated(): bool
+    {
+        return $this->translating() && !$this->forceFallback
+            && $this->languages->fallback() === Languages::FALLBACK_404;
     }
 
     // ─────────────────── Public API ───────────────────
@@ -82,7 +174,8 @@ final class ContentRepository
         $urlPath = $this->normalizePath($urlPath);
 
         if ($urlPath === '/') {
-            return $this->findRoot($this->pagesDir, '/');
+            $root = $this->findRoot($this->pagesDir, '/');
+            return $root !== null && $this->hidesUntranslated() && !$root->translated ? null : $root;
         }
 
         $segments = array_values(array_filter(explode('/', $urlPath)));
@@ -95,7 +188,8 @@ final class ContentRepository
                 return null;
             }
         }
-        return $this->findBySegments($this->pagesDir, $segments, '');
+        $page = $this->findBySegments($this->pagesDir, $segments, '');
+        return $page !== null && $this->hidesUntranslated() && !$page->translated ? null : $page;
     }
 
     /**
@@ -108,6 +202,12 @@ final class ContentRepository
     public function all(bool $includeUnpublished = true): array
     {
         $pages = $this->scanDir($this->pagesDir, '', true);
+
+        // An untranslated page does not exist in this language ('404' mode);
+        // its translated sub-pages still do.
+        if ($this->hidesUntranslated()) {
+            $pages = array_values(array_filter($pages, fn (Page $p) => $p->translated));
+        }
 
         if (!$includeUnpublished) {
             $pages = array_values(array_filter($pages, fn (Page $p) => $p->isLive()));
@@ -150,6 +250,12 @@ final class ContentRepository
      */
     public function save(Page $page, ?string $targetFilePath = null): void
     {
+        // A page read in another language saves its translation file only.
+        if ($page->lang !== '' && $this->languages !== null && !$this->languages->isDefault($page->lang)) {
+            $this->saveTranslation($page);
+            return;
+        }
+
         $page->updated = date('Y-m-d H:i:s');
         $filePath = $targetFilePath ?? $page->filePath;
 
@@ -168,6 +274,63 @@ final class ContentRepository
         rename($tmp, $filePath);
 
         unset($this->parsedCache[$filePath]);
+    }
+
+    /**
+     * Write the page's text in its language ($page->lang) to the translation
+     * file next to its content file: title, metatitle, visibility (status +
+     * dates), body and the translatable page fields. Structure (SHARED_KEYS)
+     * and `translate: false` fields stay in the default file.
+     */
+    public function saveTranslation(Page $page): void
+    {
+        if ($page->filePath === '' || $page->lang === '' || $this->languages === null
+            || $this->languages->isDefault($page->lang)) {
+            throw new \RuntimeException('Not a translation.');
+        }
+        $page->updated = date('Y-m-d H:i:s');
+        $file = Languages::translationFile($page->filePath, $page->lang);
+
+        $shared = array_flip([...self::SHARED_KEYS, ...$this->sharedFieldsOf($page->template)]);
+        $fields = [
+            'Title'       => $page->title,
+            'Metatitle'   => $page->metatitle,
+            'Status'      => $page->status,
+            'Published'   => $page->isPublished() ? 'true' : 'false',
+            'PublishAt'   => $page->publishAt,
+            'ExpireAt'    => $page->expireAt,
+            'PublishedAt' => $page->publishedAt,
+            'Author'      => $page->author,
+            'Updated'     => $page->updated,
+        ];
+        foreach ($page->extra as $k => $v) {
+            if (!isset($shared[strtolower((string) $k)])) {
+                $fields[ucfirst((string) $k)] = $v;
+            }
+        }
+
+        $tmp = $file . '.tmp.' . bin2hex(random_bytes(4));
+        file_put_contents($tmp, FrontMatter::serialize($fields, $page->body));
+        rename($tmp, $file);
+        unset($this->parsedCache[$file], $this->translationsOf[$page->filePath]);
+
+        $page->translationFile = $file;
+        $page->translated      = true;
+        if (!in_array($page->lang, $page->translations, true)) {
+            $page->translations[] = $page->lang;
+        }
+    }
+
+    /** Remove one translation of a page. True when a file was deleted. */
+    public function deleteTranslation(Page $page, string $lang): bool
+    {
+        if ($page->filePath === '' || $this->languages === null || !$this->languages->has($lang)
+            || $this->languages->isDefault($lang)) {
+            return false;
+        }
+        $file = Languages::translationFile($page->filePath, $lang);
+        unset($this->parsedCache[$file], $this->translationsOf[$page->filePath]);
+        return is_file($file) && @unlink($file);
     }
 
     /**
@@ -201,15 +364,11 @@ final class ContentRepository
 
         $page->slug        = $newSlug;
         $page->filePath    = $newDir . '/' . basename($page->filePath);
+        $page->translationFile = $page->translationFile !== null ? $newDir . '/' . basename($page->translationFile) : null;
         $page->childrenDir = $newDir . '/';
         $page->urlPath     = rtrim(dirname($page->urlPath), '/') . '/' . $newSlug;
 
-        // Drop any cached parse for the old path.
-        foreach (array_keys($this->parsedCache) as $key) {
-            if (str_starts_with($key, $oldDir . '/')) {
-                unset($this->parsedCache[$key]);
-            }
-        }
+        $this->forgetDir($oldDir);
     }
 
     /**
@@ -255,14 +414,11 @@ final class ContentRepository
         }
 
         $page->filePath    = $newDir . '/' . basename($page->filePath);
+        $page->translationFile = $page->translationFile !== null ? $newDir . '/' . basename($page->translationFile) : null;
         $page->childrenDir = $newDir . '/';
         $page->urlPath     = ($newParentUrl === '/' ? '' : $newParentUrl) . '/' . $page->slug;
 
-        foreach (array_keys($this->parsedCache) as $key) {
-            if (str_starts_with($key, $oldDir . '/')) {
-                unset($this->parsedCache[$key]);
-            }
-        }
+        $this->forgetDir($oldDir);
     }
 
     /** Delete page by URL path. Returns true on success. */
@@ -274,7 +430,7 @@ final class ContentRepository
         }
 
         $deleted = @unlink($page->filePath);
-        unset($this->parsedCache[$page->filePath]);
+        $this->forgetDir(dirname($page->filePath));
 
         if ($deleted) {
             $dir = dirname($page->filePath);
@@ -303,9 +459,14 @@ final class ContentRepository
     public function mtime(string $urlPath): int
     {
         $page = $this->find($urlPath);
-        return ($page && $page->filePath && is_file($page->filePath))
-            ? (int) filemtime($page->filePath)
-            : 0;
+        if (!$page || !$page->filePath || !is_file($page->filePath)) {
+            return 0;
+        }
+        $mtime = (int) filemtime($page->filePath);
+        if ($page->translationFile !== null && is_file($page->translationFile)) {
+            $mtime = max($mtime, (int) filemtime($page->translationFile));
+        }
+        return $mtime;
     }
 
     /**
@@ -523,6 +684,10 @@ final class ContentRepository
     {
         $dir   = rtrim($dir, '/');
         $files = array_values(array_filter(glob($dir . '/*.txt') ?: [], 'is_file'));
+        if ($this->languages !== null && $this->languages->enabled()) {
+            // `page.en.txt` is a translation, never a content file of its own.
+            $files = array_values(array_filter($files, fn (string $f) => !$this->languages->isTranslationFile($f)));
+        }
         if (count($files) <= 1) {
             return $files[0] ?? null;
         }
@@ -606,6 +771,18 @@ final class ContentRepository
     {
         [$meta, $body] = $this->parseFrontMatterFromFile($filePath);
 
+        $lang         = $this->language();
+        $translated   = true;
+        $translation  = null;
+        $translations = $lang !== '' ? $this->translationsOf($filePath) : [];
+        if ($this->translating()) {
+            $translation = Languages::translationFile($filePath, $lang);
+            $translated  = in_array($lang, $translations, true);
+            if ($translated) {
+                [$meta, $body] = $this->mergeTranslation($meta, $body, $translation, (string) ($meta['template'] ?? basename($filePath, '.txt')));
+            }
+        }
+
         $fileDir  = dirname($filePath);
         $isRoot   = (rtrim($fileDir, '/') === rtrim($this->pagesDir, '/'));
         $slug     = $isRoot ? '' : basename($fileDir);
@@ -634,9 +811,69 @@ final class ContentRepository
 
         $page->urlPath    = $urlPath ?: '/';
         $page->filePath   = $filePath;
+        $page->lang         = $lang;
+        $page->translated   = $translated;
+        $page->translationFile = $translated ? $translation : null;
+        $page->translations = $translations;
         $page->childrenDir = rtrim($fileDir, '/') . '/';
 
         return $page;
+    }
+
+    /**
+     * Translation over the default file: its keys win except SHARED_KEYS and
+     * `translate: false` fields; an empty translated body keeps the default one.
+     *
+     * @return array{array<string, mixed>, string}
+     */
+    private function mergeTranslation(array $meta, string $body, string $translationFile, string $template): array
+    {
+        [$tMeta, $tBody] = $this->parseFrontMatterFromFile($translationFile);
+        $shared   = array_flip([...self::SHARED_KEYS, ...$this->sharedFieldsOf($template)]);
+
+        // Status and its legacy mirror travel together.
+        if (array_key_exists('status', $tMeta) || array_key_exists('published', $tMeta)) {
+            unset($meta['status'], $meta['published']);
+        }
+        foreach ($tMeta as $key => $value) {
+            if (!isset($shared[$key])) {
+                $meta[$key] = $value;
+            }
+        }
+        return [$meta, trim($tBody) !== '' ? $tBody : $body];
+    }
+
+    /** Drop cached parses / translation lists of everything under $dir (renamed, moved, deleted). */
+    private function forgetDir(string $dir): void
+    {
+        foreach ([&$this->parsedCache, &$this->translationsOf] as &$cache) {
+            foreach (array_keys($cache) as $key) {
+                if (str_starts_with($key, $dir . '/')) {
+                    unset($cache[$key]);
+                }
+            }
+        }
+    }
+
+    /** @return list<string> the default language + every language with a translation file */
+    private function translationsOf(string $filePath): array
+    {
+        if (!isset($this->translationsOf[$filePath])) {
+            $found = [$this->languages->default()];
+            foreach ($this->languages->codes() as $code) {
+                if (!$this->languages->isDefault($code) && is_file(Languages::translationFile($filePath, $code))) {
+                    $found[] = $code;
+                }
+            }
+            $this->translationsOf[$filePath] = $found;
+        }
+        return $this->translationsOf[$filePath];
+    }
+
+    /** @return list<string> lower-cased `translate: false` field names of $template */
+    private function sharedFieldsOf(string $template): array
+    {
+        return $this->sharedFields !== null ? ($this->sharedFields)($template) : [];
     }
 
     // ─────────────────── Front matter parsing ───────────────────

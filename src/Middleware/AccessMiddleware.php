@@ -44,7 +44,7 @@ final class AccessMiddleware implements MiddlewareInterface
         if (!$this->visitor->isAuthenticated()) {
             $response = (new ResponseFactory())->createResponse($this->kind === self::MEDIA ? 403 : 302);
             if ($this->kind === self::PAGES) {
-                $response = $response->withHeader('Location', $this->policy->redirect());
+                $response = $response->withHeader('Location', LanguageMiddleware::localize($request, $this->policy->redirect()));
             }
             return $response->withHeader('Cache-Control', 'no-store');
         }

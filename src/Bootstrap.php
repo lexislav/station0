@@ -50,6 +50,8 @@ use Station0\Service\CollectionRepository;
 use Station0\Service\ContentRepository;
 use Station0\Service\FieldOptions;
 use Station0\Service\FileCache;
+use Station0\Service\Languages;
+use Station0\Service\SiteStrings;
 use Station0\Service\LoginLinks;
 use Station0\Service\MediaService;
 use Station0\Service\Members;
@@ -113,6 +115,13 @@ final class Bootstrap
         ));
         $app->add(VisitorMiddleware::class);
         $app->add($container->get(Guard::class));
+
+        // `/en/about` → `/about` + current language; first, so everything inside sees unprefixed paths.
+        $app->add(new \Station0\Middleware\LanguageMiddleware(
+            $container->get(Languages::class),
+            $config['adminPath'],
+            $container->get(Twig::class),
+        ));
 
         $app->addErrorMiddleware($config['debug'], true, true, $container->get(Logger::class));
         // Outermost, so admin error pages get the headers too.
@@ -255,6 +264,58 @@ final class Bootstrap
                 'passwordPath' => $loginPath !== null ? $loginPath . '/password' : null,
                 'logoutPath'   => $loginPath !== null ? $loginPath . '/logout' : null,
             ]);
+            // ── Languages (see Languages) ─────────────────────────────────────
+            // `lang` / `languages` are refreshed per request by LanguageMiddleware.
+            $languages = $c->get(Languages::class);
+            $twig->getEnvironment()->addGlobal('lang', $languages->current());
+            $twig->getEnvironment()->addGlobal('languages', \Station0\Middleware\LanguageMiddleware::languagesGlobal($languages));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'url',
+                // Public URL of a page or path in a language (current by default):
+                // url(page), url('/contact'), url(page, 'en').
+                function (mixed $target, ?string $lang = null) use ($languages): string {
+                    $path = $target instanceof \Station0\Service\Page ? $target->urlPath : (string) $target;
+                    if (preg_match('#^([a-z][a-z0-9+.-]*:|//|\#|\?)#i', $path)) {
+                        return $path;
+                    }
+                    return $languages->url($path === '' ? '/' : $path, $lang);
+                }
+            ));
+            $translationsMemo = [];
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                'translations',
+                // Language switcher / hreflang: [{code, label, locale, url, current, default}]
+                // for each language the page is live in. Members-only pages are left
+                // out for anonymous visitors, as in the listings. Memoized per request.
+                function (?\Station0\Service\Page $page = null) use ($c, $languages, &$visible, &$translationsMemo): array {
+                    $memo = &$translationsMemo;
+                    if ($page === null || !$languages->enabled()) {
+                        return [];
+                    }
+                    $key = $page->urlPath . '|' . $languages->current();
+                    if (isset($memo[$key])) {
+                        return $memo[$key];
+                    }
+                    $out = [];
+                    foreach ($languages->all() as $l) {
+                        $found = $c->get(ContentRepository::class)->in($l['code'])->find($page->urlPath);
+                        if ($found === null || !$found->isLive() || $visible([$found]) === []) {
+                            continue;
+                        }
+                        $out[] = $l + [
+                            'url'     => $languages->url($page->urlPath, $l['code']),
+                            'current' => $l['code'] === $languages->current(),
+                        ];
+                    }
+                    return $memo[$key] = $out;
+                }
+            ));
+            $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
+                't',
+                // Site strings from site/lang/<lang>.yaml: t('nav.home'), t('hello', {name: 'Eva'}).
+                fn (string $key, array $params = [], ?string $default = null)
+                    => $c->get(SiteStrings::class)->get($key, $params, $default)
+            ));
             $twig->getEnvironment()->addFunction(new \Twig\TwigFunction(
                 'action_state',
                 // State of a site action (site/actions/), see ActionState; flashed
@@ -463,10 +524,19 @@ final class Bootstrap
             return new MarkdownConverter($env);
         });
 
+        $container->set(Languages::class, fn () => Languages::fromConfig($config));
+        $container->set(SiteStrings::class, fn ($c) => new SiteStrings(
+            $c->get(Languages::class),
+            $config['paths']['lang'] ?? dirname($config['paths']['templates']) . '/lang',
+        ));
+
         $container->set(ContentRepository::class, fn ($c) => new ContentRepository(
             $config['paths']['content'] . '/pages',
             $config['paths']['templates'],
             $c->get(Logger::class),
+            $c->get(Languages::class),
+            // `translate: false` page fields; resolved on use (TemplateBlocks needs Twig).
+            fn (string $template): array => $c->get(TemplateBlocks::class)->sharedFields($template),
         ));
 
         $container->set(BlockRegistry::class, fn ($c) => new BlockRegistry(
@@ -501,6 +571,7 @@ final class Bootstrap
             $c->get(FileCache::class),
             $c->get(ContentRepository::class),
             $c->get(CollectionRepository::class),
+            $c->get(Languages::class),
         ));
 
         $container->set(UserRepository::class, fn ($c) => new UserRepository(
@@ -681,6 +752,7 @@ final class Bootstrap
             $c->get(FieldOptions::class),
             $c->get(Events::class),
             $c->get(NavGroups::class),
+            $c->get(Languages::class),
         ));
 
         $container->set(UserController::class, fn ($c) => new UserController(
@@ -1035,7 +1107,8 @@ final class Bootstrap
     {
         return new AccessPolicy(
             (array) ($config['access'] ?? []),
-            fn (string $urlPath) => $pages->find($urlPath),
+            // `Access:` is structure (shared by all languages): read in the default one.
+            fn (string $urlPath) => $pages->in('')->find($urlPath),
         );
     }
 

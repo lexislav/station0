@@ -4,7 +4,7 @@ status: open
 priority: medium
 area: content
 created: 2026-10-27
-related: [content-index.md, content-multilingual.md, plugin-content-api.md]
+related: [content-index.md, content-multilingual-collections.md, plugin-content-api.md]
 ---
 
 ## Problem
