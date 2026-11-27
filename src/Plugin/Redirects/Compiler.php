@@ -15,12 +15,14 @@ namespace Station0\Plugin\Redirects;
  *   byTarget     static local target ⇒ indexes        (admin: incoming rules)
  *   bySubtree    auto subtree target prefix ⇒ indexes  (admin: "via /old/…")
  *   byFrom       exact source ⇒ indexes                (admin: force / shadowed)
+ *   lang         code ⇒ {exact, exactCi, regex} of the rules with `lang`
+ *                (public paths; left out of every other map)
  *
  * First match wins in file order; exact rules before patterns / regexes.
  */
 final class Compiler
 {
-    public const VERSION = 1;
+    public const VERSION = 2;
 
     /** @param list<array> $rules normalized, valid rules in file order */
     public static function compile(array $rules): array
@@ -29,13 +31,29 @@ final class Compiler
             'v' => self::VERSION, 'rules' => [],
             'exact' => [], 'exactCi' => [], 'regex' => null,
             'forceExact' => [], 'forceExactCi' => [], 'forceRegex' => null, 'hasForce' => false,
-            'byTarget' => [], 'bySubtree' => [], 'byFrom' => [],
+            'byTarget' => [], 'bySubtree' => [], 'byFrom' => [], 'lang' => [],
         ];
         $alternatives = ['' => [], 'force' => []];
+        $langAlternatives = [];
 
         foreach (array_values($rules) as $i => $rule) {
+            $rule['lang'] ??= null;
             $rule['names'] = $rule['type'] === 'pattern' ? Rules::placeholders($rule['from']) : [];
             $set['rules'][$i] = $rule;
+
+            if ($rule['lang'] !== null) {
+                $maps = &$set['lang'][$rule['lang']];
+                $maps ??= ['exact' => [], 'exactCi' => [], 'regex' => null];
+                if ($rule['type'] === 'exact') {
+                    $map = $rule['caseless'] ? 'exactCi' : 'exact';
+                    $maps[$map][$rule['caseless'] ? strtolower($rule['from']) : $rule['from']] ??= $i;
+                } else {
+                    $body = Rules::regexBody($rule);
+                    $langAlternatives[$rule['lang']][] = ($rule['caseless'] ? '(?i:' . $body . ')' : $body) . '(*MARK:' . $i . ')';
+                }
+                unset($maps);
+                continue;
+            }
             $p = $rule['force'] ? 'force' : '';
 
             if ($rule['type'] === 'exact') {
@@ -63,6 +81,9 @@ final class Compiler
                 $set[$key] = Rules::delimit('^(?|' . implode('|', $alternatives[$p]) . ')$');
             }
         }
+        foreach ($langAlternatives as $lang => $list) {
+            $set['lang'][$lang]['regex'] = Rules::delimit('^(?|' . implode('|', $list) . ')$');
+        }
         return $set;
     }
 
@@ -75,7 +96,7 @@ final class Compiler
     {
         $force = array_filter($set['rules'], fn (array $rule) => $rule['force']);
         return ['rules' => $force, 'exact' => [], 'exactCi' => [], 'regex' => null,
-            'byTarget' => [], 'bySubtree' => [], 'byFrom' => []]
+            'byTarget' => [], 'bySubtree' => [], 'byFrom' => [], 'lang' => []]
             + array_intersect_key($set, array_flip(['v', 'forceExact', 'forceExactCi', 'forceRegex', 'hasForce']));
     }
 

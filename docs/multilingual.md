@@ -4,8 +4,8 @@ Station0 (≥ 0.11) can serve one content tree in several languages. Each
 page keeps its folder, assets and sub-pages. A translation is one more file
 next to the page's content file.
 
-This release covers **pages**. Collections, translated slugs and per-block
-shared fields come later (see `TODO/`).
+This release covers **pages**, including translated slugs. Collections and
+per-block shared fields come later (see `TODO/`).
 
 ## Turning it on
 
@@ -45,6 +45,7 @@ It holds the translated keys and its own body:
 
 ```
 Title: About us
+Slug: about-us
 Subtitle: Who we are
 Status: published
 ---
@@ -73,6 +74,31 @@ fields:
 A translation file is never a page of its own. A folder that holds only
 `page.en.txt` is not a page. A translation file is never served from `/media`.
 
+## Translated slugs
+
+`Slug:` in a translation file gives the page its own URL segment in that
+language. With `o-nas/page.en.txt` holding `Slug: about-us`, the English
+page is `/en/about-us`. A translation without `Slug:` uses the folder name.
+
+- Lookup goes segment by segment. At each level a translated slug wins,
+  else the folder of that name. `/en/about-us/historie` works while
+  `historie` has no English slug of its own.
+- **The folder path stays the page's identity.** `page.urlPath`, `page()`,
+  `Access:` inheritance, `access.public` globs, `options_from: pages` values,
+  `/media` URLs and language-neutral redirect rules all use folder paths.
+  `LanguageMiddleware` resolves `/en/about-us` to `/o-nas` before routing,
+  so routes, access rules and actions see the folder path.
+- **The folder slug redirects.** `/en/o-nas` answers `301` → `/en/about-us`
+  (query kept), so links made before the slug was set keep working. Pages
+  that are not live are not redirected: they return 404, so a hidden page
+  doesn't reveal its slug.
+- The default language has no translated slugs: its URLs are folder paths.
+- Slugs are sanitized like folder names. Within one parent a slug must be
+  unique per language: it can't match a sibling's folder or a sibling's
+  slug in the same language. At the top level it can't be a language code.
+  The admin refuses a clash (422). A hand-written duplicate goes to the first
+  sibling in folder order.
+
 ## Visibility per translation
 
 `Status`, `PublishAt`, `ExpireAt` and `PublishedAt` can differ per
@@ -99,14 +125,15 @@ translation at its URL.
 |---|---|
 | `lang` | current language code (`''` on a one-language site) — `<html lang="{{ lang }}">` |
 | `languages` | `[{code, label, locale, default, url, current}]`, where `url` is each language's home |
-| `url(page)` / `url('/contact')` | public URL in the current language. `url(page, 'en')` picks one |
+| `url(page)` / `url('/o-nas')` | public URL in the current language, translated slugs included (`/en/about-us`). A path that isn't a page (`/contact/send`) only gets the prefix. `url(page, 'en')` picks the language |
 | `translations(page)` | languages the page is live in: `[{code, label, locale, default, url, current}]` |
 | `t('key', {name: …}, 'fallback')` | site strings, see below |
 | `page.lang`, `page.translated`, `page.translations` | the page's language, whether a translation exists, and its language codes |
+| `page.publicPath`, `page.translatedSlug` | unprefixed path with translated slugs (`/about-us/team`); the translation's own `Slug:` or null |
 
 `page()`, `child_pages()`, `nav_pages()` and `top_level_pages()` return pages
 in the current language. **Links must use `url()`.** `page.urlPath` is the
-unprefixed path that identifies the page.
+folder path that identifies the page in every language.
 
 ```twig
 <html lang="{{ lang }}">
@@ -147,9 +174,9 @@ the key itself. A one-language site reads `site/lang/default.yaml`.
 
 - The page edit form has **language tabs**. The default tab is the usual
   form. A translation tab (`?lang=en`) edits the title, metatitle, body,
-  translatable page fields, display date and the translation's visibility.
-  Slug, template, listing, cascade and `translate: false` fields stay on the
-  default tab.
+  translatable page fields, display date, the translation's visibility and
+  its **slug** (empty = the folder slug). Template, listing, cascade and
+  `translate: false` fields stay on the default tab.
 - An untranslated page opens with the default text and a notice. Saving it
   creates `page.en.txt`.
 - **Delete translation** removes only that file. Deleting the page removes
@@ -160,11 +187,23 @@ the key itself. A one-language site reads `site/lang/default.yaml`.
 
 - **Render cache.** Keys include the language and the translation's mtime.
 - **Scheduling.** `VisibilityHorizon` watches the dates of every translation.
-- **Redirects plugin.** Rules stay language-neutral. `/en/old` matches the
-  rule for `/old`, and a local target keeps the prefix (`/en/new`). External
-  targets are left alone. The 404 log records the unprefixed path.
-  Rename and move rules cover every language, because the folder moves with
-  all its translations.
+- **Redirects plugin.**
+  - A rule without `lang` is language-neutral. It matches the folder path in
+    every language: `/en/old` matches the rule for `/old`. A local target is
+    a folder path; the visitor gets it in their language, translated slugs
+    included (`/o-nas` → `/en/about-us`). External targets are left alone.
+  - `lang: en` scopes a rule to English requests. Its `from` and `to` are
+    public paths in that language (translated slugs, no prefix); the prefix
+    is added to a local target. Such a rule can't be `force`. The admin rule
+    form has a language select.
+  - Renaming or moving a folder adds a neutral rule. It covers every
+    language, because the folder moves with all its translations.
+    Changing a translated slug adds a rule in that language:
+    `/about-us/{path*}` → `/who-we-are/{path}` with `lang: en`.
+  - The 404 log records the visited path with its prefix (`/en/x`), so misses
+    per language stay apart. A rule created from such an entry gets `lang`.
+  - The page panel and badges list neutral rules only.
+- **`thumbs:warm`** fetches every live page in every language.
 - **Events / task hooks.** `page.saved` from a translation tab carries `lang`
   (and `translation_created`). Deleting a translation fires
   `page.translation.deleted` with `lang`.
@@ -181,8 +220,8 @@ the key itself. A one-language site reads `site/lang/default.yaml`.
 ## Limits of this release
 
 - Collections are single-language.
-- Slugs are shared: `/en/o-nas` is `/o-nas` in English.
 - Blocks are translated as a whole body. A `translate: false` field inside a
   block is not shared yet.
-- `options_from: pages` values and `thumbs:warm` work on default-language
-  URLs.
+- `options_from: pages` stores folder paths and labels them with
+  default-language titles.
+- No `Accept-Language` redirect from `/`.

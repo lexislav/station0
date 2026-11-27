@@ -39,6 +39,20 @@ final class Page
     /** @var list<string> Languages the page exists in: the default one + each translation file. */
     public array $translations = [];
 
+    /**
+     * `Slug:` of the translation this page was read in (null = the folder
+     * slug is used in that language too). Only ever set in a translation.
+     */
+    public ?string $translatedSlug = null;
+
+    /**
+     * Unprefixed public path in $lang: $urlPath with translated slugs
+     * (`/o-nas/tym` ⇒ `/about-us/team` in English). Equals $urlPath in the
+     * default language and wherever no slug is translated. $urlPath stays the
+     * page's identity (lookups, access globs, redirect sources, media).
+     */
+    public string $publicPath = '';
+
     /** Editorial status: draft | published | archived (see Visibility) */
     public string $status;
 

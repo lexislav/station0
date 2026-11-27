@@ -19,7 +19,7 @@ reverse relations) other than loading everything.
 
 ## Why it matters / why deferred
 It is the foundation for the gaps against Bolt: search (`content-search.md`),
-multilingual lookups (`docs/multilingual.md`, `content-multilingual-slugs.md`) and the API
+multilingual lookups (`docs/multilingual.md`, `content-multilingual-extras.md`) and the API
 (`plugin-content-api.md`) all need fast metadata access, and it keeps
 Station0's speed advantage as sites grow. Not urgent for today's small sites,
 so it waits for a design pass. Multilingual pages shipped without it (one

@@ -256,7 +256,9 @@ return [
     'lang_tabs'                       => 'Jazyky',
     'lang_not_translated'             => '%s — zatím nepřeloženo',
     'lang_untranslated_notice'        => 'Stránka zatím není přeložena (%s). Formulář ukazuje text ve výchozím jazyce; uložením vznikne překlad.',
-    'lang_translation_hint'           => 'Slug, šablona, zařazení v menu a sdílená pole se upravují ve výchozím jazyce.',
+    'lang_translation_hint'           => 'Šablona, zařazení v menu a sdílená pole se upravují ve výchozím jazyce.',
     'lang_delete_translation'         => 'Smazat překlad',
     'lang_delete_translation_confirm' => 'Smazat tento překlad? Stránka sama zůstane.',
+    'lang_slug_hint'                  => 'prázdné = slug složky (%s)',
+    'lang_slug_taken'                 => 'Tento slug už v tomto jazyce používá jiná stránka na stejné úrovni.',
 ];

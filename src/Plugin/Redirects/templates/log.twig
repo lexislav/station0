@@ -89,7 +89,7 @@
             {% if not showIgnored %}
             <td>
                 {% if e.suggest %}
-                    <code>{{ e.suggest.to }}</code><br>
+                    <code>{{ e.prefix ~ e.suggest.to }}</code><br>
                     <span class="muted note">{{ attribute(t, 'redirects_log_suggest_' ~ e.suggest.reason) }}</span>
                 {% endif %}
             </td>
@@ -104,7 +104,7 @@
                         <input type="hidden" name="to" value="{{ e.suggest.to }}">
                         <input type="hidden" name="status" value="301">
                         <input type="hidden" name="back" value="{{ back }}">
-                        <button type="submit" class="link" title="301 → {{ e.suggest.to }}">{{ t.redirects_log_redirect }}</button>
+                        <button type="submit" class="link" title="301 → {{ e.prefix ~ e.suggest.to }}">{{ t.redirects_log_redirect }}</button>
                     </form>
                     &nbsp;
                     {% endif %}

@@ -10,7 +10,14 @@ namespace Station0\Plugin\Redirects;
  *
  * A normalized rule:
  *   id, type (exact|pattern|regex), from, to (?string), status (301|302|307|308|410),
- *   force, caseless, query (keep|drop), count, auto (?Y-m-d), note (?string)
+ *   force, caseless, query (keep|drop), count, auto (?Y-m-d), note (?string),
+ *   lang (?string)
+ *
+ * `lang: en` scopes a rule to one language of a multilingual site: it
+ * matches the requested public path (translated slugs, no prefix) of English
+ * requests only, and a local `to` is a public path in that language too
+ * (the prefix is added). Rules without `lang` match every language on the
+ * folder path; their local targets are localized (LanguageMiddleware).
  */
 final class Rules
 {
@@ -28,9 +35,9 @@ final class Rules
         return $path === '/' ? '/' : rtrim($path, '/');
     }
 
-    public static function id(string $type, string $from): string
+    public static function id(string $type, string $from, ?string $lang = null): string
     {
-        return substr(sha1($type . ' ' . $from), 0, 10);
+        return substr(sha1($type . ' ' . ($lang !== null ? $lang . ' ' : '') . $from), 0, 10);
     }
 
     /**
@@ -60,9 +67,11 @@ final class Rules
         if (is_int($auto)) {
             $auto = date('Y-m-d', $auto);   // unquoted YAML date
         }
+        $lang = strtolower(trim((string) ($raw['lang'] ?? '')));
+        $lang = $lang !== '' ? $lang : null;
 
         return [
-            'id'       => self::id($type, $from),
+            'id'       => self::id($type, $from, $lang),
             'type'     => $type,
             'from'     => $from,
             'to'       => $status === 410 || $to === '' ? null : $to,
@@ -73,6 +82,7 @@ final class Rules
             'count'    => filter_var($raw['count'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'auto'     => $auto !== null && $auto !== '' && $auto !== false ? (string) $auto : null,
             'note'     => isset($raw['note']) && trim((string) $raw['note']) !== '' ? trim((string) $raw['note']) : null,
+            'lang'     => $lang,
         ];
     }
 
@@ -103,6 +113,9 @@ final class Rules
         if ($rule['note'] !== null) {
             $out['note'] = $rule['note'];
         }
+        if (($rule['lang'] ?? null) !== null) {
+            $out['lang'] = $rule['lang'];
+        }
         return $out;
     }
 
@@ -119,6 +132,14 @@ final class Rules
         }
         if ($rule['status'] !== 410 && $rule['to'] === null) {
             $errors[] = 'A redirect needs "to" (or status 410).';
+        }
+        if (($rule['lang'] ?? null) !== null) {
+            if (!preg_match('/^[a-z]{2,3}(-[a-z0-9]{2,8})?$/', $rule['lang'])) {
+                $errors[] = '"lang" must be a language code (en, pt-br).';
+            }
+            if ($rule['force']) {
+                $errors[] = 'A rule with "lang" cannot be force.';
+            }
         }
 
         // Source

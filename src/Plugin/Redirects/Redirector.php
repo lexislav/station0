@@ -37,7 +37,9 @@ final class Redirector
         }
         $query   = $request->getUri()->getQuery();
         $matcher = $this->store->matcher();
-        $hit     = $matcher->match($path, $query);
+        $lang    = (string) $request->getAttribute(LanguageMiddleware::ATTR_LANG, '');
+        $public  = $request->getAttribute(LanguageMiddleware::ATTR_PUBLIC_PATH);
+        $hit     = $matcher->match($path, $query, false, $lang, is_string($public) ? $public : null);
 
         // Assets travel with their page: /media/old/x.jpg follows the page's subtree rule.
         if ($hit === null && str_starts_with($path, '/media/')) {
@@ -52,7 +54,10 @@ final class Redirector
 
         if ($status === 404 && $this->log404) {
             try {
-                ($this->log)()->record404($path, $request->getHeaderLine('Referer'));
+                // As visited: `/en/x` and `/x` are separate misses.
+                $prefix = (string) $request->getAttribute(LanguageMiddleware::ATTR_PREFIX, '');
+                $logged = $prefix !== '' ? $prefix . (is_string($public) ? $public : $path) : $path;
+                ($this->log)()->record404(rtrim($logged, '/') ?: '/', $request->getHeaderLine('Referer'));
             } catch (\Throwable $e) {
                 $this->logger?->error('Redirects: 404 log failed: ' . $e->getMessage());
             }
@@ -73,8 +78,10 @@ final class Redirector
 
     /**
      * @param array{rule: array, status: int, location: ?string} $hit
-     * @param ?Request $request  rules are language-neutral; with a request, local targets
-     *                           stay in the visitor's language (LanguageMiddleware::localize())
+     * @param ?Request $request  with a request, local targets stay in the visitor's
+     *                           language: a `lang` rule's target is a public path there
+     *                           (prefix added), a neutral rule's a folder path
+     *                           (LanguageMiddleware::localize())
      */
     public function respond(Response $response, array $hit, string $path, ?Request $request = null): Response
     {
@@ -91,7 +98,14 @@ final class Redirector
             return $twig->render($response->withStatus(410), $template, ['urlPath' => $path, 'status' => 410]);
         }
         $location = (string) $hit['location'];
-        if ($request !== null) {
+        if ($request !== null && ($hit['rule']['lang'] ?? null) !== null) {
+            $prefix = (string) $request->getAttribute(LanguageMiddleware::ATTR_PREFIX, '');
+            if ($prefix !== '' && str_starts_with($location, '/') && !str_starts_with($location, '//')) {
+                $location = $location === '/' || str_starts_with($location, '/?') || str_starts_with($location, '/#')
+                    ? $prefix . substr($location, 1)
+                    : $prefix . $location;
+            }
+        } elseif ($request !== null) {
             $location = LanguageMiddleware::localize($request, $location);
         }
         $permanent = in_array($hit['status'], [301, 308], true);

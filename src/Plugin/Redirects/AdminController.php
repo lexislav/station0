@@ -8,6 +8,8 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\Twig;
 use Station0\Service\ContentRepository;
+use Station0\Service\Languages;
+use Station0\Service\Page;
 
 /**
  * Admin: rule list + form + "Test a URL" ({adminPath}/redirects), the 404
@@ -29,6 +31,7 @@ final class AdminController
         private readonly ContentRepository $pages,
         private readonly \Closure $user,
         private readonly string $adminPath,
+        private readonly ?Languages $languages = null,
     ) {}
 
     public function index(Request $request, Response $response, array $args = [], array $form = [], ?string $error = null): Response
@@ -48,16 +51,19 @@ final class AdminController
         }
 
         $editing = isset($query['edit']) ? $this->store->find((string) $query['edit']) : null;
-        $form = $form ?: ($editing !== null && $this->mayEdit($editing) ? $editing : [
-            'from' => (string) ($query['from'] ?? ''), 'to' => (string) ($query['to'] ?? ''), 'status' => 301,
-        ]);
+        if ($form === [] && ($editing === null || !$this->mayEdit($editing))) {
+            [$lang, $from] = $this->splitLang((string) ($query['from'] ?? ''));
+            $form = ['from' => $from, 'to' => (string) ($query['to'] ?? ''), 'status' => 301, 'lang' => $lang !== '' ? $lang : null];
+        }
+        $form = $form ?: $editing;
         $form['back'] ??= isset($query['back']) ? self::logQuery((string) $query['back']) : null;
 
         $test = null;
         if (isset($query['test']) && trim((string) $query['test']) !== '') {
             [$path, $q] = array_pad(explode('?', trim((string) $query['test']), 2), 2, '');
-            $hit = $this->store->matcher()->test($path, $q);
-            $page = $hit === null ? $this->pages->find(Rules::normalizePath($path)) : null;
+            [$lang, $path] = $this->splitLang($path);
+            $hit = $this->store->matcher()->test($path, $q, $lang);
+            $page = $hit === null ? $this->pageAt(Rules::normalizePath($path), $lang) : null;
             $test = ['input' => (string) $query['test'], 'hit' => $hit, 'page' => $page !== null && $page->isLive()];
         }
 
@@ -71,6 +77,7 @@ final class AdminController
             'isAdmin'   => $this->isAdmin(),
             'saved'     => isset($query['saved']),
             'file'      => $this->store->file(),
+            'languages' => $this->languages?->all() ?? [],
             'activeNav' => 'plugin-redirects',
         ]);
     }
@@ -89,7 +96,13 @@ final class AdminController
             'count'    => !empty($data['count']),
             'query'    => ($data['query'] ?? '') === 'drop' ? 'drop' : 'keep',
             'note'     => (string) ($data['note'] ?? ''),
+            'lang'     => trim((string) ($data['lang'] ?? '')),
         ];
+        // A logged `/en/x` miss: the rule is English, from `/x`.
+        [$fromLang, $raw['from']] = $this->splitLang($raw['from']);
+        if ($fromLang !== '' && $raw['lang'] === '') {
+            $raw['lang'] = $fromLang;
+        }
         if ($replaceId !== null && ($existing = $this->store->find($replaceId)) !== null) {
             $raw['auto'] = $existing['auto'];
         }
@@ -149,15 +162,28 @@ final class AdminController
         $page   = max(1, (int) ($query['page'] ?? 1));
         $log    = ($this->log)();
 
-        $live    = array_map(fn ($p) => $p->urlPath, $this->pages->all(false));
-        $isLive  = array_flip($live);
+        // Live public paths per language ('' = default / not multilingual).
+        $live = ['' => array_map(fn ($p) => $p->urlPath, $this->pages->in('')->all(false))];
+        foreach ($this->languages?->codes() ?? [] as $code) {
+            if (!$this->languages->isDefault($code)) {
+                $live[$code] = array_map(fn ($p) => $p->publicPath, $this->pages->in($code)->all(false));
+            }
+        }
+        $isLive  = array_map('array_flip', $live);
         $matcher = $this->store->matcher();
-        $resolved = $log->forgetResolved(fn (string $path): bool => isset($isLive[$path]) || $matcher->test($path) !== null);
+        $resolved = $log->forgetResolved(function (string $logged) use ($isLive, $matcher): bool {
+            [$lang, $path] = $this->splitLang($logged);
+            return isset($isLive[$lang][$path]) || $matcher->test($path, '', $lang) !== null;
+        });
 
-        $result    = $log->search($filter, self::LOG_PER_PAGE, ($page - 1) * self::LOG_PER_PAGE);
-        $suggester = new Suggester($live);
+        $result     = $log->search($filter, self::LOG_PER_PAGE, ($page - 1) * self::LOG_PER_PAGE);
+        $suggesters = [];
         foreach ($result['entries'] as &$entry) {
-            $entry['suggest'] = $filter['ignored'] ? null : $suggester->suggest($entry['path']);
+            [$lang, $path] = $this->splitLang($entry['path']);
+            $entry['lang']   = $lang;
+            $entry['prefix'] = $lang !== '' ? $this->languages->prefix($lang) : '';
+            $entry['suggest'] = $filter['ignored'] ? null
+                : ($suggesters[$lang] ??= new Suggester($live[$lang] ?? []))->suggest($path);
         }
         unset($entry);
 
@@ -228,20 +254,46 @@ final class AdminController
     private function warnings(array $rule): array
     {
         $warnings = [];
+        $lang = (string) ($rule['lang'] ?? '');
         if ($rule['type'] === 'exact' && !$rule['force']) {
-            $page = $this->pages->find($rule['from']);
-            if ($page !== null && $page->isLive()) {
+            $page = $this->pageAt($rule['from'], $lang);
+            if ($page !== null && $page->isLive() && ($lang === '' || $page->publicPath === $rule['from'])) {
                 $warnings[] = 'redirects_warn_shadowed';
             }
         }
         $target = Rules::staticTarget($rule);
         if ($target !== null && !str_starts_with($target, '/media/')) {
-            $page = $this->pages->find($target);
+            $page = $this->pageAt($target, $lang);
             if ($page === null || !$page->isLive()) {
                 $warnings[] = 'redirects_warn_target';
             }
         }
         return $warnings;
+    }
+
+    /**
+     * `/en/x` ⇒ ['en', '/x']; a path without a non-default prefix ⇒ ['', path].
+     *
+     * @return array{string, string}
+     */
+    private function splitLang(string $path): array
+    {
+        if ($this->languages === null || !$this->languages->enabled()) {
+            return ['', $path];
+        }
+        [$lang, $inner] = $this->languages->split($path);
+        return $inner !== $path ? [$lang, $inner] : ['', $path];
+    }
+
+    /** The page answering $path: a folder path, or with $lang a public path in that language. */
+    private function pageAt(string $path, string $lang = ''): ?Page
+    {
+        if ($lang === '' || $this->languages === null || !$this->languages->has($lang)) {
+            return $this->pages->in('')->find($path);
+        }
+        $pages  = $this->pages->in($lang);
+        $folder = $pages->resolvePublicPath($path);
+        return $folder !== null ? $pages->find($folder) : null;
     }
 
     private function hits(array $rules): array

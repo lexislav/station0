@@ -623,9 +623,10 @@ final class PageController
 
     /**
      * Save a translation (`?lang=en`): the text — title, metatitle, body,
-     * translatable page fields, display date and the translation's own
-     * visibility. Slug, template, listing and cascade belong to the page and
-     * are edited in the default language.
+     * translatable page fields, display date, the translation's own
+     * visibility and its slug (`Slug:`, empty = the folder slug). Template,
+     * listing and cascade belong to the page and are edited in the default
+     * language.
      */
     private function updateTranslation(Request $request, Response $response, string $urlPath, string $lang): Response
     {
@@ -633,7 +634,8 @@ final class PageController
         if ($page === null) {
             return $response->withStatus(404);
         }
-        $created = !$page->translated;
+        $created        = !$page->translated;
+        $previousPublic = $page->publicPath;
 
         $data = (array) $request->getParsedBody();
         $page->title     = trim((string) ($data['title'] ?? $page->title));
@@ -647,6 +649,16 @@ final class PageController
         $this->applyVisibility($page, $visibility);
         $errorKey = Visibility::validate($page->publishAt, $page->expireAt);
 
+        // Translated slug: empty or the folder slug = none of its own.
+        if (array_key_exists('slug', $data) && $page->urlPath !== '/') {
+            $slug = Slug::sanitize((string) $data['slug']);
+            $slug = $slug === '' || $slug === $page->slug ? null : $slug;
+            if ($slug !== null && !$this->content->in($lang, true)->translatedSlugAvailable($page, $slug)) {
+                $errorKey ??= 'lang_slug_taken';
+            }
+            $page->translatedSlug = $slug;
+        }
+
         if ($errorKey !== null) {
             return $this->renderEditForm($request, $response->withStatus(422), $page, $lang, ['errorKey' => $errorKey]);
         }
@@ -654,7 +666,8 @@ final class PageController
         $this->content->saveTranslation($page);
         $this->cache->flush();
         $this->events?->dispatch('page.saved', $this->pagePayload($page, $page->urlPath)
-            + ['created' => false, 'lang' => $lang, 'translation_created' => $created]);
+            + ['created' => false, 'lang' => $lang, 'translation_created' => $created, 'public_path' => $page->publicPath]
+            + ($previousPublic !== $page->publicPath && !$created ? ['previous_public_path' => $previousPublic] : []));
 
         $editKey = $page->urlPath === '/' ? '~' : ltrim($page->urlPath, '/');
         return $response->withStatus(302)->withHeader(

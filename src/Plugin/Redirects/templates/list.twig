@@ -45,6 +45,7 @@
         <tr id="rule-{{ r.id }}">
             <td>
                 <code>{{ r.from }}</code>
+                {% if r.lang %}<span class="tag" title="{{ t.redirects_form_lang }}">{{ r.lang }}</span>{% endif %}
                 {% if r.type != 'exact' %}<span class="tag subtle">{{ r.type }}</span>{% endif %}
                 {% if r.auto %}<span class="tag" title="{{ r.auto }}">{{ t.redirects_auto }}</span>{% endif %}
                 {% if r.force %}<span class="tag gone">{{ t.redirects_force }}</span>{% endif %}
@@ -115,6 +116,17 @@
             <select id="r-type" name="type">
                 <option value="">{{ t.redirects_form_type_auto }}</option>
                 <option value="regex" {% if (form.type ?? '') == 'regex' %}selected{% endif %}>regex</option>
+            </select>
+        </div>
+        {% endif %}
+        {% if languages is not empty %}
+        <div class="field">
+            <label for="r-lang">{{ t.redirects_form_lang }}</label>
+            <select id="r-lang" name="lang">
+                <option value="">{{ t.redirects_form_lang_all }}</option>
+                {% for l in languages %}
+                    <option value="{{ l.code }}" {% if (form.lang ?? '') == l.code %}selected{% endif %}>{{ l.label }}</option>
+                {% endfor %}
             </select>
         </div>
         {% endif %}

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-27
+
 ### Added
 - **Multilingual pages.** Add `'languages' => ['cs' => […], 'en' => […]]` to
   `site/config.php`. The first language is the default and has no URL
@@ -24,8 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`nav_pages()`, `child_pages()`, `page()`) return pages in the current language.
 - Admin: language tabs on the page edit form, translation badges in the page
   tree, and a "Delete translation" button.
+- **Translated slugs.** `Slug: about-us` in `o-nas/page.en.txt` serves the
+  English page at `/en/about-us`. Set it on the translation tab. The folder
+  slug (`/en/o-nas`) answers `301` to it, and `url()`, the language switcher
+  and the nav helpers link to it. The folder path stays the page's identity
+  for `page()`, access rules and media.
 - Redirect rules apply in every language and keep the visitor's language
-  prefix on local targets.
+  prefix on local targets, with translated slugs. `lang: en` scopes a rule
+  to one language. Renaming a translated slug adds such a rule automatically,
+  and the 404 log keeps the language prefix of each miss.
+- `thumbs:warm` fetches every page in every language.
 
 Sites without `languages` are unchanged. See `docs/multilingual.md`.
 
@@ -544,6 +554,7 @@ Sites without `languages` are unchanged. See `docs/multilingual.md`.
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.11.0]: https://github.com/lexislav/station0/compare/v0.10.3...v0.11.0
 [0.10.3]: https://github.com/lexislav/station0/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/lexislav/station0/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/lexislav/station0/compare/v0.10.0...v0.10.1

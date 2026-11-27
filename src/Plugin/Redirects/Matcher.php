@@ -26,25 +26,37 @@ final class Matcher
     }
 
     /**
-     * @param bool $force true = only `force` rules, false = only fallback rules
+     * @param bool    $force      true = only `force` rules, false = only fallback rules
+     * @param string  $lang       request language: its `lang` rules are tried first
+     * @param ?string $publicPath what `lang` rules match (the requested public path); default $path
      * @return array{rule: array, index: int, status: int, location: ?string}|null
      */
-    public function match(string $path, string $query = '', bool $force = false): ?array
+    public function match(string $path, string $query = '', bool $force = false, string $lang = '', ?string $publicPath = null): ?array
     {
-        $path = Rules::normalizePath($path);
-        [$exact, $exactCi, $regex] = $force
-            ? ['forceExact', 'forceExactCi', 'forceRegex']
-            : ['exact', 'exactCi', 'regex'];
+        if (!$force && $lang !== '' && isset($this->set['lang'][$lang])) {
+            $hit = $this->lookup($this->set['lang'][$lang], Rules::normalizePath($publicPath ?? $path), $query);
+            if ($hit !== null) {
+                return $hit;
+            }
+        }
+        $maps = $force
+            ? ['exact' => $this->set['forceExact'] ?? [], 'exactCi' => $this->set['forceExactCi'] ?? [], 'regex' => $this->set['forceRegex'] ?? null]
+            : ['exact' => $this->set['exact'] ?? [], 'exactCi' => $this->set['exactCi'] ?? [], 'regex' => $this->set['regex'] ?? null];
+        return $this->lookup($maps, Rules::normalizePath($path), $query);
+    }
 
+    /** @param array{exact: array, exactCi: array, regex: ?string} $maps */
+    private function lookup(array $maps, string $path, string $query): ?array
+    {
         $candidates = array_filter([
-            $this->set[$exact][$path] ?? null,
-            $this->set[$exactCi][strtolower($path)] ?? null,
+            $maps['exact'][$path] ?? null,
+            $maps['exactCi'][strtolower($path)] ?? null,
         ], fn ($i) => $i !== null);
         if ($candidates !== []) {
             return $this->result(min($candidates), [], $query);
         }
 
-        if (($pattern = $this->set[$regex] ?? null) !== null) {
+        if (($pattern = $maps['regex']) !== null) {
             $limit = ini_get('pcre.backtrack_limit');
             ini_set('pcre.backtrack_limit', (string) self::BACKTRACK_LIMIT);
             $ok = preg_match($pattern, $path, $m);
@@ -62,10 +74,13 @@ final class Matcher
         return null;
     }
 
-    /** Fallback and force rules — what a request to $path ends up at (admin "Test a URL"). */
-    public function test(string $path, string $query = ''): ?array
+    /**
+     * Fallback and force rules — what a request to $path ends up at (admin
+     * "Test a URL"). With $lang, $path is a public path in that language.
+     */
+    public function test(string $path, string $query = '', string $lang = ''): ?array
     {
-        return $this->match($path, $query, true) ?? $this->match($path, $query);
+        return $this->match($path, $query, true) ?? $this->match($path, $query, false, $lang);
     }
 
     // ── Admin index lookups ──────────────────────────────────────────────
