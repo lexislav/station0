@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-27
+
 ### Added
 - **Multilingual pages.** Add `'languages' => ['cs' => […], 'en' => […]]` to
   `site/config.php`. The first language is the default and has no URL
@@ -552,6 +554,7 @@ Sites without `languages` are unchanged. See `docs/multilingual.md`.
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.11.0]: https://github.com/lexislav/station0/compare/v0.10.3...v0.11.0
 [0.10.3]: https://github.com/lexislav/station0/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/lexislav/station0/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/lexislav/station0/compare/v0.10.0...v0.10.1
