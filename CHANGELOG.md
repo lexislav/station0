@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-11-27
+
+### Fixed
+- **`url()` leaves `/media`, `/thumb` and the admin alone.** In a prefixed
+  language `url('/media/x.pdf')` returned `/en/media/x.pdf` (a 404). External
+  and relative URLs, `#…` / `?…` and paths that already carry a language
+  prefix are returned unchanged too, so editor-entered links can safely go
+  through `url()`. `url()` and redirects built by `localize()` (actions,
+  members-only access, redirect rules) now share one rule
+  (`LanguageMiddleware::localizeTo()`).
+- **Untranslated pages under a translated parent.** `url('/blog/categories')`
+  in English gave `/en/blog/categories` (served only via a 301) when
+  `categories` has no English translation. Ancestors' translated slugs are now
+  applied segment by segment: `/en/clanky-co/categories`.
+
 ## [0.11.0] - 2026-11-27
 
 ### Added
@@ -554,6 +569,7 @@ Sites without `languages` are unchanged. See `docs/multilingual.md`.
   relied on inline HTML.
 - Full i18n of controller messages (en/cs); removed dead code.
 
+[0.11.1]: https://github.com/lexislav/station0/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/lexislav/station0/compare/v0.10.3...v0.11.0
 [0.10.3]: https://github.com/lexislav/station0/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/lexislav/station0/compare/v0.10.1...v0.10.2

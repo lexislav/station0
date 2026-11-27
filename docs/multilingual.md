@@ -125,7 +125,7 @@ translation at its URL.
 |---|---|
 | `lang` | current language code (`''` on a one-language site) — `<html lang="{{ lang }}">` |
 | `languages` | `[{code, label, locale, default, url, current}]`, where `url` is each language's home |
-| `url(page)` / `url('/o-nas')` | public URL in the current language, translated slugs included (`/en/about-us`). A path that isn't a page (`/contact/send`) only gets the prefix. `url(page, 'en')` picks the language |
+| `url(page)` / `url('/o-nas')` | public URL in the current language, translated slugs included (`/en/about-us`). A path that isn't a page keeps its ancestors' slugs (`/o-nas/kontakt/send` → `/en/about-us/kontakt/send`), as does a page without a translation. Left as they are: external and relative URLs, `#…` / `?…`, paths that already have a prefix, `/media`, `/thumb` and the admin — so editor-entered links can go through `url()` too. `url(page, 'en')` picks the language |
 | `translations(page)` | languages the page is live in: `[{code, label, locale, default, url, current}]` |
 | `t('key', {name: …}, 'fallback')` | site strings, see below |
 | `page.lang`, `page.translated`, `page.translations` | the page's language, whether a translation exists, and its language codes |
